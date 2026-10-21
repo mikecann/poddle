@@ -35,6 +35,14 @@ public protocol PoddleDataSource: Sendable {
     /// Full show notes HTML, which the synced episode list leaves out.
     func showNotes(episodeId: String) async -> String?
     func connectionStatus() async -> AsyncStream<ConnectionStatus>
+
+    /// Listening sessions for stats (`sessions:record`). The same `sessionId` is re-sent every 30 s
+    /// with a later end while playing; the server keeps the newest copy. Throw to have them retried.
+    func recordSessions(_ sessions: [SessionInput]) async throws
+
+    /// This device's APNs token (`devices:register`, hex). The data source fills in its own
+    /// `deviceId`, name and platform. Called at launch and whenever the token changes.
+    func registerDevice(apnsToken: String, environment: APNsEnvironment) async throws
 }
 
 extension PoddleDataSource {
@@ -79,5 +87,52 @@ public struct ConnectionStatus: Sendable, Hashable {
     /// "qualified-hedgehog-912"
     public var deploymentName: String {
         deploymentURL.host()?.split(separator: ".").first.map(String.init) ?? deploymentURL.absoluteString
+    }
+}
+
+
+/// `SessionInput` in docs/api.md, field for field.
+public struct SessionInput: Codable, Sendable, Hashable {
+    /// Client UUID, stable for the whole session so re-sends replace the server's copy.
+    public var sessionId: String
+    public var episodeId: String
+    public var deviceId: String?
+    public var startedAt: Millis
+    public var endedAt: Millis
+    /// Content seconds.
+    public var contentStart: Double
+    public var contentEnd: Double
+    public var rate: Double
+    public var smartSpeed: Bool
+    /// Content seconds Smart Speed cut.
+    public var smartRemovedContent: Double
+    public var voiceBoost: Bool
+    /// `speaker`, `headphones`, `airPods`, `bluetooth`, `carPlay`, `airPlay` or `unknown`.
+    public var route: String?
+    public var utcOffsetMinutes: Int?
+
+    public init(
+        sessionId: String, episodeId: String, deviceId: String? = nil, startedAt: Millis, endedAt: Millis,
+        contentStart: Double, contentEnd: Double, rate: Double, smartSpeed: Bool, smartRemovedContent: Double,
+        voiceBoost: Bool, route: String? = nil, utcOffsetMinutes: Int? = nil
+    ) {
+        self.sessionId = sessionId; self.episodeId = episodeId; self.deviceId = deviceId
+        self.startedAt = startedAt; self.endedAt = endedAt; self.contentStart = contentStart
+        self.contentEnd = contentEnd; self.rate = rate; self.smartSpeed = smartSpeed
+        self.smartRemovedContent = smartRemovedContent; self.voiceBoost = voiceBoost; self.route = route
+        self.utcOffsetMinutes = utcOffsetMinutes
+    }
+}
+
+/// Which APNs gateway a token belongs to. Debug builds are `sandbox`.
+public enum APNsEnvironment: String, Codable, Sendable, Hashable {
+    case sandbox, production
+
+    public static var current: APNsEnvironment {
+        #if DEBUG
+        .sandbox
+        #else
+        .production
+        #endif
     }
 }

@@ -3,7 +3,7 @@ import PoddleKit
 
 struct LibraryView: View {
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @AppStorage("libraryLayout") private var layout = "grid"
     @AppStorage("librarySort") private var sort = Sort.updated

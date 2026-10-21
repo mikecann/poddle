@@ -5,3 +5,6 @@
 // Release talks to the prod deployment.
 PODDLE_CONVEX_URL = $(PODDLE_CONVEX_URL_RELEASE)
 PODDLE_APS_ENVIRONMENT = production
+
+// convex-swift ships no x86_64 simulator slice, so build simulators for Apple Silicon only
+EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64

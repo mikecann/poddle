@@ -4,7 +4,7 @@ import PoddleKit
 /// The walnut mini player that sits above the tab bar on every tab.
 /// Tap or swipe up to expand, swipe sideways to skip, long press for the queue.
 struct MiniPlayer: View {
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @State private var drag: CGSize = .zero
     @State private var skipped = 0

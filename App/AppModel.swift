@@ -66,6 +66,8 @@ final class AppModel {
     var importDemo = false
     /// Running on sample data (`-PoddleMock`, or a screenshot run).
     var isMock = false
+    /// Tapped download over mobile data in Wi-Fi-only mode: ask what to do (decisions.md).
+    var mobilePromptEpisodeId: String?
 
     func path(_ tab: Tab) -> Binding<[Route]> {
         Binding { self.paths[tab] ?? [] } set: { self.paths[tab] = $0 }
@@ -85,7 +87,7 @@ final class AppModel {
     }
 
     /// `-PoddleScreen <name>` opens a screen directly, for automated screenshots.
-    func applyLaunchScreen(_ name: String, player: MockPlayer, store: PoddleStore) {
+    func applyLaunchScreen(_ name: String, player: any PoddlePlayer, store: PoddleStore) {
         // The sample data's IDs, or real ones when screenshotting live data (`-PoddleLive YES`).
         let show = { (mockId: String) in store.podcast(mockId) != nil ? mockId : store.library.first?.id ?? mockId }
         let episode = store.episode("ep_syntax_912") != nil ? "ep_syntax_912" : store.inbox.first?.id ?? store.queue.first?.id ?? ""

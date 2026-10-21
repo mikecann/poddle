@@ -33,6 +33,7 @@ struct ShowSettingsSheet: View {
                     }
                     boolMenu("Smart Speed", key: \.smartSpeed, global: g.smartSpeed)
                     boolMenu("Voice Boost", key: \.voiceBoost, global: g.voiceBoost)
+                    enumMenu("Speed-up method", key: \.timePitch, all: TimePitchAlgorithm.allCases, global: g.timePitch, label: \.label)
                 }
 
                 GroupLabel(text: "Skip")
@@ -77,11 +78,6 @@ struct ShowSettingsSheet: View {
                     }
                     .toggleStyle(.poddle).padding(.horizontal, 16).frame(minHeight: 50)
                     enumMenu("Auto-archive unplayed", key: \.autoArchive, all: AutoArchive.allCases, global: g.autoArchive, label: \.label)
-                }
-
-                GroupLabel(text: "Advanced")
-                GroupCard {
-                    enumMenu("Time-pitch", key: \.timePitch, all: TimePitchAlgorithm.allCases, global: g.timePitch, label: \.label)
                 }
 
                 if s.hasOverrides {

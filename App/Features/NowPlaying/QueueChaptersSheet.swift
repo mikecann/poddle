@@ -4,7 +4,7 @@ import PoddleKit
 /// Chapters for what's playing (tap to jump) and the queue (drag to reorder).
 struct QueueChaptersSheet: View {
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(\.dismiss) private var dismiss
     @State private var pane: Pane = .chapters
 

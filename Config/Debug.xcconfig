@@ -6,3 +6,6 @@
 // Debug talks to the dev deployment.
 PODDLE_CONVEX_URL = $(PODDLE_CONVEX_URL_DEBUG)
 PODDLE_APS_ENVIRONMENT = development
+
+// convex-swift ships no x86_64 simulator slice, so build simulators for Apple Silicon only
+EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64

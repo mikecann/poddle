@@ -6,6 +6,9 @@ public actor MockStore: PoddleDataSource {
     private var server: LibrarySnapshot
     private var listeners: [UUID: AsyncStream<LibrarySnapshot>.Continuation] = [:]
     private var nextId = 1
+    /// What `sessions:record` would hold, keyed by `sessionId` (the newest copy wins).
+    public private(set) var sessions: [String: SessionInput] = [:]
+    public private(set) var apnsToken: (token: String, environment: APNsEnvironment)?
     private let now: @Sendable () -> Date
     /// Scales the fake network delays. 0 makes everything instant (tests).
     private let latency: Double
@@ -19,8 +22,12 @@ public actor MockStore: PoddleDataSource {
     /// A store wired to a fresh mock backend, seeded synchronously so first paint has data.
     @MainActor
     public static func makeStore(now: Date = Date(), sync: Bool = true) -> PoddleStore {
-        let seed = MockData.snapshot(now: now)
-        return PoddleStore(dataSource: MockStore(snapshot: seed), seed: seed, downloads: MockData.downloads(), sync: sync)
+        makeStore(seed: MockData.snapshot(now: now), downloads: MockData.downloads(), sync: sync)
+    }
+
+    @MainActor
+    public static func makeStore(seed: LibrarySnapshot, downloads: [String: Download], sync: Bool = true) -> PoddleStore {
+        PoddleStore(dataSource: MockStore(snapshot: seed), seed: seed, downloads: downloads, sync: sync)
     }
 
     private var nowMillis: Millis { now().timeIntervalSince1970 * 1000 }
@@ -145,5 +152,19 @@ public actor MockStore: PoddleDataSource {
 
     public func chapters(for episode: Episode) async -> [Chapter] {
         MockData.chapters(for: episode.id, duration: episode.duration ?? 0)
+    }
+
+    public func recordSessions(_ batch: [SessionInput]) async throws {
+        await pause(40)
+        for s in batch {
+            // Like the server: an identical or older copy is ignored.
+            if let old = sessions[s.sessionId], old.endedAt >= s.endedAt { continue }
+            sessions[s.sessionId] = s
+        }
+    }
+
+    public func registerDevice(apnsToken: String, environment: APNsEnvironment) async throws {
+        await pause(40)
+        self.apnsToken = (apnsToken, environment)
     }
 }

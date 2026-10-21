@@ -3,7 +3,7 @@ import PoddleKit
 
 struct UpNextView: View {
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @State private var filter: Filter = .all
     @State private var confirmClear = false

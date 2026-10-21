@@ -5,10 +5,49 @@ import PoddleKit
 struct SettingsView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(AppModel.self) private var app
+    @Environment(PushCoordinator.self) private var push
 
     @State private var editingConnection = false
 
     private var g: GlobalSettings { store.global }
+
+    private var storageSubtitle: String? {
+        guard let used = store.downloader?.storageUsed else { return nil }
+        return "\(Format.bytes(used)) used. Never deletes the top 3 in Up Next."
+    }
+
+    /// Device-local, not synced: "Download on" plus the temporary mobile allowance.
+    @ViewBuilder
+    private func downloadNetwork(_ downloader: DownloadManager) -> some View {
+        Menu {
+            Picker("Download on", selection: Binding(get: { downloader.settings.mode }, set: { downloader.setMode($0) })) {
+                ForEach(DownloadNetworkMode.allCases, id: \.self) { Text($0.label).tag($0) }
+            }
+        } label: {
+            Cell(title: "Download on", subtitle: "This device only") { MenuValue(text: downloader.settings.mode.label, isOverride: false) }
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button).buttonStyle(.plain)
+        if downloader.settings.mode == .wifiOnly {
+            if let remaining = downloader.mobileAllowanceRemaining {
+                Cell(title: "Mobile downloads on", subtitle: MobileAllowanceChip.left(remaining), icon: "antenna.radiowaves.left.and.right", iconTint: Palette.fern) {
+                    TextButton(title: "Stop", bold: true) { downloader.stopMobileAllowance() }
+                }
+            } else {
+                Menu {
+                    ForEach(MobileAllowance.allCases, id: \.self) { a in
+                        Button(a.label) { downloader.allowMobile(a) }
+                    }
+                } label: {
+                    Cell(title: "Allow mobile downloads", subtitle: "Streaming always works on mobile", icon: "antenna.radiowaves.left.and.right", iconTint: Palette.ink3) {
+                        MenuValue(text: "Off", isOverride: false)
+                    }
+                    .contentShape(Rectangle())
+                }
+                .menuStyle(.button).buttonStyle(.plain)
+            }
+        }
+    }
 
     var body: some View {
         ScrollView {
@@ -39,7 +78,7 @@ struct SettingsView: View {
                     }
                     toggle("Smart Speed", \.smartSpeed, subtitle: "Trims silences", icon: "waveform.path", tint: Palette.mustard)
                     toggle("Voice Boost", \.voiceBoost, subtitle: "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
-                    picker("Time-pitch", \.timePitch, TimePitchAlgorithm.allCases, \.label)
+                    picker("Speed-up method", \.timePitch, TimePitchAlgorithm.allCases, \.label)
                 }
 
                 GroupLabel(text: "Skipping")
@@ -61,20 +100,33 @@ struct SettingsView: View {
                 GroupCard {
                     picker("Where they go", \.autoAdd, AutoAdd.allCases, \.label)
                     toggle("Notifications", \.notifications)
+                    if push.notAskedYet || push.isDenied {
+                        Button { push.requestAuthorizationIfNeeded() } label: {
+                            Cell(title: "Allow notifications", subtitle: push.isDenied ? "Turned off in system Settings" : "So new-episode alerts can show",
+                                 icon: "bell.badge", iconTint: Palette.mustard) {
+                                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .disabled(push.isDenied)
+                    }
                     picker("Auto-archive unplayed", \.autoArchive, AutoArchive.allCases, \.label)
                 }
 
                 GroupLabel(text: "Downloads")
                 GroupCard {
-                    toggle("Auto-download Up Next", \.autoDownload)
+                    if let downloader = store.downloader {
+                        downloadNetwork(downloader)
+                    }
+                    toggle("Auto-download Up Next", \.autoDownload, subtitle: "The first 10, plus new episodes from priority shows")
                     Cell(title: "Keep latest") {
                         WellStepper(text: "\(g.keepLatest) eps",
                                     onDecrement: { store.updateGlobal { $0.keepLatest = max(1, $0.keepLatest - 1) } },
                                     onIncrement: { store.updateGlobal { $0.keepLatest = min(50, $0.keepLatest + 1) } })
                     }
-                    picker("Cellular", \.cellularDownloads, CellularDownloads.allCases, \.label)
                     picker("Delete played files", \.deletePlayed, DeletePlayed.allCases, \.label)
-                    Cell(title: "Storage cap") {
+                    Cell(title: "Storage cap", subtitle: storageSubtitle) {
                         WellStepper(text: "\(Int(g.storageCapGB)) GB",
                                     onDecrement: { store.updateGlobal { $0.storageCapGB = max(1, $0.storageCapGB - 1) } },
                                     onIncrement: { store.updateGlobal { $0.storageCapGB = min(100, $0.storageCapGB + 1) } })

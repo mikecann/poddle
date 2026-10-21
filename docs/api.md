@@ -157,7 +157,7 @@ Per-show fields (each one "use default" or an explicit value):
 | `playbackSpeed` | Double | 1.0 |
 | `smartSpeed` | Bool | true |
 | `voiceBoost` | Bool | true |
-| `timePitch` | `"spectral" \| "timeDomain"` | `spectral` |
+| `timePitch` | `"spectral" \| "timeDomain"` | `timeDomain` (the speed-up method: "Speech-tuned"; `spectral` is "Apple spectral") |
 | `skipIntroSeconds` | Double | 0 |
 | `skipOutroSeconds` | Double | 0 |
 | `newEpisodes` | `"inbox" \| "upNextTop" \| "upNextBottom" \| "none"` | `inbox` |

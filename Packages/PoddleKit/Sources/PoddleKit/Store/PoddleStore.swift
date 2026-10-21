@@ -10,7 +10,11 @@ public final class PoddleStore {
     public private(set) var snapshot: LibrarySnapshot {
         didSet { byPodcastCache = nil }
     }
-    public private(set) var downloads: [String: Download]
+    /// Sample downloads for previews and screenshots. Real ones come from `downloader`.
+    private var fakeDownloads: [String: Download]
+    /// The background downloader. Nil in previews and tests, which fake downloads instead.
+    public var downloader: DownloadManager?
+    public var downloads: [String: Download] { downloader?.downloads ?? fakeDownloads }
     public private(set) var chapterCache: [String: [Chapter]] = [:]
 
     public private(set) var stats: StatsSummary?
@@ -39,7 +43,7 @@ public final class PoddleStore {
     ) {
         self.dataSource = dataSource
         self.snapshot = seed
-        self.downloads = downloads
+        self.fakeDownloads = downloads
         self.deviceId = deviceId
         if sync { startSync() }
     }
@@ -265,21 +269,71 @@ public final class PoddleStore {
 
     // MARK: - Downloads (device only)
 
-    public func download(_ episodeId: String) {
-        guard downloads[episodeId]?.state != .done else { return }
-        downloads[episodeId] = Download(episodeId: episodeId, state: .downloading, progress: 0)
-        // TODO(playback wiring): hand this to the real background URLSession downloader.
+    /// Download one episode. Over mobile data in Wi-Fi-only mode this returns `.needsMobilePrompt`
+    /// and the UI asks (see `resolveMobilePrompt`).
+    @discardableResult
+    public func download(_ episodeId: String) -> DownloadManager.RequestResult {
+        guard downloads[episodeId]?.state != .done else { return .alreadyDownloaded }
+        if let downloader {
+            guard let url = episode(episodeId).flatMap({ URL(string: $0.enclosureURL) }) else { return .started }
+            return downloader.request(episodeId, url: url)
+        }
+        fakeDownloads[episodeId] = Download(episodeId: episodeId, state: .downloading, progress: 0)
         tasks.append(Task { [weak self] in
             for step in 1...10 {
                 try? await Task.sleep(for: .milliseconds(120))
-                guard let self, self.downloads[episodeId] != nil else { return }
-                self.downloads[episodeId]?.progress = Double(step) / 10
+                guard let self, self.fakeDownloads[episodeId] != nil else { return }
+                self.fakeDownloads[episodeId]?.progress = Double(step) / 10
             }
-            self?.downloads[episodeId]?.state = .done
+            self?.fakeDownloads[episodeId]?.state = .done
         })
+        return .started
     }
 
-    public func removeDownload(_ episodeId: String) { downloads[episodeId] = nil }
+    public func resolveMobilePrompt(_ choice: MobilePromptChoice, episodeId: String) {
+        guard let downloader, let url = episode(episodeId).flatMap({ URL(string: $0.enclosureURL) }) else { return }
+        downloader.resolvePrompt(choice, episodeId: episodeId, url: url)
+    }
+
+    public func removeDownload(_ episodeId: String) {
+        if let downloader { downloader.remove(episodeId) } else { fakeDownloads[episodeId] = nil }
+    }
+
+    /// Auto-downloads and cleanup: the first Up Next items plus new episodes from priority shows,
+    /// then deletes played files, extras beyond each show's "keep latest" and anything over the cap.
+    public func runDownloadHousekeeping(playing: String?) {
+        guard let downloader else { return }
+        let g = global
+        func candidate(_ id: String) -> DownloadPlanner.Candidate? {
+            guard let ep = episode(id) else { return nil }
+            let st = snapshot.state(id)
+            return .init(episodeId: id, podcastId: ep.podcastId, pubDate: ep.pubDate, played: st.played,
+                         archived: st.archived, hasEnclosure: !ep.enclosureURL.isEmpty && !ep.isGhost)
+        }
+        let queueIds = snapshot.queue.map(\.episodeId)
+        let subscribed = snapshot.episodes.values.filter { snapshot.podcasts[$0.podcastId]?.subscribed == true }
+        let capBytes = Int64(g.storageCapGB * 1_073_741_824)
+
+        let wanted = DownloadPlanner.autoDownloads(
+            queue: queueIds.compactMap(candidate), episodes: subscribed.compactMap { candidate($0.id) },
+            autoDownload: { self.resolved($0).autoDownload.value }, isPriority: { self.resolved($0).isPriority },
+            keepLatest: { self.resolved($0).keepLatest.value }, now: nowMillis)
+        for id in wanted where downloads[id] == nil && downloader.storageUsed < capBytes {
+            guard let url = episode(id).flatMap({ URL(string: $0.enclosureURL) }) else { continue }
+            downloader.request(id, url: url, auto: true)
+        }
+
+        let files = downloader.downloadedFiles.compactMap { f -> DownloadedFile? in
+            guard let ep = episode(f.episodeId) else { return nil }
+            let st = snapshot.state(f.episodeId)
+            return DownloadedFile(episodeId: f.episodeId, podcastId: ep.podcastId, bytes: f.bytes, pubDate: ep.pubDate,
+                                  playedAt: st.played ? (st.playedAt ?? st.updatedAt) : nil)
+        }
+        let doomed = DownloadPlanner.filesToDelete(
+            files: files, queue: queueIds, playing: playing, keepLatest: { self.resolved($0).keepLatest.value },
+            deletePlayedAfter: g.deletePlayed.interval, capBytes: capBytes, now: nowMillis)
+        for id in doomed { downloader.remove(id) }
+    }
 
     // MARK: - Backend reads
 

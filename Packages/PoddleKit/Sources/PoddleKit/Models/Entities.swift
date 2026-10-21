@@ -222,7 +222,7 @@ public struct Chapter: Codable, Sendable, Hashable, Identifiable {
 
 /// Local only. Downloads are per device and never synced.
 public struct Download: Codable, Sendable, Hashable {
-    public enum State: String, Codable, Sendable { case queued, downloading, done, failed }
+    public enum State: String, Codable, Sendable { case queued, downloading, waitingForWifi, done, failed }
     public var episodeId: String
     public var state: State
     public var progress: Double

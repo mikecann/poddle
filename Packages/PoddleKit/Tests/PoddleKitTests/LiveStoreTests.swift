@@ -118,6 +118,100 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
     }
 }
 
+@Suite struct PlaybackRecordTests {
+    private func session(_ id: String, end: Millis, route: String? = nil) -> SessionInput {
+        SessionInput(
+            sessionId: id, episodeId: "ep1", deviceId: "device-1", startedAt: 1_000, endedAt: end,
+            contentStart: 0, contentEnd: end / 1000, rate: 1.8, smartSpeed: true, smartRemovedContent: 2,
+            voiceBoost: true, route: route, utcOffsetMinutes: 660
+        )
+    }
+
+    private func first(_ call: FakeTransport.Call?) -> JSONValue? {
+        guard case let .array(a)? = call?.args["sessions"] else { return nil }
+        return a.first
+    }
+
+    @Test func sessionsGoThroughTheOutboxAndNewerCopiesReplaceWaitingOnes() async throws {
+        let fake = FakeTransport()
+        fake.online = false
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        _ = await store.snapshots()
+        try await store.recordSessions([session("s1", end: 10_000)])
+        try await store.send(.setStarred(episodeId: "ep0", true))
+        try await store.recordSessions([session("s1", end: 20_000), session("s2", end: 5_000)])
+        try await store.recordSessions([session("s1", end: 30_000)])
+        // The head may already be on its way; everything behind it keeps only the newest copy.
+        let pending = await store.pendingEntries.map(\.mutation)
+        #expect(pending == [
+            .recordSessions([session("s1", end: 10_000)]),
+            .setStarred(episodeId: "ep0", true),
+            .recordSessions([session("s2", end: 5_000)]),
+            .recordSessions([session("s1", end: 30_000)]),
+        ])
+
+        fake.online = true
+        #expect(await eventually { await store.pendingEntries.isEmpty })
+        #expect(fake.mutations.map(\.name) == ["sessions:record", "episodes:setStarredState", "sessions:record", "sessions:record"])
+        let sent = first(fake.mutations[0])
+        #expect(sent?["sessionId"] == "s1")
+        #expect(sent?["utcOffsetMinutes"] == 660)
+        #expect(sent?["route"] == nil) // optional fields are left out, never null
+        await store.stop()
+    }
+
+    @Test func forwarderHandsSessionsToTheOutboxOnce() async throws {
+        let fake = FakeTransport()
+        fake.online = false
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        _ = await store.snapshots()
+        let forwarder = await SessionForwarder(dataSource: store, deviceId: "device-1", retryAfter: .milliseconds(10))
+        let id = UUID()
+        for end in [31_000.0, 61_000] {
+            await forwarder.record(ListeningCheckpoint(
+                id: id, episodeId: "ep1", wallStart: 1_000, wallEnd: end, contentStart: 0, contentEnd: end / 500,
+                rate: 2, smartSpeed: true, smartRemovedContent: 0, voiceBoost: false, route: "headphones", isFinal: false))
+            await forwarder.flush()
+        }
+        // Offline, but the outbox has them on disk: the forwarder has nothing left to retry.
+        #expect(await forwarder.pending.isEmpty)
+        #expect(await store.pendingEntries.count == 2)
+
+        fake.online = true
+        #expect(await eventually { await store.pendingEntries.isEmpty })
+        try await Task.sleep(for: .milliseconds(50))
+        #expect(fake.mutations.map(\.name) == ["sessions:record", "sessions:record"])
+        #expect(fake.mutations.map { first($0)?["sessionId"] } == [.string(id.uuidString.lowercased()), .string(id.uuidString.lowercased())])
+        #expect(first(fake.mutations.last)?["endedAt"] == 61_000)
+        await store.stop()
+    }
+
+    @Test func registerDeviceSendsTheNewestTokenWithThisDevice() async throws {
+        let fake = FakeTransport()
+        fake.online = false
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        _ = await store.snapshots()
+        try await store.send(.setStarred(episodeId: "ep0", true))
+        try await store.registerDevice(apnsToken: "aa11", environment: .sandbox)
+        try await store.registerDevice(apnsToken: "bb22", environment: .sandbox)
+        fake.online = true
+        #expect(await eventually { await store.pendingEntries.isEmpty })
+        #expect(fake.mutations.map(\.name) == ["episodes:setStarredState", "devices:register"])
+        let args = fake.mutations[1].args
+        #expect(args["apnsToken"] == "bb22")
+        #expect(args["apnsEnvironment"] == "sandbox")
+        #expect(args["deviceId"] == "device-1")
+        #expect(args["platform"] == "macOS")
+        await store.stop()
+    }
+}
+
 @Suite struct MutationMappingTests {
     let base = MockData.snapshot(now: Date(timeIntervalSince1970: 1_790_000_000))
 

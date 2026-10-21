@@ -26,4 +26,4 @@ swift build -c release
 
 It prints the output duration, the Smart Speed saving, the peak and the output loudness. `--cuts file` lists where Smart Speed cut.
 
-`Package.swift` targets macOS 26 so `swift test` runs on Macs still on 26. The app's Mac target requires 27.
+`Package.swift` targets iOS 18 (Mike's iPhone XS Max) and macOS 26, so `swift test` runs on Macs still on 26. Newer AVFAudio calls sit behind `#available` checks (`Compat.swift`, `AudioSessionController.swift`).

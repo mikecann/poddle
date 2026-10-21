@@ -4,7 +4,7 @@ import PoddleKit
 /// Warm dark Now Playing. Swipe down anywhere to drop back to the mini player.
 struct NowPlayingView: View {
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var dragY: CGFloat = 0
@@ -147,7 +147,7 @@ struct NowPlayingBackground: View {
 /// Artwork: tap to play/pause, double-tap a half to skip, swipe sideways for chapters.
 private struct ArtworkGestures: View {
     var item: EpisodeItem
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @State private var swipeX: CGFloat = 0
     @State private var bumped = 0
     @State private var flash: Edge?
@@ -210,7 +210,7 @@ private struct ArtworkGestures: View {
 
 /// Chapters are gaps in the scrubber. Drag to seek; drag your finger further down to scrub finer.
 private struct Scrubber: View {
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @State private var dragPosition: Double?
     @State private var startPosition: Double = 0
 
@@ -288,7 +288,7 @@ private struct Scrubber: View {
 }
 
 private struct Transport: View {
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @State private var pressed = 0
 
     var body: some View {
@@ -460,7 +460,7 @@ private struct TuningStrip: View {
 private struct UtilityRow: View {
     var item: EpisodeItem
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
 
     var body: some View {
@@ -527,7 +527,7 @@ struct UtilityLabel: View {
 }
 
 private struct SleepMenu: View {
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
 
     var body: some View {
         Menu {
@@ -568,7 +568,7 @@ import AVKit
 
 /// AirPlay: the label shows the current route, and the real route picker sits on top of it.
 private struct AirPlayUtil: View {
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     var body: some View {
         UtilityLabel(title: "AirPlay", detail: player.routeName, icon: "airplay.audio", on: false)
             .overlay(alignment: .top) { RoutePicker().frame(width: 44, height: 44) }
@@ -587,7 +587,7 @@ private struct RoutePicker: UIViewRepresentable {
 }
 #else
 private struct AirPlayUtil: View {
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     var body: some View {
         UtilityLabel(title: "AirPlay", detail: player.routeName, icon: "airplay.audio", on: false)
     }

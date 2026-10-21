@@ -512,6 +512,49 @@ public actor LiveStore: PoddleDataSource {
         kickDrain()
     }
 
+    /// Queues listening sessions in the outbox and returns once they're on disk, so the caller
+    /// (`SessionForwarder`) can forget them: from here the outbox owns retrying, and nothing is
+    /// retried twice. The player re-reports an open session every 30 s; a newer copy replaces any
+    /// older one still waiting, so a backlog sends each session once, with its latest end.
+    public func recordSessions(_ sessions: [SessionInput]) async throws {
+        guard !sessions.isEmpty else { return }
+        let ids = Set(sessions.map(\.sessionId))
+        dropWaiting { m in
+            guard case let .recordSessions(old) = m else { return m }
+            let left = old.filter { !ids.contains($0.sessionId) }
+            return left.isEmpty ? nil : .recordSessions(left)
+        }
+        try await send(.recordSessions(sessions))
+    }
+
+    /// Queues `devices:register` with this device's ID, name and platform. Only the newest token
+    /// waiting is sent.
+    public func registerDevice(apnsToken: String, environment: APNsEnvironment) async throws {
+        dropWaiting { m in
+            if case .registerDevice = m { return nil }
+            return m
+        }
+        try await send(.registerDevice(apnsToken: apnsToken, environment: environment))
+    }
+
+    /// Rewrites (or with nil, drops) pending entries that haven't been sent yet. The head is left
+    /// alone while it may be in flight.
+    private func dropWaiting(_ rewrite: (Mutation) -> Mutation?) {
+        let first = draining || outbox.pending.first.map({ $0.done > 0 }) == true ? 1 : 0
+        guard outbox.pending.count > first else { return }
+        var kept = Array(outbox.pending[..<first])
+        for var e in outbox.pending[first...] {
+            guard let m = rewrite(e.mutation) else { continue }
+            if m != e.mutation {
+                e.mutation = m
+                e.calls = Self.calls(for: m, at: e.at, base: LibrarySnapshot(), deviceId: deviceId)
+                if e.calls.isEmpty { continue }
+            }
+            kept.append(e)
+        }
+        outbox.pending = kept
+    }
+
     /// Puts rejected actions back in the queue (in their original order, with their original
     /// times).
     public func retryFailed() {
@@ -688,7 +731,52 @@ public actor LiveStore: PoddleDataSource {
             let patch = SettingsMapping.patch(from: SettingsMapping.fields(base.global), to: SettingsMapping.fields(g))
             guard !patch.isEmpty else { return [] }
             return [OutboxCall("settings:updateGlobal", ["patch": .object(patch), "at": at])]
+
+        case let .recordSessions(sessions):
+            // Sessions on an episode the server hasn't assigned an ID to yet would fail the batch.
+            let real = sessions.filter { !isLocal($0.episodeId) }
+            guard !real.isEmpty else { return [] }
+            return [OutboxCall("sessions:record", ["sessions": .array(real.map(sessionArgs))])]
+
+        case let .registerDevice(apnsToken, environment):
+            return [OutboxCall("devices:register", [
+                "deviceId": .string(deviceId), "name": .string(deviceName), "platform": .string(platform),
+                "apnsToken": .string(apnsToken), "apnsEnvironment": .string(environment.rawValue),
+            ])]
         }
+    }
+
+    /// `SessionInput` as Convex wants it: optional fields left out rather than null.
+    static func sessionArgs(_ s: SessionInput) -> JSONValue {
+        var o: [String: JSONValue] = [
+            "sessionId": .string(s.sessionId), "episodeId": .string(s.episodeId),
+            "startedAt": .number(s.startedAt), "endedAt": .number(s.endedAt),
+            "contentStart": .number(s.contentStart), "contentEnd": .number(s.contentEnd),
+            "rate": .number(s.rate), "smartSpeed": .bool(s.smartSpeed),
+            "smartRemovedContent": .number(s.smartRemovedContent), "voiceBoost": .bool(s.voiceBoost),
+        ]
+        if let v = s.deviceId { o["deviceId"] = .string(v) }
+        if let v = s.route { o["route"] = .string(v) }
+        if let v = s.utcOffsetMinutes { o["utcOffsetMinutes"] = .number(Double(v)) }
+        return .object(o)
+    }
+
+    static var platform: String {
+        #if os(iOS)
+        "iOS"
+        #elseif os(macOS)
+        "macOS"
+        #else
+        "unknown"
+        #endif
+    }
+
+    static var deviceName: String {
+        #if os(macOS)
+        Host.current().localizedName ?? ProcessInfo.processInfo.hostName
+        #else
+        ProcessInfo.processInfo.hostName.replacingOccurrences(of: ".local", with: "")
+        #endif
     }
 
     // MARK: - Stats

@@ -20,7 +20,8 @@ public struct EpisodeItem: Sendable, Hashable, Identifiable {
     public var isInProgress: Bool { !state.played && state.position > 1 }
     public var isNew: Bool { state.inboxAt != nil && !state.played && !isInProgress }
     public var isDownloaded: Bool { download?.state == .done }
-    public var isDownloading: Bool { download?.state == .downloading || download?.state == .queued }
+    public var isDownloading: Bool { download?.state == .downloading || download?.state == .queued || isWaitingForWifi }
+    public var isWaitingForWifi: Bool { download?.state == .waitingForWifi }
     public var isStarred: Bool { state.starredAt != nil }
 
     /// "38m left at 1.8×" for something started, "41m at 1.8×" otherwise.

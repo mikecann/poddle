@@ -4,7 +4,8 @@ import PoddleKit
 struct RootView: View {
     @Environment(AppModel.self) private var app
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(PushCoordinator.self) private var push
+    @Environment(\.player) private var player
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -19,7 +20,18 @@ struct RootView: View {
             #endif
         }
         .sheet(item: $app.sheet) { SheetHost(route: $0) }
+        .modifier(MobileDownloadPrompt())
+        // Up Next changed: download what's coming, clean up what's done.
+        .onChange(of: store.snapshot.queue.map(\.episodeId)) { _, queue in
+            // First launch with no cache: the queue arrives after the player was set up.
+            if player.currentEpisodeId == nil, let head = queue.first { player.load(head) }
+            AppServices.current?.runHousekeeping()
+        }
+        // Ask for notifications after the first subscribe, not on first launch (when the library
+        // arriving from Convex also bumps the count from zero).
+        .onChange(of: store.library.count) { old, new in if old > 0, new > old { push.requestAuthorizationIfNeeded() } }
         #if os(iOS)
+        .onReceive(NotificationCenter.default.publisher(for: .poddleDeviceShaken)) { _ in player.extendSleepTimer() }
         .fullScreenCover(isPresented: $app.showNowPlaying) { NowPlayingView().preferredColorScheme(.dark) }
         .fullScreenCover(isPresented: $app.showYearInReview) { YearInReviewView().preferredColorScheme(.dark) }
         #else
@@ -34,7 +46,7 @@ struct RootView: View {
 private struct PhoneRoot: View {
     @Environment(AppModel.self) private var app
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
 
     var body: some View {
         @Bindable var app = app
@@ -48,6 +60,7 @@ private struct PhoneRoot: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
+                MobileAllowanceChip()
                 MiniPlayer().padding(.horizontal, 8)
                 PoddleTabBar(selection: $app.tab, inboxCount: store.inbox.count)
             }
@@ -91,7 +104,10 @@ private struct SidebarRoot: View {
             TabRoot(tab: app.tab)
                 .id(app.tab)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
-                    MiniPlayer()
+                    VStack(spacing: 8) {
+                        MobileAllowanceChip()
+                        MiniPlayer()
+                    }
                         .frame(maxWidth: 560)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 10)

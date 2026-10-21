@@ -62,6 +62,11 @@ public enum Mutation: Codable, Sendable, Hashable {
     case setSpeed(Double, scope: SpeedScope)
     case updatePodcastSettings(PodcastSettings)
     case updateGlobalSettings(GlobalSettings)
+    // Device-side records that ride the live outbox but don't change the library.
+    /// Listening sessions for stats (`sessions:record`).
+    case recordSessions([SessionInput])
+    /// This device's APNs token (`devices:register`).
+    case registerDevice(apnsToken: String, environment: APNsEnvironment)
 }
 
 extension LibrarySnapshot {
@@ -171,6 +176,9 @@ extension LibrarySnapshot {
 
         case let .updateGlobalSettings(settings):
             global = settings
+
+        case .recordSessions, .registerDevice:
+            break
         }
     }
 

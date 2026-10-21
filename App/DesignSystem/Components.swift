@@ -46,10 +46,17 @@ struct DownloadGlyph: View {
         if item.isDownloaded {
             Image(systemName: "arrow.down.circle.fill").font(.system(size: 14)).foregroundStyle(Palette.fern)
                 .accessibilityLabel("Downloaded")
+        } else if item.isWaitingForWifi {
+            Image(systemName: "wifi").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink3)
+                .accessibilityLabel("Waiting for Wi-Fi")
         } else if item.isDownloading {
             ProgressView(value: item.download?.progress ?? 0)
                 .progressViewStyle(RingProgressStyle())
                 .frame(width: 14, height: 14)
+                .accessibilityLabel("Downloading, \(Int((item.download?.progress ?? 0) * 100)) percent")
+        } else if item.download?.state == .failed {
+            Image(systemName: "exclamationmark.circle").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.tomato)
+                .accessibilityLabel("Download failed")
         } else {
             Image(systemName: "icloud.and.arrow.down").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink3)
                 .accessibilityLabel("Not downloaded")

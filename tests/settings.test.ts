@@ -19,6 +19,13 @@ describe("resolveShowSettings", () => {
     expect(r).toMatchObject({ playbackSpeed: 1, smartSpeed: true, voiceBoost: true, newEpisodes: "inbox", notifications: false });
     expect(DEFAULT_GLOBAL_SETTINGS).toMatchObject({ skipBackSeconds: 15, skipForwardSeconds: 30, autoRewind: true, remoteNextPrevious: "skip" });
   });
+
+  test("the speed-up method defaults to the speech-tuned stretcher, and a show can override it", () => {
+    expect(resolveShowSettings(null, null).timePitch).toBe("timeDomain");
+    const r = resolveShowSettings(null, { timePitch: "spectral" });
+    expect(r.timePitch).toBe("spectral");
+    expect(r.inherited).not.toContain("timePitch");
+  });
 });
 
 describe("settings functions", () => {

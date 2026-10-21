@@ -4,7 +4,7 @@ import PoddleKit
 struct PodcastView: View {
     var podcastId: String
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
     @State private var expanded = false

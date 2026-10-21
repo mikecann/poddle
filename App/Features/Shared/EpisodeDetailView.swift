@@ -6,7 +6,7 @@ struct EpisodeDetailView: View {
     var episodeId: String
     var inSheet = false
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
 

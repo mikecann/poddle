@@ -8,6 +8,22 @@ Mike's own podcast player for iPhone, iPad and Mac, built to replace Overcast. S
 - `designs/c-earful-warm.html`: the chosen look (open it in a browser)
 - `docs/api.md`: the backend API the app is written against, including the offline/outbox contract
 
+## Launch arguments
+
+With none, the app runs on live data (`LiveStore` over Convex: the dev deployment in Debug, prod in Release) and plays through the real engine (`EnginePlayer`). Pass these in the scheme's Arguments, or after `xcrun simctl launch <device> com.mikecann.poddle`. They're read in `App/PoddleApp.swift` (and `AppModel.applyLaunchScreen`).
+
+| Argument | What it does |
+|---|---|
+| `-PoddleMock YES` | Sample data (`MockStore`) instead of Convex |
+| `-PoddleLive YES` | Keep live data on a `-PoddleScreen` run, which otherwise uses sample data |
+| `-PoddleScreen <name>` | Open a screen straight away for screenshots: `upNext`, `inbox`, `library`, `libraryList`, `podcast`, `showSettings`, `episode`, `settings`, `import`, `importDone`, `discover`, `stats`, `yearInReview`, `nowPlaying`, `speed`, `chapters`. Implies sample data and `MockPlayer`, unless overridden by the two rows either side |
+| `-PoddleMockPlayer YES\|NO` | `YES` fakes playback and downloads (`MockPlayer`) on any launch; `NO` keeps the real engine on a `-PoddleScreen` run |
+| `-PoddleAppearance dark\|light` | Force the colour scheme |
+| `-PoddleRealAudio YES` | Sample data with the top of Up Next pointed at real, short public episodes (implies `-PoddleMock`) |
+| `-PoddleAudioCheck YES` | Debug builds: plays the queue head, logs position and rate, downloads mid-stream and checks the queue advances. Use with `-PoddleRealAudio YES` |
+
+Smaller ones: `-PoddlePaused YES` stops a mock screenshot run starting playback, `-PoddleAutoplay YES` starts the real engine playing at launch, and `-PoddleQuery <text>` pre-fills Discover.
+
 ## Backend
 
 The Convex backend lives in `convex/`. Node 24+.

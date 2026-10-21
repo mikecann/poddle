@@ -10,14 +10,15 @@ public enum SleepTimer: Sendable, Hashable {
     public static let presets = [5, 10, 15, 30, 45, 60]
 }
 
-/// Stands in for PoddlePlayback until it's wired in: it ticks the position along at the current
-/// speed so Now Playing, the mini player and every progress bar move, saves positions, advances
-/// the queue and runs the sleep timer.
+/// Fake playback for previews and screenshots (the app uses PoddlePlayback otherwise): it ticks the
+/// position along at the current speed so Now Playing, the mini player and every progress bar move,
+/// saves positions, advances the queue and runs the sleep timer.
 @MainActor
 @Observable
-public final class MockPlayer {
+public final class MockPlayer: PoddlePlayer {
     public private(set) var currentEpisodeId: String?
     public private(set) var isPlaying = false
+    public let isBuffering = false
     public private(set) var position: Double = 0
     public private(set) var chapters: [Chapter] = []
     /// Content seconds Smart Speed has trimmed from this episode.
@@ -38,7 +39,7 @@ public final class MockPlayer {
     }
 
     /// Loads an episode without playing it (used at launch to restore state).
-    public func load(_ episodeId: String, position: Double? = nil, smartSaved: Double = 0) {
+    public func load(_ episodeId: String, position: Double?, smartSaved: Double) {
         currentEpisodeId = episodeId
         let item = store.item(episodeId)
         let start = position ?? item.map { $0.state.position > 0 ? $0.state.position : store.resolved($0.podcast.id).skipIntro.value } ?? 0
@@ -50,19 +51,8 @@ public final class MockPlayer {
 
     // MARK: - Derived
 
-    public var item: EpisodeItem? { currentEpisodeId.flatMap { store.item($0) } }
     public var duration: Double { item?.duration ?? 0 }
     public var rate: Double { item?.speed.value ?? store.global.speed }
-    public var remaining: Double { max(0, duration - position) }
-    public var wallRemaining: Double { remaining / rate }
-    public var progress: Double { duration > 0 ? position / duration : 0 }
-    public var skipBack: Double { skipBackOverride ?? store.global.skipBack }
-    public var skipForward: Double { skipForwardOverride ?? store.global.skipForward }
-
-    public var currentChapterIndex: Int? {
-        chapters.lastIndex { $0.start <= position + 0.5 }
-    }
-    public var currentChapter: Chapter? { currentChapterIndex.map { chapters[$0] } }
 
     public var sleepRemaining: Double? {
         switch sleepTimer {
@@ -79,7 +69,7 @@ public final class MockPlayer {
     public func play(_ episodeId: String) {
         if episodeId != currentEpisodeId {
             saveNow()
-            load(episodeId)
+            load(episodeId, position: nil, smartSaved: 0)
         }
         store.moveToTop(episodeId)
         resume()
@@ -100,15 +90,10 @@ public final class MockPlayer {
         saveNow()
     }
 
-    public func togglePlayPause() { isPlaying ? pause() : resume() }
-
     public func seek(to seconds: Double) {
         position = min(max(0, seconds), duration)
         saveNow()
     }
-
-    public func skipForwardTapped() { seek(to: position + skipForward) }
-    public func skipBackTapped() { seek(to: position - skipBack) }
 
     public func nextChapter() {
         guard let i = currentChapterIndex, i + 1 < chapters.count else { return playNextInQueue() }
@@ -121,8 +106,6 @@ public final class MockPlayer {
         if position - chapters[i].start > 3 || i == 0 { seek(to: chapters[i].start) } else { seek(to: chapters[i - 1].start) }
     }
 
-    public func seek(toChapter chapter: Chapter) { seek(to: chapter.start) }
-
     public func playNextInQueue() {
         guard let next = store.queue.first(where: { $0.id != currentEpisodeId }) else { return }
         play(next.id)
@@ -130,8 +113,8 @@ public final class MockPlayer {
 
     public func setSleepTimer(_ timer: SleepTimer) { sleepTimer = timer }
 
-    public func setSleepMinutes(_ minutes: Int) {
-        sleepTimer = .minutes(minutes, endsAt: Date().addingTimeInterval(Double(minutes) * 60))
+    public func extendSleepTimer() {
+        if case let .minutes(m, _) = sleepTimer { setSleepMinutes(m) }
     }
 
     // MARK: - Ticking
@@ -182,7 +165,7 @@ public final class MockPlayer {
         let stopHere = sleepTimer == .endOfEpisode
         if stopHere { sleepTimer = .off }
         if store.global.autoAdvance, !stopHere, let next = store.queue.first(where: { $0.id != id }) {
-            load(next.id)
+            load(next.id, position: nil, smartSaved: 0)
             isPlaying = true
         } else {
             isPlaying = false

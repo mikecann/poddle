@@ -16,9 +16,11 @@ public enum AutoAdd: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// The speed-up method (decisions.md): PoddlePlayback's speech-tuned `timeDomain` stretcher by
+/// default, or Apple's spectral one to A/B against it.
 public enum TimePitchAlgorithm: String, Codable, Sendable, Hashable, CaseIterable {
-    case spectral, timeDomain
-    public var label: String { self == .spectral ? "Spectral" : "Time domain" }
+    case timeDomain, spectral
+    public var label: String { self == .spectral ? "Apple spectral" : "Speech-tuned" }
 }
 
 public enum EpisodeOrder: String, Codable, Sendable, Hashable, CaseIterable {
@@ -93,7 +95,7 @@ public struct GlobalSettings: Codable, Sendable, Hashable {
     public var storageCapGB: Double
 
     public init(
-        speed: Double = 1.0, smartSpeed: Bool = true, voiceBoost: Bool = true, timePitch: TimePitchAlgorithm = .spectral,
+        speed: Double = 1.0, smartSpeed: Bool = true, voiceBoost: Bool = true, timePitch: TimePitchAlgorithm = .timeDomain,
         skipIntro: Double = 0, skipOutro: Double = 0, autoAdd: AutoAdd = .inbox, autoDownload: Bool = true,
         keepLatest: Int = 3, notifications: Bool = false, episodeOrder: EpisodeOrder = .newestFirst,
         autoArchive: AutoArchive = .never, skipBack: Double = 15, skipForward: Double = 30,

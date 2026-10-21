@@ -3,39 +3,61 @@ import PoddleKit
 
 @main
 struct PoddleApp: App {
+    #if os(iOS)
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #else
+    @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
+    #endif
     @State private var store: PoddleStore
-    @State private var player: MockPlayer
-    @State private var app = AppModel()
+    @State private var app: AppModel
+    @State private var push: PushCoordinator
     @Environment(\.scenePhase) private var scenePhase
+    private let player: any PoddlePlayer
 
+    /// Launch arguments are documented in the README ("Launch arguments").
     init() {
         let defaults = UserDefaults.standard
-        let arguments = ProcessInfo.processInfo.arguments
         let screen = defaults.string(forKey: "PoddleScreen")
-        // Sample data only when asked for: `-PoddleMock YES`, or a screenshot run (`-PoddleScreen`)
-        // without `-PoddleLive YES`.
-        let mock = arguments.contains("-PoddleMock") || (screen != nil && !arguments.contains("-PoddleLive"))
+        // Sample data only when asked for: `-PoddleMock YES`, `-PoddleRealAudio YES`, or a screenshot run
+        // without `-PoddleLive YES`. Otherwise it's LiveStore.
+        let realAudio = defaults.bool(forKey: "PoddleRealAudio")
+        let mock = defaults.bool(forKey: "PoddleMock") || realAudio || (screen != nil && !defaults.bool(forKey: "PoddleLive"))
+        // Fake playback and downloads on screenshot runs, unless `-PoddleMockPlayer NO`; `-PoddleMockPlayer YES`
+        // forces it on any launch. Otherwise the real engine plays.
+        let fakePlayback = defaults.object(forKey: "PoddleMockPlayer") != nil ? defaults.bool(forKey: "PoddleMockPlayer") : screen != nil
 
-        let store = mock ? MockStore.makeStore() : Self.liveStore()
-        let player = MockPlayer(store: store)
+        let store: PoddleStore
         if mock {
-            player.routeName = "Kitchen"
-            player.load(MockData.playingEpisodeId, smartSaved: 252)
-        } else if let head = store.queue.first {
-            player.load(head.id)
+            var seed = MockData.snapshot()
+            if realAudio { seed = MockData.withRealAudio(seed) }
+            store = MockStore.makeStore(seed: seed, downloads: fakePlayback ? MockData.downloads() : [:])
+        } else {
+            store = Self.liveStore()
         }
-        _store = State(initialValue: store)
-        _player = State(initialValue: player)
-
         let app = AppModel()
         app.isMock = mock
-        if let screen {
-            app.applyLaunchScreen(screen, player: player, store: store)
+        let services = AppServices(store: store, app: app, fakePlayback: fakePlayback)
+        let player = services.player
+
+        if mock, let fake = player as? MockPlayer {
+            fake.routeName = "Kitchen"
+            fake.load(MockData.playingEpisodeId, position: nil, smartSaved: 252)
+        } else if let head = store.queue.first {
+            // Restore what was playing, paused at its saved position.
+            player.load(head.id)
         }
-        _app = State(initialValue: app)
-        if mock && defaults.string(forKey: "PoddlePaused") == nil {
+        if let screen { app.applyLaunchScreen(screen, player: player, store: store) }
+        if fakePlayback ? mock && defaults.string(forKey: "PoddlePaused") == nil : defaults.bool(forKey: "PoddleAutoplay") {
             player.resume()
         }
+        #if DEBUG
+        AudioCheck.run(services)
+        #endif
+
+        _store = State(initialValue: store)
+        _app = State(initialValue: app)
+        _push = State(initialValue: services.push)
+        self.player = player
     }
 
     /// The Convex-backed store, seeded from the on-disk cache so the first frame has data.
@@ -53,8 +75,9 @@ struct PoddleApp: App {
         WindowGroup {
             RootView()
                 .environment(store)
-                .environment(player)
+                .environment(\.player, player)
                 .environment(app)
+                .environment(push)
                 .preferredColorScheme(Self.forcedScheme)
                 .tint(Palette.tomato)
                 .onChange(of: scenePhase) { _, phase in
@@ -85,7 +108,7 @@ struct PoddleApp: App {
 #if os(macOS)
 /// Space to play or pause, arrows to skip (spec §2.6, Mac and iPad).
 struct PlaybackCommands: Commands {
-    var player: MockPlayer
+    var player: any PoddlePlayer
     var store: PoddleStore
     var body: some Commands {
         CommandMenu("Playback") {

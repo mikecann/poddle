@@ -61,11 +61,23 @@ final class NowPlayingController {
         artworkKey = data
         #if canImport(UIKit)
         guard let image = UIImage(data: data) else { artwork = nil; return nil }
-        artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in UIImage(data: data) ?? UIImage() }
+        artwork = MPMediaItemArtwork(boundsSize: image.size, requestHandler: Self.imageHandler(data))
         #elseif canImport(AppKit)
         guard let image = NSImage(data: data) else { artwork = nil; return nil }
-        artwork = MPMediaItemArtwork(boundsSize: image.size) { _ in NSImage(data: data) ?? NSImage() }
+        artwork = MPMediaItemArtwork(boundsSize: image.size, requestHandler: Self.imageHandler(data))
         #endif
         return artwork
     }
+
+    // MediaPlayer calls the artwork handler on its own queue. Made outside the main actor so the
+    // closure isn't main-actor isolated (Swift 6 traps when an isolated closure runs off-actor).
+    #if canImport(UIKit)
+    private nonisolated static func imageHandler(_ data: Data) -> @Sendable (CGSize) -> UIImage {
+        { _ in UIImage(data: data) ?? UIImage() }
+    }
+    #elseif canImport(AppKit)
+    private nonisolated static func imageHandler(_ data: Data) -> @Sendable (CGSize) -> NSImage {
+        { _ in NSImage(data: data) ?? NSImage() }
+    }
+    #endif
 }

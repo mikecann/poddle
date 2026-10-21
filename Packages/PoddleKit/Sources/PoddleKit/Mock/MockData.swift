@@ -228,6 +228,29 @@ public enum MockData {
         )
     }
 
+    /// Real, short public episodes (Changelog News) for checking actual playback against sample data.
+    public static let realEnclosures: [(url: String, duration: Double)] = [
+        ("https://cdn.changelog.com/uploads/news/183/changelog-news-183.mp3", 310),
+        ("https://cdn.changelog.com/uploads/news/182/changelog-news-182.mp3", 468),
+        ("https://cdn.changelog.com/uploads/news/181/changelog-news-181.mp3", 384),
+        ("https://cdn.changelog.com/uploads/news/180/changelog-news-180.mp3", 455),
+        ("https://cdn.changelog.com/uploads/news/179/changelog-news-179.mp3", 526),
+        ("https://cdn.changelog.com/uploads/news/178/changelog-news-178.mp3", 410),
+        ("https://cdn.changelog.com/uploads/news/177/changelog-news-177.mp3", 374),
+    ]
+
+    /// The sample library with the top of the queue pointing at `realEnclosures`, from the start.
+    public static func withRealAudio(_ snapshot: LibrarySnapshot) -> LibrarySnapshot {
+        var s = snapshot
+        for (item, real) in zip(s.queue, realEnclosures) {
+            s.episodes[item.episodeId]?.enclosureURL = real.url
+            s.episodes[item.episodeId]?.duration = real.duration
+            s.episodes[item.episodeId]?.enclosureLength = nil
+            s.states[item.episodeId]?.position = 0
+        }
+        return s
+    }
+
     /// Everything queued is downloaded except Latent Space, plus the newest Syntax.
     public static func downloads() -> [String: Download] {
         let ids = queueOrder.filter { $0 != "ep_latent_sandbox" } + ["ep_syntax_912", "ep_changelog_news"]

@@ -70,8 +70,14 @@ struct EpisodeRow: View {
             }
             Text("at \(Format.speed(item.speed.value))").foregroundStyle(Palette.ink2)
             DownloadGlyph(item: item)
-            if !item.isDownloaded && !item.isDownloading && style == .queue {
-                Text("Not downloaded").foregroundStyle(Palette.ink3)
+            if style == .queue {
+                if item.isWaitingForWifi {
+                    Text("Waiting for Wi-Fi").foregroundStyle(Palette.ink3)
+                } else if item.isDownloading {
+                    Text("\(Int((item.download?.progress ?? 0) * 100))%").foregroundStyle(Palette.ink3)
+                } else if !item.isDownloaded {
+                    Text("Not downloaded").foregroundStyle(Palette.ink3)
+                }
             }
         }
         .font(.text(12.5, .medium))
@@ -100,11 +106,16 @@ extension View {
 /// Everything you can do to an episode, used by context menus and swipes.
 struct EpisodeActions {
     var store: PoddleStore
-    var player: MockPlayer
+    var player: any PoddlePlayer
     var app: AppModel
 
     func playNow(_ id: String) {
         player.play(id)
+    }
+
+    /// Over mobile data in Wi-Fi-only mode this asks first (RootView shows the prompt).
+    func download(_ id: String) {
+        if store.download(id) == .needsMobilePrompt { app.mobilePromptEpisodeId = id }
     }
 
     /// Top of the visible Up Next list: straight after whatever's playing.
@@ -130,8 +141,10 @@ struct EpisodeActions {
         }
         if item.isDownloaded {
             Button { store.removeDownload(id) } label: { Label("Remove download", systemImage: "xmark.circle") }
+        } else if item.isDownloading {
+            Button { store.removeDownload(id) } label: { Label("Cancel download", systemImage: "xmark.circle") }
         } else {
-            Button { store.download(id) } label: { Label("Download", systemImage: "arrow.down.circle") }
+            Button { download(id) } label: { Label("Download", systemImage: "arrow.down.circle") }
         }
         Button { store.toggleStar(id) } label: {
             Label(item.isStarred ? "Unstar" : "Star", systemImage: item.isStarred ? "star.slash" : "star")

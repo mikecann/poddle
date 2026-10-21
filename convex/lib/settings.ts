@@ -68,7 +68,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   playbackSpeed: 1.0,
   smartSpeed: true,
   voiceBoost: true,
-  timePitch: "spectral",
+  timePitch: "timeDomain",
   skipIntroSeconds: 0,
   skipOutroSeconds: 0,
   newEpisodes: "inbox",

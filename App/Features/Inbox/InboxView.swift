@@ -5,7 +5,7 @@ import PoddleKit
 /// left to archive (short) or mark played (long).
 struct InboxView: View {
     @Environment(PoddleStore.self) private var store
-    @Environment(MockPlayer.self) private var player
+    @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
     @State private var confirmArchiveAll = false
     @State private var refreshed = 0
