@@ -12,3 +12,5 @@ node_modules/
 .env*.local
 # Secrets
 *.p8
+# Simulator screenshots, regenerate with scripts/screenshots.sh
+designs/build-shots/
