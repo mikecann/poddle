@@ -17,6 +17,13 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 - **Speed edits:** the speed sheet's scope switch defaults to "Just this show" if the show already has its own speed, otherwise "All podcasts". A change applies to whichever scope is selected. There is no per-episode speed.
 - **Per-show settings:** each one is either "Use default" (inherits the global value live) or an explicit value. The full list is in spec §2.5.
 - **Defaults:** skip back 15 s and forward 30 s; Smart Speed and Voice Boost on; AirPods next/previous = skip forward/back; auto-rewind on resume.
+- **Downloads over mobile data** (Mike, 21 Oct):
+  - The global setting is "Download on: Wi-Fi only" (default) or "Wi-Fi and mobile data".
+  - In Wi-Fi-only mode you can temporarily allow mobile downloads: "Allow mobile downloads for 1 hour" (also 3 hours, or until tomorrow). It's one tap from the Downloads settings, from the download queue, and from the prompt below.
+  - While it's active, a small banner or chip shows the time left and has a "Stop" button. When it expires, unfinished downloads pause until Wi-Fi.
+  - Tapping download on a single episode over mobile data in Wi-Fi-only mode asks: "Download now on mobile", "Allow mobile for 1 hour", or "Wait for Wi-Fi".
+  - Streaming playback over mobile data is always allowed. This setting only covers downloads.
+  - It's a device-local setting, not synced, so the iPad and Mac don't care.
 
 ## Tech
 
