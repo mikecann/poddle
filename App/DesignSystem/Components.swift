@@ -41,6 +41,7 @@ struct NewDot: View {
 }
 
 struct DownloadGlyph: View {
+    @Environment(PoddleStore.self) private var store
     var item: EpisodeItem
     var body: some View {
         if item.isDownloaded {
@@ -50,10 +51,7 @@ struct DownloadGlyph: View {
             Image(systemName: "wifi").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink3)
                 .accessibilityLabel("Waiting for Wi-Fi")
         } else if item.isDownloading {
-            ProgressView(value: item.download?.progress ?? 0)
-                .progressViewStyle(RingProgressStyle())
-                .frame(width: 14, height: 14)
-                .accessibilityLabel("Downloading, \(Int((item.download?.progress ?? 0) * 100)) percent")
+            DownloadRing(progress: store.downloadProgress(item.id), fallback: item.download?.progress ?? 0)
         } else if item.download?.state == .failed {
             Image(systemName: "exclamationmark.circle").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.tomato)
                 .accessibilityLabel("Download failed")
@@ -61,6 +59,30 @@ struct DownloadGlyph: View {
             Image(systemName: "icloud.and.arrow.down").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink3)
                 .accessibilityLabel("Not downloaded")
         }
+    }
+}
+
+/// The only views that read live download progress, so a progress tick redraws just them and not
+/// the row or list around them.
+struct DownloadRing: View {
+    var progress: DownloadProgress?
+    var fallback: Double
+
+    var body: some View {
+        let value = progress?.fraction ?? fallback
+        ProgressView(value: value)
+            .progressViewStyle(RingProgressStyle())
+            .frame(width: 14, height: 14)
+            .accessibilityLabel("Downloading, \(Int(value * 100)) percent")
+    }
+}
+
+struct DownloadPercent: View {
+    var progress: DownloadProgress?
+    var fallback: Double
+
+    var body: some View {
+        Text("\(Int((progress?.fraction ?? fallback) * 100))%")
     }
 }
 

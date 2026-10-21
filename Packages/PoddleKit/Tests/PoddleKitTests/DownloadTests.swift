@@ -286,4 +286,109 @@ private let sydney: Calendar = {
         // (A file:// URL ignores the network, so it may already be done.)
         #expect([.waitingForWifi, .done].contains(manager.downloads["ep5"]?.state))
     }
+
+    /// Never answers, so a task stays in flight (TEST-NET-1).
+    func slow(_ name: String) -> URL { URL(string: "http://192.0.2.1/\(name).mp3")! }
+
+    @Test func atMostTwoAtOnceInUpNextOrder() async throws {
+        let manager = makeManager(ManualNetworkMonitor(.wifi))
+        await waitFor { manager.network == .wifi }
+        for id in ["a", "b", "c", "d"] { manager.request(id, url: slow(id), auto: true) }
+        #expect(manager.records.values.filter { $0.state == .downloading }.map(\.episodeId).sorted() == ["a", "b"])
+        #expect(manager.records["c"]?.state == .queued && manager.records["d"]?.state == .queued)
+        #expect(manager.download(for: "d")?.state == .queued)
+
+        // A slot frees up: the next in Up Next order starts, not the next requested.
+        manager.setOrder(["d", "c"])
+        #expect(manager.records["d"]?.state == .queued)
+        manager.remove("a")
+        #expect(manager.records["d"]?.state == .downloading)
+        #expect(manager.records["c"]?.state == .queued)
+
+        // A tap goes ahead of auto-downloads.
+        manager.request("tap", url: slow("tap"))
+        #expect(manager.records["tap"]?.state == .queued)
+        manager.remove("b")
+        #expect(manager.records["tap"]?.state == .downloading)
+        #expect(manager.records["c"]?.state == .queued)
+
+        // Failures free slots too.
+        let taskId = try #require(manager.taskIdentifier(for: "d"))
+        manager.handle(.failed("d", taskId: taskId, message: "nope", resumeData: nil))
+        #expect(manager.records["d"]?.state == .failed)
+        #expect(manager.records["c"]?.state == .downloading)
+        for id in ["c", "d", "tap"] { manager.remove(id) }
+    }
+
+    @Test func pausedDownloadsWaitInLineWhenWifiReturns() async throws {
+        let net = ManualNetworkMonitor(.mobile)
+        let manager = makeManager(net)
+        await waitFor { manager.network == .mobile }
+        manager.allowMobile(.oneHour)
+        for id in ["a", "b", "c"] { manager.request(id, url: slow(id), auto: true) }
+        manager.stopMobileAllowance()
+        #expect(manager.records["a"]?.state == .pausedForWifi && manager.records["b"]?.state == .pausedForWifi)
+        // Nothing's running, but "c" can't use mobile, so it waits for Wi-Fi.
+        #expect(manager.download(for: "c")?.state == .waitingForWifi)
+        net.set(.wifi)
+        await waitFor { manager.network == .wifi }
+        #expect(manager.records.values.count { $0.state == .downloading } == 2)
+        #expect(manager.records.values.count { $0.state == .queued } == 1)
+        for id in ["a", "b", "c"] { manager.remove(id) }
+    }
+
+    /// Progress ticks redraw only the views that read `DownloadProgress`, never lists or rows.
+    @Test func progressDoesNotInvalidateListsButStateChangesDo() async throws {
+        var clock = t0
+        let manager = makeManager(ManualNetworkMonitor(.wifi), now: { clock })
+        await waitFor { manager.network == .wifi }
+        let store = MockStore.makeStore(sync: false)
+        store.downloader = manager
+        let queued = MockData.playingEpisodeId
+        #expect(store.queue.contains { $0.id == queued } && !store.inbox.isEmpty)
+
+        manager.request(queued, url: slow("progress"))
+        let taskId = try #require(manager.taskIdentifier(for: queued))
+        manager.handle(.progress(queued, taskId: taskId, written: 1_000, expected: 100_000))
+        #expect(store.download(for: queued)?.state == .downloading)
+
+        let lists: [(String, () -> Void)] = [
+            ("queue", { _ = store.queue }), ("inbox", { _ = store.inbox }), ("item", { _ = store.item(queued) }),
+        ]
+        let progress = try #require(store.downloadProgress(queued))
+        var written: Int64 = 1_000
+        for _ in 1...3 {
+            for (name, read) in lists {
+                clock = clock.addingTimeInterval(1) // past the 4-a-second throttle
+                written += 4_000
+                let fired = invalidates(read) {
+                    manager.handle(.progress(queued, taskId: taskId, written: written, expected: 100_000))
+                }
+                #expect(!fired, "progress invalidated \(name)")
+            }
+        }
+        clock = clock.addingTimeInterval(1)
+        #expect(invalidates({ _ = progress.fraction }) {
+            manager.handle(.progress(queued, taskId: taskId, written: 50_000, expected: 100_000))
+        })
+        #expect(progress.fraction == 0.5)
+        #expect(manager.records[queued]?.bytesWritten == 1_000) // untouched since the first bytes
+
+        let done = invalidates({ _ = store.queue; _ = store.inbox; _ = store.item(queued) }) {
+            manager.handle(.finished(queued, taskId: taskId, fileName: "progress.mp3", bytes: 100_000))
+        }
+        #expect(done)
+        #expect(store.item(queued)?.isDownloaded == true)
+        #expect(progress.fraction == 1)
+        manager.remove(queued)
+    }
+
+    private func invalidates(_ read: () -> Void, by change: () -> Void) -> Bool {
+        let fired = Flag()
+        withObservationTracking(read) { fired.value = true }
+        change()
+        return fired.value
+    }
 }
+
+private final class Flag: @unchecked Sendable { var value = false }

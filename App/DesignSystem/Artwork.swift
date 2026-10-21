@@ -2,7 +2,7 @@ import SwiftUI
 import PoddleKit
 
 /// Generated artwork tiles, drawn to match the design's CSS art. Real artwork (when a show has an
-/// `artworkURL`) loads over the generated tile.
+/// `artworkURL`) replaces the generated tile once its thumbnail is in.
 struct ArtworkView: View {
     var title: String
     var artworkURL: String? = nil
@@ -29,12 +29,13 @@ struct ArtworkView: View {
     var body: some View {
         let radius = cornerRadius ?? size * 0.2
         let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
-        GeneratedArt(style: ArtStyle(title: title), title: title, s: size)
-            .overlay {
-                if let artworkURL, let url = URL(string: artworkURL) {
-                    AsyncImage(url: url) { $0.resizable().scaledToFill() } placeholder: { Color.clear }
-                }
+        Group {
+            if let artworkURL, let url = URL(string: artworkURL) {
+                RemoteArtwork(url: url, size: size) { GeneratedArt(style: ArtStyle(title: title), title: title, s: size) }
+            } else {
+                GeneratedArt(style: ArtStyle(title: title), title: title, s: size)
             }
+        }
             .frame(width: size, height: size)
             .clipShape(shape)
             .overlay(shape.stroke(.black.opacity(0.14), lineWidth: 0.5))

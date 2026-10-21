@@ -3,6 +3,7 @@ import PoddleKit
 
 /// Row content shared by Up Next and the Inbox: artwork, show line, title and the time/speed line.
 struct EpisodeRow: View {
+    @Environment(PoddleStore.self) private var store
     enum Style { case queue, inbox }
     var item: EpisodeItem
     var style: Style
@@ -74,7 +75,8 @@ struct EpisodeRow: View {
                 if item.isWaitingForWifi {
                     Text("Waiting for Wi-Fi").foregroundStyle(Palette.ink3)
                 } else if item.isDownloading {
-                    Text("\(Int((item.download?.progress ?? 0) * 100))%").foregroundStyle(Palette.ink3)
+                    DownloadPercent(progress: store.downloadProgress(item.id), fallback: item.download?.progress ?? 0)
+                        .foregroundStyle(Palette.ink3)
                 } else if !item.isDownloaded {
                     Text("Not downloaded").foregroundStyle(Palette.ink3)
                 }

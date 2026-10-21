@@ -19,7 +19,7 @@ enum AudioCheck {
             }
             @MainActor func status() -> String {
                 let id = player.currentEpisodeId ?? "-"
-                return "ep=\(id) backend=\(player.backend) pos=\(String(format: "%.1f", player.position))/\(String(format: "%.0f", player.duration)) rate=\(player.rate) playing=\(player.isPlaying) buffering=\(player.isBuffering) download=\(store.downloads[id].map { "\($0.state.rawValue) \(Int($0.progress * 100))%" } ?? "none") queue=\(store.queue.prefix(3).map(\.id))"
+                return "ep=\(id) backend=\(player.backend) pos=\(String(format: "%.1f", player.position))/\(String(format: "%.0f", player.duration)) rate=\(player.rate) playing=\(player.isPlaying) buffering=\(player.isBuffering) download=\(store.download(for: id).map { "\($0.state.rawValue) \(Int((store.downloadProgress(id)?.fraction ?? $0.progress) * 100))%" } ?? "none") queue=\(store.queue.prefix(3).map(\.id))"
             }
             // Stream first: hold auto-downloads off until the check downloads it by hand.
             store.updateGlobal { $0.autoDownload = false }

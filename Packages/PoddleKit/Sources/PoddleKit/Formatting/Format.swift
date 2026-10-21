@@ -1,4 +1,5 @@
 import Foundation
+import Synchronization
 
 /// Display formatting shared by every screen.
 public enum Format {
@@ -76,32 +77,40 @@ public enum Format {
         let date = Date(timeIntervalSince1970: millis / 1000)
         if calendar.isDate(date, inSameDayAs: now) { return "Today" }
         if let y = calendar.date(byAdding: .day, value: -1, to: now), calendar.isDate(date, inSameDayAs: y) { return "Yesterday" }
-        let f = DateFormatter()
-        f.locale = locale
-        f.calendar = calendar
-        f.timeZone = calendar.timeZone
         let sameYear = calendar.component(.year, from: date) == calendar.component(.year, from: now)
-        f.dateFormat = sameYear ? "EEE d MMM" : "d MMM yyyy"
+        let f = formatter(sameYear ? "EEE d MMM" : "d MMM yyyy", locale: locale, calendar: calendar)
         return f.string(from: date)
     }
 
     /// "21 OCT 2026" for receipts.
     public static func receiptDate(_ millis: Millis, calendar: Calendar = .current) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_AU")
-        f.timeZone = calendar.timeZone
-        f.dateFormat = "d MMM yyyy"
-        return f.string(from: Date(timeIntervalSince1970: millis / 1000)).uppercased()
+        formatter("d MMM yyyy", locale: Locale(identifier: "en_AU"), calendar: calendar)
+            .string(from: Date(timeIntervalSince1970: millis / 1000)).uppercased()
     }
 
     /// "March 2014".
     public static func monthYear(_ millis: Millis, calendar: Calendar = .current) -> String {
-        let f = DateFormatter()
-        f.locale = Locale(identifier: "en_AU")
-        f.timeZone = calendar.timeZone
-        f.dateFormat = "MMMM yyyy"
-        return f.string(from: Date(timeIntervalSince1970: millis / 1000))
+        formatter("MMMM yyyy", locale: Locale(identifier: "en_AU"), calendar: calendar)
+            .string(from: Date(timeIntervalSince1970: millis / 1000))
     }
+
+    /// Date formatters are slow to make, and rows ask for dates while scrolling, so each one is
+    /// made once. (`DateFormatter` is thread-safe for formatting.)
+    private static func formatter(_ format: String, locale: Locale, calendar: Calendar) -> DateFormatter {
+        let key = "\(format)|\(locale.identifier)|\(calendar.identifier)|\(calendar.timeZone.identifier)"
+        return formatters.withLock { cache in
+            if let f = cache[key] { return f }
+            let f = DateFormatter()
+            f.locale = locale
+            f.calendar = calendar
+            f.timeZone = calendar.timeZone
+            f.dateFormat = format
+            cache[key] = f
+            return f
+        }
+    }
+
+    private static let formatters = Mutex<[String: DateFormatter]>([:])
 
     /// "12:00", "4:30" countdown for the sleep timer.
     public static func countdown(_ seconds: Double) -> String { clock(seconds) }

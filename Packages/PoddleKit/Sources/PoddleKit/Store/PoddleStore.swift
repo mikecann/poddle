@@ -14,7 +14,10 @@ public final class PoddleStore {
     private var fakeDownloads: [String: Download]
     /// The background downloader. Nil in previews and tests, which fake downloads instead.
     public var downloader: DownloadManager?
+    /// Every download. Maps all of them, so rows should use `download(for:)`.
     public var downloads: [String: Download] { downloader?.downloads ?? fakeDownloads }
+    /// Live progress for fake downloads, like `DownloadManager.progress(for:)`.
+    @ObservationIgnored private var fakeProgress: [String: DownloadProgress] = [:]
     public private(set) var chapterCache: [String: [Chapter]] = [:]
 
     public private(set) var stats: StatsSummary?
@@ -103,16 +106,40 @@ public final class PoddleStore {
         snapshot.podcastSettings[podcastId] ?? PodcastSettings(podcastId: podcastId)
     }
 
+    /// One episode's download, as rows show it.
+    public func download(for episodeId: String) -> Download? {
+        if let downloader { return downloader.download(for: episodeId) }
+        return fakeDownloads[episodeId]
+    }
+
+    /// Live download progress. Only small leaf views should read it, so progress ticks don't
+    /// rebuild rows and lists.
+    public func downloadProgress(_ episodeId: String) -> DownloadProgress? {
+        if let downloader { return downloader.progress(for: episodeId) }
+        guard let d = fakeDownloads[episodeId] else { return nil }
+        if let p = fakeProgress[episodeId] { return p }
+        let p = DownloadProgress(fraction: d.progress)
+        fakeProgress[episodeId] = p
+        return p
+    }
+
     public func item(_ episodeId: String) -> EpisodeItem? {
+        item(episodeId, isQueued: snapshot.isQueued(episodeId))
+    }
+
+    /// `isQueued` passed in, because `snapshot.isQueued` scans the whole queue.
+    private func item(_ episodeId: String, isQueued: Bool) -> EpisodeItem? {
         guard let ep = snapshot.episodes[episodeId], let pod = snapshot.podcasts[ep.podcastId] else { return nil }
         return EpisodeItem(
-            episode: ep, podcast: pod, state: snapshot.state(episodeId), isQueued: snapshot.isQueued(episodeId),
-            speed: snapshot.resolved(pod.id).speed, download: downloads[episodeId]
+            episode: ep, podcast: pod, state: snapshot.state(episodeId), isQueued: isQueued,
+            speed: snapshot.resolved(pod.id).speed, download: download(for: episodeId)
         )
     }
 
+    private var queuedIds: Set<String> { Set(snapshot.queue.map(\.episodeId)) }
+
     /// The whole queue in order. The head is what's playing (or plays next).
-    public var queue: [EpisodeItem] { snapshot.queue.compactMap { item($0.episodeId) } }
+    public var queue: [EpisodeItem] { snapshot.queue.compactMap { item($0.episodeId, isQueued: true) } }
 
     /// The Up Next list: the queue minus whatever's loaded in the player.
     public func upNext(excluding current: String?) -> [EpisodeItem] {
@@ -124,9 +151,10 @@ public final class PoddleStore {
 
     /// New episodes waiting for a decision, newest first.
     public var inbox: [EpisodeItem] {
-        snapshot.states.values
-            .filter { snapshot.isInInbox($0.episodeId) }
-            .compactMap { item($0.episodeId) }
+        let queued = queuedIds
+        return snapshot.states.values
+            .filter { $0.inboxAt != nil && !$0.archived && !$0.played && !queued.contains($0.episodeId) }
+            .compactMap { item($0.episodeId, isQueued: false) }
             .filter { $0.podcast.subscribed }
             .sorted { $0.episode.pubDate > $1.episode.pubDate }
     }
@@ -147,9 +175,10 @@ public final class PoddleStore {
 
     public func episodes(of podcastId: String, order: EpisodeOrder? = nil) -> [EpisodeItem] {
         let order = order ?? resolved(podcastId).episodeOrder.value
+        let queued = queuedIds
         return (byPodcast[podcastId] ?? [])
             .sorted { order == .newestFirst ? $0.pubDate > $1.pubDate : $0.pubDate < $1.pubDate }
-            .compactMap { item($0.id) }
+            .compactMap { item($0.id, isQueued: queued.contains($0.id)) }
     }
 
     public func latestPubDate(_ podcastId: String) -> Millis? {
@@ -273,18 +302,20 @@ public final class PoddleStore {
     /// and the UI asks (see `resolveMobilePrompt`).
     @discardableResult
     public func download(_ episodeId: String) -> DownloadManager.RequestResult {
-        guard downloads[episodeId]?.state != .done else { return .alreadyDownloaded }
+        guard download(for: episodeId)?.state != .done else { return .alreadyDownloaded }
         if let downloader {
             guard let url = episode(episodeId).flatMap({ URL(string: $0.enclosureURL) }) else { return .started }
             return downloader.request(episodeId, url: url)
         }
         fakeDownloads[episodeId] = Download(episodeId: episodeId, state: .downloading, progress: 0)
+        fakeProgress[episodeId] = DownloadProgress(fraction: 0)
         tasks.append(Task { [weak self] in
             for step in 1...10 {
                 try? await Task.sleep(for: .milliseconds(120))
                 guard let self, self.fakeDownloads[episodeId] != nil else { return }
-                self.fakeDownloads[episodeId]?.progress = Double(step) / 10
+                self.fakeProgress[episodeId]?.setFraction(Double(step) / 10)
             }
+            self?.fakeDownloads[episodeId]?.progress = 1
             self?.fakeDownloads[episodeId]?.state = .done
         })
         return .started
@@ -296,7 +327,10 @@ public final class PoddleStore {
     }
 
     public func removeDownload(_ episodeId: String) {
-        if let downloader { downloader.remove(episodeId) } else { fakeDownloads[episodeId] = nil }
+        if let downloader { downloader.remove(episodeId) } else {
+            fakeDownloads[episodeId] = nil
+            fakeProgress[episodeId] = nil
+        }
     }
 
     /// Auto-downloads and cleanup: the first Up Next items plus new episodes from priority shows,
@@ -318,7 +352,9 @@ public final class PoddleStore {
             queue: queueIds.compactMap(candidate), episodes: subscribed.compactMap { candidate($0.id) },
             autoDownload: { self.resolved($0).autoDownload.value }, isPriority: { self.resolved($0).isPriority },
             keepLatest: { self.resolved($0).keepLatest.value }, now: nowMillis)
-        for id in wanted where downloads[id] == nil && downloader.storageUsed < capBytes {
+        downloader.setOrder(queueIds)
+        let used = downloader.storageUsed
+        for id in wanted where downloader.download(for: id) == nil && used < capBytes {
             guard let url = episode(id).flatMap({ URL(string: $0.enclosureURL) }) else { continue }
             downloader.request(id, url: url, auto: true)
         }

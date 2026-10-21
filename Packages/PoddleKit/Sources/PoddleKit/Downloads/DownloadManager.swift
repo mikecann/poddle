@@ -3,7 +3,8 @@ import Observation
 
 /// One episode's download. Device-local, kept in `downloads.json` next to the files.
 public struct DownloadRecord: Codable, Sendable, Hashable {
-    public enum State: String, Codable, Sendable { case downloading, pausedForWifi, done, failed }
+    /// `queued` waits for one of the `DownloadManager.maxConcurrent` slots.
+    public enum State: String, Codable, Sendable { case queued, downloading, pausedForWifi, done, failed }
 
     public var episodeId: String
     public var remoteURL: String
@@ -21,10 +22,42 @@ public struct DownloadRecord: Codable, Sendable, Hashable {
     /// Integrated loudness in LUFS, measured once after download for Voice Boost.
     public var loudness: Double?
     public var error: String?
+    /// Breaks ties when picking what to start next.
+    public var requestedAt: Date?
 
     public var progress: Double {
         if state == .done { return 1 }
         return bytesExpected > 0 ? min(1, Double(bytesWritten) / Double(bytesExpected)) : 0
+    }
+}
+
+/// Bytes for one download, observed only by the small views that draw progress. Kept out of
+/// `DownloadManager.records` so progress ticks don't rebuild every list that shows episodes.
+@MainActor
+@Observable
+public final class DownloadProgress {
+    public private(set) var bytesWritten: Int64
+    public private(set) var bytesExpected: Int64
+    /// Set directly for fake downloads (previews), which have no byte counts.
+    public private(set) var fraction: Double
+
+    public init(bytesWritten: Int64 = 0, bytesExpected: Int64 = 0, fraction: Double? = nil) {
+        self.bytesWritten = bytesWritten
+        self.bytesExpected = bytesExpected
+        self.fraction = fraction ?? Self.fraction(bytesWritten, bytesExpected)
+    }
+
+    func update(written: Int64, expected: Int64) {
+        if bytesWritten != written { bytesWritten = written }
+        if expected > 0, bytesExpected != expected { bytesExpected = expected }
+        let f = Self.fraction(bytesWritten, bytesExpected)
+        if fraction != f { fraction = f }
+    }
+
+    public func setFraction(_ value: Double) { if fraction != value { fraction = value } }
+
+    private static func fraction(_ written: Int64, _ expected: Int64) -> Double {
+        expected > 0 ? min(1, Double(written) / Double(expected)) : 0
     }
 }
 
@@ -36,7 +69,11 @@ public struct DownloadRecord: Codable, Sendable, Hashable {
 @Observable
 public final class DownloadManager {
     public static let sessionIdentifier = "com.mikecann.poddle.downloads"
+    /// More at once just splits the bandwidth, so the top of Up Next lands later.
+    public static let maxConcurrent = 2
 
+    /// Changes only on state transitions (queued, downloading, done, failed, waiting for Wi-Fi), so
+    /// lists can read it freely. Live byte counts are in `progress(for:)`.
     public private(set) var records: [String: DownloadRecord] = [:]
     public private(set) var settings: DownloadSettings
     public private(set) var network: NetworkPath = .wifi
@@ -56,6 +93,9 @@ public final class DownloadManager {
     @ObservationIgnored private let defaults: UserDefaults
     @ObservationIgnored private var expiryTimer: Task<Void, Never>?
     @ObservationIgnored private var lastProgressUpdate: [String: Date] = [:]
+    @ObservationIgnored private var progressById: [String: DownloadProgress] = [:]
+    /// Up Next positions, so queued downloads start in the order they'll be played.
+    @ObservationIgnored private var order: [String: Int] = [:]
 
     private static let settingsKey = "PoddleDownloadSettings"
 
@@ -106,19 +146,39 @@ public final class DownloadManager {
 
     public var policy: DownloadPolicy { DownloadPolicy(settings: settings) }
 
-    /// What episode rows show.
-    public var downloads: [String: Download] {
-        records.mapValues { r in
-            let state: Download.State = switch r.state {
-            case .done: .done
-            case .failed: .failed
-            case .pausedForWifi: .waitingForWifi
-            case .downloading: !r.taskAllowsMobile && network == .mobile && !r.oneOffMobile ? .waitingForWifi
-                : r.bytesWritten > 0 ? .downloading : .queued
-            }
-            return Download(episodeId: r.episodeId, state: state, progress: r.progress,
-                            bytes: Double(r.state == .done ? r.bytesWritten : r.bytesExpected))
+    /// Every download, as rows show them. Maps all records, so prefer `download(for:)`.
+    public var downloads: [String: Download] { records.mapValues { download($0) } }
+
+    /// What an episode row shows. Its `progress` is as of the last state change; draw live
+    /// progress from `progress(for:)`.
+    public func download(for episodeId: String) -> Download? { records[episodeId].map(download) }
+
+    private func download(_ r: DownloadRecord) -> Download {
+        let state: Download.State = switch r.state {
+        case .done: .done
+        case .failed: .failed
+        case .pausedForWifi: .waitingForWifi
+        case .queued: network == .mobile && !policy.mayUseMobile(now: now(), oneOff: r.oneOffMobile) ? .waitingForWifi : .queued
+        case .downloading: !r.taskAllowsMobile && network == .mobile && !r.oneOffMobile ? .waitingForWifi
+            : r.bytesWritten > 0 ? .downloading : .queued
         }
+        return Download(episodeId: r.episodeId, state: state, progress: r.progress,
+                        bytes: Double(r.state == .done ? r.bytesWritten : r.bytesExpected))
+    }
+
+    /// Live bytes for one download. Observe it from a leaf view (a ring or a percentage), not a row.
+    public func progress(for episodeId: String) -> DownloadProgress? {
+        guard let r = records[episodeId] else { return nil }
+        if let p = progressById[episodeId] { return p }
+        let p = DownloadProgress(bytesWritten: r.bytesWritten, bytesExpected: r.bytesExpected, fraction: r.progress)
+        progressById[episodeId] = p
+        return p
+    }
+
+    /// Up Next order (episode ids). Queued downloads start in this order, after manual taps.
+    public func setOrder(_ episodeIds: [String]) {
+        order = Dictionary(episodeIds.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
+        startQueued()
     }
 
     public func localFile(for episodeId: String) -> URL? {
@@ -128,6 +188,8 @@ public final class DownloadManager {
     }
 
     public func loudness(for episodeId: String) -> Double? { records[episodeId]?.loudness }
+
+    func taskIdentifier(for episodeId: String) -> Int? { tasks[episodeId]?.taskIdentifier }
 
     public var storageUsed: Int64 {
         records.values.filter { $0.state == .done }.reduce(0) { $0 + $1.bytesWritten }
@@ -183,7 +245,10 @@ public final class DownloadManager {
         if let name = records[episodeId]?.fileName { try? FileManager.default.removeItem(at: directory.appending(path: name)) }
         try? FileManager.default.removeItem(at: resumeURL(episodeId))
         records[episodeId] = nil
+        progressById[episodeId] = nil
+        lastProgressUpdate[episodeId] = nil
         saveRecords()
+        startQueued()
     }
 
     public func setLoudness(_ lufs: Double, for episodeId: String) {
@@ -243,16 +308,43 @@ public final class DownloadManager {
             cancelled.insert(task.taskIdentifier)
             task.cancel()
         }
+        let wasRunning = records[episodeId]?.state == .downloading
         var record = records[episodeId] ?? DownloadRecord(
-            episodeId: episodeId, remoteURL: url.absoluteString, state: .downloading,
+            episodeId: episodeId, remoteURL: url.absoluteString, state: .queued,
             taskAllowsMobile: allowsMobile, oneOffMobile: oneOff, isAuto: auto)
         record.remoteURL = url.absoluteString
-        record.state = .downloading
         record.oneOffMobile = oneOff
         record.isAuto = record.isAuto && auto
         record.error = nil
-        records[episodeId] = record
-        launch(episodeId, allowsMobile: allowsMobile, useResumeData: true)
+        record.requestedAt = record.requestedAt ?? now()
+        if wasRunning || activeCount < Self.maxConcurrent {
+            records[episodeId] = record
+            launch(episodeId, allowsMobile: allowsMobile, useResumeData: true)
+        } else {
+            record.state = .queued
+            records[episodeId] = record
+            saveRecords()
+        }
+    }
+
+    private var activeCount: Int { records.values.count { $0.state == .downloading } }
+
+    /// Fills free slots from the queued downloads: manual taps first, then Up Next order, then
+    /// oldest request. Each gets whatever mobile data the policy allows when it starts.
+    private func startQueued() {
+        var free = Self.maxConcurrent - activeCount
+        guard free > 0 else { return }
+        let waiting = records.values.filter { $0.state == .queued }.sorted { a, b in
+            if a.isAuto != b.isAuto { return !a.isAuto }
+            let oa = order[a.episodeId] ?? .max, ob = order[b.episodeId] ?? .max
+            if oa != ob { return oa < ob }
+            return (a.requestedAt ?? .distantPast, a.episodeId) < (b.requestedAt ?? .distantPast, b.episodeId)
+        }
+        let p = policy
+        for r in waiting where free > 0 {
+            launch(r.episodeId, allowsMobile: p.mayUseMobile(now: now(), oneOff: r.oneOffMobile), useResumeData: true)
+            free -= 1
+        }
     }
 
     /// Creates and starts the task, from resume data when there is some.
@@ -269,6 +361,7 @@ public final class DownloadManager {
             task = session.downloadTask(with: request)
             record.taskAllowsMobile = allowsMobile
             record.bytesWritten = 0
+            progressById[episodeId]?.update(written: 0, expected: record.bytesExpected)
         }
         try? FileManager.default.removeItem(at: resumeURL(episodeId))
         task.taskDescription = episodeId
@@ -301,8 +394,9 @@ public final class DownloadManager {
                 for (id, boxed) in pairs {
                     if self.records[id]?.state == .downloading { self.tasks[id] = boxed.task } else { boxed.task.cancel() }
                 }
+                // Lost ones go back in line, so they don't push past the cap.
                 for (id, r) in self.records where r.state == .downloading && self.tasks[id] == nil {
-                    self.launch(id, allowsMobile: r.taskAllowsMobile, useResumeData: true)
+                    self.records[id]?.state = .queued
                 }
                 self.reconcile()
             }
@@ -315,7 +409,8 @@ public final class DownloadManager {
         reconcile()
     }
 
-    /// Applies the mobile-data rules to every unfinished download.
+    /// Applies the mobile-data rules to every unfinished download, then fills free slots. Queued
+    /// ones get the rules when they start.
     public func reconcile() {
         let p = policy
         for (id, r) in records where r.state == .downloading || r.state == .pausedForWifi {
@@ -338,14 +433,18 @@ public final class DownloadManager {
                 }
                 launch(id, allowsMobile: false, useResumeData: false)
             case .resume:
-                launch(id, allowsMobile: p.mayUseMobile(now: now(), oneOff: r.oneOffMobile), useResumeData: true)
+                // Back in line; `startQueued` resumes it from its resume data when a slot is free.
+                records[id]?.state = .queued
+                saveRecords()
             }
         }
+        startQueued()
     }
 
     private func pause(_ episodeId: String) {
         records[episodeId]?.state = .pausedForWifi
         saveRecords()
+        defer { startQueued() }
         guard let task = tasks.removeValue(forKey: episodeId) else { return }
         cancelled.insert(task.taskIdentifier)
         let resume = resumeURL(episodeId)
@@ -356,17 +455,20 @@ public final class DownloadManager {
 
     // MARK: Delegate events
 
-    private func handle(_ event: SessionDelegate.Event) {
+    func handle(_ event: SessionDelegate.Event) {
         switch event {
         case let .progress(id, taskId, written, expected):
-            guard tasks[id]?.taskIdentifier == taskId, var r = records[id] else { return }
-            r.bytesWritten = written
-            if expected > 0 { r.bytesExpected = expected }
-            // Rows only need a few updates a second.
+            guard tasks[id]?.taskIdentifier == taskId, let r = records[id] else { return }
+            // Only the first bytes (queued -> downloading) and a new size change what rows show.
+            if (r.bytesWritten == 0 && written > 0) || (expected > 0 && expected != r.bytesExpected) {
+                records[id]?.bytesWritten = written
+                if expected > 0 { records[id]?.bytesExpected = expected }
+            }
+            // Progress views only need a few updates a second.
             let t = now()
             if let last = lastProgressUpdate[id], t.timeIntervalSince(last) < 0.25, written < expected { return }
             lastProgressUpdate[id] = t
-            records[id] = r
+            progress(for: id)?.update(written: written, expected: expected)
 
         case let .finished(id, taskId, fileName, bytes):
             if tasks[id]?.taskIdentifier == taskId { tasks[id] = nil }
@@ -380,7 +482,10 @@ public final class DownloadManager {
             r.bytesExpected = bytes
             r.completedAt = now()
             records[id] = r
+            progressById[id]?.update(written: bytes, expected: bytes)
+            lastProgressUpdate[id] = nil
             saveRecords()
+            startQueued()
             onFileReady?(id, directory.appending(path: fileName))
 
         case let .failed(id, taskId, message, resumeData):
@@ -392,6 +497,7 @@ public final class DownloadManager {
                 // Dropped connection: carry on from where it got to in a moment, once the network allows.
                 records[id]?.state = .pausedForWifi
                 saveRecords()
+                startQueued()
                 Task { [weak self] in
                     try? await Task.sleep(for: .seconds(5))
                     self?.reconcile()
@@ -401,6 +507,7 @@ public final class DownloadManager {
             records[id]?.state = .failed
             records[id]?.error = message
             saveRecords()
+            startQueued()
 
         case .backgroundEventsFinished:
             backgroundCompletion?()
@@ -424,8 +531,14 @@ public final class DownloadManager {
         }
     }
 
+    /// Writes on state changes only, with the latest byte counts (progress ticks don't save).
     private func saveRecords() {
-        guard let data = try? JSONEncoder().encode(records) else { return }
+        var latest = records
+        for (id, p) in progressById where latest[id]?.state != .done {
+            latest[id]?.bytesWritten = p.bytesWritten
+            if p.bytesExpected > 0 { latest[id]?.bytesExpected = p.bytesExpected }
+        }
+        guard let data = try? JSONEncoder().encode(latest) else { return }
         try? data.write(to: recordsURL, options: .atomic)
     }
 }
