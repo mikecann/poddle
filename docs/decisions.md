@@ -6,8 +6,12 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 
 - **Name:** Poddle. Bundle ID `com.mikecann.poddle`. Apple team `4DTAZSZL6B` (paid account).
 - **Look:** direction C, "Earful", warm and tactile: `designs/c-earful-warm.html`. Swap the name Earful for Poddle everywhere. Directions A and B are only kept for reference.
-- **Platforms:** native SwiftUI. iPhone first, iPad and Mac to follow from the same multiplatform target. Latest OS only (iOS 27, macOS 27). No Watch or CarPlay for now.
+- **Platforms:** native SwiftUI. iPhone first, iPad and Mac to follow from the same multiplatform target. Minimum **iOS 18.0** (Mike's phone is an iPhone XS Max on iOS 18.7, which can't run iOS 26 or later) and **macOS 26.0**. Newer APIs go behind `if #available`. His iPad is on iPadOS 26.6. No Watch or CarPlay for now.
 - **Import:** Overcast "All data" OPML, with history. Apple Podcasts only by searching the directory.
+  - Assumed speed for imported history: **2.0×** (Mike's usual Overcast speed).
+  - A show is subscribed only if it has `subscribed="1"`. A missing attribute means unsubscribed.
+  - Overcast has no Inbox. Its main smart playlist ("All Episodes") is effectively the queue. So on import, unplayed episodes that aren't deleted go into **Up Next**, ordered the way that playlist sorts them: `priorityPodcastIds` shows first, then by its `sorting`, with `sortedEpisodeIds` and manual playlists' `includeEpisodeIds` placed first. Everything else is archived.
+  - Shows in `priorityPodcastIds` get the new-episode rule `Up Next top`. Every other show gets `Inbox`.
 
 ## Behaviour
 
