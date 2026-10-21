@@ -31,7 +31,7 @@ umask 077
 {
   echo '// Written by scripts/write-secrets.sh. Gitignored; never commit it.'
   echo '// xcconfig treats // as a comment, so URLs are written https:/$()/…'
-  echo 'PODDLE_CONVEX_URL_DEBUG = https:/$()/qualified-hedgehog-912.convex.cloud'
+  echo 'PODDLE_CONVEX_URL_DEBUG = https:/$()/striped-turtle-260.ap-southeast-2.convex.cloud'
   echo 'PODDLE_CONVEX_URL_RELEASE = https:/$()/coordinated-dodo-120.ap-southeast-2.convex.cloud'
   printf 'PODDLE_API_TOKEN = %s\n' "$escaped"
 } > "$OUT"
