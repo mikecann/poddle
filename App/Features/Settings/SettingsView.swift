@@ -6,6 +6,8 @@ struct SettingsView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(AppModel.self) private var app
 
+    @State private var editingConnection = false
+
     private var g: GlobalSettings { store.global }
 
     var body: some View {
@@ -15,7 +17,9 @@ struct SettingsView: View {
                 LargeTitle(title: "Settings", subtitle: "Defaults for every show. Shows can override any of these.")
                     .padding(.top, 6)
 
-                GroupLabel(text: "Bring your stuff").padding(.top, 8)
+                connection.padding(.top, 8)
+
+                GroupLabel(text: "Bring your stuff")
                 GroupCard {
                     Button { app.push(.importOvercast, on: app.tab) } label: {
                         Cell(title: "Import from Overcast", subtitle: "Shows, played history, progress and stars", icon: "square.and.arrow.down", iconTint: Palette.tomato) {
@@ -80,12 +84,66 @@ struct SettingsView: View {
                 VStack(spacing: 6) {
                     AppMark(size: 44)
                     Text("Poddle").font(.rounded(17, .heavy)).foregroundStyle(Palette.ink)
-                    Text("Version 0.1 · sample data, not synced yet").font(.text(12.5)).foregroundStyle(Palette.ink2)
+                    Text(app.isMock ? "Version 0.1 · sample data" : "Version 0.1 · synced with Convex").font(.text(12.5)).foregroundStyle(Palette.ink2)
                 }
                 .padding(.top, 30).padding(.bottom, 30)
             }
         }
         .scrollContentBackground(.hidden)
+        .sheet(isPresented: $editingConnection) { ConnectionSheet() }
+    }
+
+    /// Which deployment this is synced with, how it's doing, and a way to point it elsewhere.
+    @ViewBuilder private var connection: some View {
+        GroupLabel(text: "Sync")
+        GroupCard {
+            if app.isMock {
+                Cell(title: "Sample data", subtitle: "Launched with -PoddleMock. Nothing is synced.", icon: "shippingbox", iconTint: Palette.mustard) { EmptyView() }
+            } else if let c = store.connection {
+                Button { editingConnection = true } label: {
+                    Cell(title: "Connection", subtitle: c.deploymentName, icon: "antenna.radiowaves.left.and.right", iconTint: c.connected ? Palette.fern : Palette.ink3) {
+                        HStack(spacing: 8) {
+                            Text(c.connected ? "Live" : "Offline").font(.text(14, .medium)).foregroundStyle(Palette.ink2)
+                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
+                        }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                if c.pending > 0 {
+                    Cell(title: "Waiting to sync", subtitle: "Sent in order when the connection's back") {
+                        Text("\(c.pending)").font(.text(15, .semibold)).monospacedDigit().foregroundStyle(Palette.ink2)
+                    }
+                }
+                if c.failed > 0 {
+                    Cell(title: "\(c.failed) change\(c.failed == 1 ? "" : "s") rejected", subtitle: c.error ?? "The server said no") {
+                        HStack(spacing: 4) {
+                            TextButton(title: "Retry", bold: true) { retryFailed() }
+                            TextButton(title: "Discard") { discardFailed() }
+                        }
+                    }
+                } else if let error = c.error {
+                    Cell(title: "Last problem", subtitle: error) { EmptyView() }
+                }
+                if let at = c.lastSyncAt {
+                    Cell(title: "Last caught up") {
+                        Text(Date(timeIntervalSince1970: at / 1000), style: .relative).font(.text(14)).foregroundStyle(Palette.ink2)
+                    }
+                }
+            } else {
+                Cell(title: "Connecting…") { ProgressView() }
+            }
+        }
+    }
+
+    private func retryFailed() {
+        guard let live = store.dataSource as? LiveStore else { return }
+        Task { await live.retryFailed() }
+    }
+
+    private func discardFailed() {
+        guard let live = store.dataSource as? LiveStore else { return }
+        Task { await live.discardFailed() }
     }
 
     private func toggle(_ title: String, _ key: WritableKeyPath<GlobalSettings, Bool>, subtitle: String? = nil, icon: String? = nil, tint: Color = Palette.tomato) -> some View {
@@ -116,5 +174,82 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
         }
         .menuStyle(.button).buttonStyle(.plain)
+    }
+}
+
+/// Paste a different deployment URL or API token. Saved to the Keychain; takes effect straight away.
+private struct ConnectionSheet: View {
+    @Environment(PoddleStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var url = ""
+    @State private var token = ""
+    @State private var problem: String?
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 0) {
+                TopBar {
+                    TextButton(title: "Cancel") { dismiss() }
+                } trailing: {
+                    TextButton(title: "Save", bold: true) { save() }
+                }
+                LargeTitle(title: "Connection", subtitle: "The Convex deployment Poddle syncs with. Each one keeps its own offline copy.")
+                    .padding(.top, 6)
+                GroupLabel(text: "Deployment URL").padding(.top, 8)
+                GroupCard {
+                    TextField("https://….convex.cloud", text: $url)
+                        .font(.mono(14)).autocorrectionDisabled()
+                        #if os(iOS)
+                        .textInputAutocapitalization(.never).keyboardType(.URL)
+                        #endif
+                        .padding(.horizontal, 16).frame(minHeight: 50)
+                }
+                GroupLabel(text: "API token")
+                GroupCard {
+                    SecureField("Leave empty to keep the current token", text: $token)
+                        .font(.mono(14))
+                        .padding(.horizontal, 16).frame(minHeight: 50)
+                }
+                if let problem {
+                    Text(problem).font(.text(13)).foregroundStyle(Palette.tomato).padding(.horizontal, 32).padding(.top, 8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                if LiveConfigStore.bundled() != nil {
+                    Button("Use this build's deployment") { reset() }
+                        .font(.text(15, .semibold)).foregroundStyle(Palette.tomato).padding(.top, 20)
+                }
+            }
+            .padding(.bottom, 30)
+        }
+        .background(Palette.paper)
+        .onAppear { url = store.connection?.deploymentURL.absoluteString ?? LiveConfigStore.resolve()?.deploymentURL.absoluteString ?? "" }
+    }
+
+    private func save() {
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let u = URL(string: trimmed), u.scheme == "https", u.host() != nil else {
+            problem = "That doesn't look like a deployment URL."
+            return
+        }
+        let newToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let finalToken = newToken.isEmpty ? LiveConfigStore.resolve()?.token : newToken, !finalToken.isEmpty else {
+            problem = "Paste the API token too."
+            return
+        }
+        let config = LiveConfig(deploymentURL: u, token: finalToken)
+        LiveConfigStore.saveManual(config)
+        apply(config)
+    }
+
+    private func reset() {
+        guard let config = LiveConfigStore.resetToBuild() else { return }
+        apply(config)
+    }
+
+    private func apply(_ config: LiveConfig) {
+        if let live = store.dataSource as? LiveStore {
+            Task { await live.reconfigure(deploymentURL: config.deploymentURL, token: config.token) }
+        }
+        dismiss()
     }
 }

@@ -1,0 +1,8 @@
+// Settings for Debug builds. Committed; the secrets come from the gitignored Secrets.xcconfig,
+// which scripts/write-secrets.sh writes. Without it the app builds, and the Settings
+// "Connection" row takes a pasted URL and token.
+#include? "Secrets.xcconfig"
+
+// Debug talks to the dev deployment.
+PODDLE_CONVEX_URL = $(PODDLE_CONVEX_URL_DEBUG)
+PODDLE_APS_ENVIRONMENT = development

@@ -58,6 +58,7 @@ struct UpNextView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable { await store.refresh() }
         .contentMargins(.top, 0, for: .scrollContent)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: shown.map(\.id))
         #if os(iOS)

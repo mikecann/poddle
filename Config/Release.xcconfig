@@ -1,0 +1,7 @@
+// Settings for Release builds. Committed; the secrets come from the gitignored Secrets.xcconfig,
+// which scripts/write-secrets.sh writes.
+#include? "Secrets.xcconfig"
+
+// Release talks to the prod deployment.
+PODDLE_CONVEX_URL = $(PODDLE_CONVEX_URL_RELEASE)
+PODDLE_APS_ENVIRONMENT = production

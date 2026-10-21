@@ -28,7 +28,8 @@ struct LibraryView: View {
         case .title: return base.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
         case .added: return base.sorted { ($0.subscribedAt ?? 0) > ($1.subscribedAt ?? 0) }
         case .listened:
-            let rank = Dictionary(uniqueKeysWithValues: MockData.topShows2026.enumerated().map { ($1.podcastId, $0) })
+            let top = store.stats?.topShows ?? []
+            let rank = Dictionary(top.enumerated().map { ($1.podcastId, $0) }, uniquingKeysWith: { a, _ in a })
             return base.sorted { (rank[$0.id] ?? 99) < (rank[$1.id] ?? 99) }
         }
     }

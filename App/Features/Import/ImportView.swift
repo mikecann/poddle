@@ -11,7 +11,8 @@ struct ImportView: View {
     @State private var file: PickedFile?
     @State private var pickingFile = false
     @State private var openedOvercast = false
-    @State private var speed = 1.0
+    /// Mike's usual Overcast speed (decisions.md).
+    @State private var speed = 2.0
     @State private var error: String?
 
     struct PickedFile: Equatable {

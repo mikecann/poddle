@@ -6,26 +6,47 @@ struct PoddleApp: App {
     @State private var store: PoddleStore
     @State private var player: MockPlayer
     @State private var app = AppModel()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
-        // TODO(LiveStore wiring): swap in PoddleStore(dataSource: LiveStore(...), seed: cachedSnapshot)
-        // once the Convex API is ready.
-        let store = MockStore.makeStore()
+        let defaults = UserDefaults.standard
+        let arguments = ProcessInfo.processInfo.arguments
+        let screen = defaults.string(forKey: "PoddleScreen")
+        // Sample data only when asked for: `-PoddleMock YES`, or a screenshot run (`-PoddleScreen`)
+        // without `-PoddleLive YES`.
+        let mock = arguments.contains("-PoddleMock") || (screen != nil && !arguments.contains("-PoddleLive"))
+
+        let store = mock ? MockStore.makeStore() : Self.liveStore()
         let player = MockPlayer(store: store)
-        player.routeName = "Kitchen"
-        player.load(MockData.playingEpisodeId, smartSaved: 252)
+        if mock {
+            player.routeName = "Kitchen"
+            player.load(MockData.playingEpisodeId, smartSaved: 252)
+        } else if let head = store.queue.first {
+            player.load(head.id)
+        }
         _store = State(initialValue: store)
         _player = State(initialValue: player)
 
-        let defaults = UserDefaults.standard
         let app = AppModel()
-        if let screen = defaults.string(forKey: "PoddleScreen") {
-            app.applyLaunchScreen(screen, player: player)
+        app.isMock = mock
+        if let screen {
+            app.applyLaunchScreen(screen, player: player, store: store)
         }
         _app = State(initialValue: app)
-        if defaults.string(forKey: "PoddlePaused") == nil {
+        if mock && defaults.string(forKey: "PoddlePaused") == nil {
             player.resume()
         }
+    }
+
+    /// The Convex-backed store, seeded from the on-disk cache so the first frame has data.
+    private static func liveStore() -> PoddleStore {
+        // Built without Config/Secrets.xcconfig and nothing pasted in Settings yet: connect to
+        // nothing and let the Settings "Connection" row fix it.
+        let config = LiveConfigStore.resolve()
+            ?? LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!, token: "")
+        let live = LiveStore(deploymentURL: config.deploymentURL, token: config.token, deviceId: LiveConfigStore.deviceId())
+        let seed = LiveStore.cachedSnapshot(disk: .forDeployment(config.deploymentURL))
+        return PoddleStore(dataSource: live, seed: seed, deviceId: live.deviceId)
     }
 
     var body: some Scene {
@@ -36,6 +57,14 @@ struct PoddleApp: App {
                 .environment(app)
                 .preferredColorScheme(Self.forcedScheme)
                 .tint(Palette.tomato)
+                .onChange(of: scenePhase) { _, phase in
+                    switch phase {
+                    // Foreground: ask Convex to re-check feeds not checked in the last 2 minutes.
+                    case .active: Task { await store.refresh() }
+                    case .background: if let live = store.dataSource as? LiveStore { Task { await live.flush() } }
+                    default: break
+                    }
+                }
         }
         #if os(macOS)
         .defaultSize(width: 1100, height: 780)

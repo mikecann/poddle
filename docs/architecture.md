@@ -26,7 +26,7 @@ poddle/
 
 ## Conventions
 
-- Swift 6 language mode, strict concurrency, Observation (`@Observable`), SwiftUI only (AppKit/UIKit only where SwiftUI has no API). Deployment targets iOS 27 and macOS 27.
+- Swift 6 language mode, strict concurrency, Observation (`@Observable`), SwiftUI only (AppKit/UIKit only where SwiftUI has no API). Deployment targets iOS 18 and macOS 26 (decisions.md); newer APIs go behind `if #available`.
 - Times are content seconds as `Double` (TS `number`). Speeds are `Double` from 0.5 to 3.0 in 0.05 steps.
 - Wall-clock timestamps are milliseconds since the epoch (`number` in Convex, `Double` in Swift).
 - Backend tests use `convex-test` with Vitest. Swift tests use Swift Testing (`import Testing`).

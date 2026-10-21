@@ -3,12 +3,15 @@ import PackageDescription
 
 let package = Package(
     name: "PoddleKit",
-    platforms: [.iOS("27.0"), .macOS("27.0")],
+    platforms: [.iOS("18.0"), .macOS("26.0")],
     products: [
         .library(name: "PoddleKit", targets: ["PoddleKit"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/get-convex/convex-swift", from: "0.8.1"),
+    ],
     targets: [
-        .target(name: "PoddleKit"),
+        .target(name: "PoddleKit", dependencies: [.product(name: "ConvexMobile", package: "convex-swift")]),
         .testTarget(name: "PoddleKitTests", dependencies: ["PoddleKit"]),
     ],
     swiftLanguageModes: [.v6]

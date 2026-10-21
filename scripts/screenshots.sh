@@ -7,6 +7,8 @@
 #   SKIP_BUILD=1 scripts/screenshots.sh    # reuse the last build
 #   APPEARANCE=dark scripts/screenshots.sh # warm dark mode (saved with a -dark suffix)
 #   DEVICE="iPad Pro 13-inch (M5)" scripts/screenshots.sh
+#   LIVE=1 scripts/screenshots.sh library  # real data from the Debug deployment, saved as live-*.png
+#                                          # (launch the app once first so the cache is filled)
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -59,13 +61,16 @@ mkdir -p "$OUT"
 
 suffix=""
 [ "$APPEARANCE" = "dark" ] && suffix="-dark"
+prefix=""
+DATA=(-PoddleMock YES)
+if [ -n "${LIVE:-}" ]; then prefix="live-"; DATA=(-PoddleLive YES); fi
 for screen in "${SCREENS[@]}"; do
   xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true
-  xcrun simctl launch "$UDID" "$BUNDLE" -PoddleScreen "$screen" -PoddleAppearance "$APPEARANCE" >/dev/null
+  xcrun simctl launch "$UDID" "$BUNDLE" "${DATA[@]}" -PoddleScreen "$screen" -PoddleAppearance "$APPEARANCE" >/dev/null
   wait=$WAIT
   case "$screen" in importDone) wait=$((WAIT + 5)) ;; esac
   sleep "$wait"
-  xcrun simctl io "$UDID" screenshot --type=png "$OUT/$screen$suffix.png" >/dev/null 2>&1
-  echo "  $OUT/$screen$suffix.png"
+  xcrun simctl io "$UDID" screenshot --type=png "$OUT/$prefix$screen$suffix.png" >/dev/null 2>&1
+  echo "  $OUT/$prefix$screen$suffix.png"
 done
 xcrun simctl terminate "$UDID" "$BUNDLE" 2>/dev/null || true

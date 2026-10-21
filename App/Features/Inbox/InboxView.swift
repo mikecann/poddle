@@ -61,8 +61,7 @@ struct InboxView: View {
         .scrollContentBackground(.hidden)
         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: items.map(\.id))
         .refreshable {
-            // TODO(LiveStore wiring): ask Convex to poll every feed now.
-            try? await Task.sleep(for: .milliseconds(700))
+            await store.refresh()
             refreshed += 1
         }
         .sensoryFeedback(.success, trigger: refreshed)

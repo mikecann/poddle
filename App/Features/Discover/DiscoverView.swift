@@ -241,7 +241,7 @@ struct DiscoverView: View {
             if store.isFollowing(feedURL: found.feedURL) {
                 show("Already following \(found.title)")
             } else {
-                store.subscribe(feedURL: found.feedURL, isPrivate: isPrivate)
+                store.subscribe(found, isPrivate: isPrivate)
                 show("Following \(found.title)")
                 followed += 1
             }

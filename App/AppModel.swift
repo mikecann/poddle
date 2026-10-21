@@ -64,6 +64,8 @@ final class AppModel {
     var discoverQuery = ""
     var fakeClipboard: String?
     var importDemo = false
+    /// Running on sample data (`-PoddleMock`, or a screenshot run).
+    var isMock = false
 
     func path(_ tab: Tab) -> Binding<[Route]> {
         Binding { self.paths[tab] ?? [] } set: { self.paths[tab] = $0 }
@@ -83,18 +85,21 @@ final class AppModel {
     }
 
     /// `-PoddleScreen <name>` opens a screen directly, for automated screenshots.
-    func applyLaunchScreen(_ name: String, player: MockPlayer) {
+    func applyLaunchScreen(_ name: String, player: MockPlayer, store: PoddleStore) {
+        // The sample data's IDs, or real ones when screenshotting live data (`-PoddleLive YES`).
+        let show = { (mockId: String) in store.podcast(mockId) != nil ? mockId : store.library.first?.id ?? mockId }
+        let episode = store.episode("ep_syntax_912") != nil ? "ep_syntax_912" : store.inbox.first?.id ?? store.queue.first?.id ?? ""
         switch name {
         case "upNext": tab = .upNext
         case "inbox": tab = .inbox
         case "library": tab = .library
         case "libraryList": tab = .library; UserDefaults.standard.set("list", forKey: "libraryLayout")
-        case "podcast": tab = .library; paths[.library] = [.podcast("pod_syntax")]
+        case "podcast": tab = .library; paths[.library] = [.podcast(show("pod_syntax"))]
         case "showSettings":
             tab = .library
-            paths[.library] = [.podcast("pod_conan")]
-            sheet = .showSettings(podcastId: "pod_conan")
-        case "episode": tab = .inbox; paths[.inbox] = [.episode("ep_syntax_912")]
+            paths[.library] = [.podcast(show("pod_conan"))]
+            sheet = .showSettings(podcastId: show("pod_conan"))
+        case "episode": tab = .inbox; paths[.inbox] = [.episode(episode)]
         case "settings": tab = .library; paths[.library] = [.settings]
         case "import", "importDone":
             tab = .library
@@ -102,8 +107,8 @@ final class AppModel {
             importDemo = name == "importDone"
         case "discover":
             tab = .discover
-            discoverQuery = "ai pod"
-            fakeClipboard = "https://podcast.mikecann.app/feed/9f2c6b1e7d0a4c55?token=sk_live_7f3a91"
+            discoverQuery = UserDefaults.standard.string(forKey: "PoddleQuery") ?? "ai pod"
+            if isMock { fakeClipboard = "https://podcast.mikecann.app/feed/9f2c6b1e7d0a4c55?token=sk_live_7f3a91" }
         case "stats": tab = .stats
         case "yearInReview": tab = .stats; showYearInReview = true
         case "nowPlaying": showNowPlaying = true

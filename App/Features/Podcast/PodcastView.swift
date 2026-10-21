@@ -102,6 +102,8 @@ struct PodcastView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
+        .refreshable { await store.refresh(podcastId: podcastId) }
+        .task(id: podcastId) { await store.observePodcast(podcastId) }
         .sensoryFeedback(.success, trigger: copied)
         .confirmationDialog("Unsubscribe from \(podcast.title)?", isPresented: $confirmUnsubscribe, titleVisibility: .visible) {
             Button("Unsubscribe", role: .destructive) { store.unsubscribe(podcastId) }

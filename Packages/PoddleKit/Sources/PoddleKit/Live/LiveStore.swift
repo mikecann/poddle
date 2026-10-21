@@ -1,73 +1,928 @@
 import Foundation
 
-/// The Convex-backed data source. A stub until the backend API (docs/api.md) is ready.
+/// The Convex-backed data source (docs/api.md).
 ///
-/// Wiring plan:
-/// - Add the `convex-swift` package and hold a `ConvexClient` for the deployment URL.
-/// - Every call passes `PODDLE_API_TOKEN` from the Keychain.
-/// - `snapshots()` subscribes to the library queries and merges them into a `LibrarySnapshot`.
-/// - `send(_:)` maps each `Mutation` case to its Convex mutation. The store already applies it
-///   locally and calls `send` in order, so this is the outbox. Persist pending mutations so they
-///   survive a relaunch offline.
-/// - Cache the last snapshot on disk (SwiftData or a JSON file) and seed `PoddleStore` with it.
-public final class LiveStore: PoddleDataSource {
-    public let deploymentURL: URL
-    private let token: String
+/// - Reads: live subscriptions for what the screens show (`podcasts:list`, `queue:upNext`,
+///   `episodes:inbox`, `settings:getGlobal`, a podcast page's episodes), merged into one
+///   `LibrarySnapshot`. `sync:changes` catches up on everything else after a relaunch or a
+///   reconnect, following the API's offline contract.
+/// - Writes: `send(_:)` turns each `Mutation` into backend calls stamped with the device time and
+///   appends them to a persisted outbox, which drains in order. Network and auth errors keep the
+///   entry and retry; an outright rejection moves it to `failed`, which is kept too.
+/// - Snapshots pushed to the store are the server state with every queued action applied on top,
+///   so the app looks right offline and across relaunches.
+/// - Everything is cached as JSON under Application Support, per deployment.
+public actor LiveStore: PoddleDataSource {
+    public struct Timing: Sendable {
+        public var retry: Duration
+        public var maxRetry: Duration
+        public var saveDelay: Duration
+        public var emitDelay: Duration
+        public var resyncEvery: Duration
+        public init(retry: Duration, maxRetry: Duration, saveDelay: Duration, emitDelay: Duration, resyncEvery: Duration) {
+            self.retry = retry; self.maxRetry = maxRetry; self.saveDelay = saveDelay
+            self.emitDelay = emitDelay; self.resyncEvery = resyncEvery
+        }
+        public static let standard = Timing(retry: .seconds(1), maxRetry: .seconds(60), saveDelay: .seconds(1), emitDelay: .milliseconds(120), resyncEvery: .seconds(300))
+        public static let fast = Timing(retry: .milliseconds(5), maxRetry: .milliseconds(20), saveDelay: .zero, emitDelay: .zero, resyncEvery: .seconds(3600))
+    }
 
-    public init(deploymentURL: URL, token: String) {
+    /// Tables mirrored locally. Show notes, sessions and events stay on the server.
+    static let syncTables = ["podcasts", "podcastSettings", "globalSettings", "episodes", "episodeStates", "queueItems", "deletions"]
+    static let syncPageSize = 250.0
+    /// Tombstones live 90 days; offline longer than this and a table resyncs from scratch.
+    static let tombstoneWindow: Millis = 89 * 86_400_000
+
+    public private(set) var deploymentURL: URL
+    private var token: String
+    public nonisolated let deviceId: String
+    private let makeTransport: @Sendable (URL) -> any ConvexTransport
+    private let makeDisk: @Sendable (URL) -> LiveDisk
+    private var transport: any ConvexTransport
+    private var disk: LiveDisk
+    private let timing: Timing
+    private let now: @Sendable () -> Date
+
+    private var cache: LiveCache
+    private var outbox: OutboxFile
+    /// Accepted by the server but maybe not visible in what we've synced yet. Kept on top of the
+    /// server state until the next catch-up, so the UI doesn't flicker back.
+    private var confirmed: [OutboxEntry] = []
+    /// Once `queue:upNext` has answered, it owns the queue and catch-up leaves it alone.
+    private var liveQueue = false
+    private var liveGlobal = false
+
+    private var listeners: [UUID: AsyncStream<LibrarySnapshot>.Continuation] = [:]
+    private var statusListeners: [UUID: AsyncStream<ConnectionStatus>.Continuation] = [:]
+    private var connected = false
+    private var lastError: String?
+    private var started = false
+    private var tasks: [Task<Void, Never>] = []
+    private var draining = false
+    private var syncing = false
+    private var emitPending = false
+    private var savePending = false
+    /// Bumped by `reconfigure` so work started against the old deployment stops writing.
+    private var generation = 0
+
+    public init(
+        deploymentURL: URL, token: String, deviceId: String,
+        transport: (@Sendable (URL) -> any ConvexTransport)? = nil,
+        disk: (@Sendable (URL) -> LiveDisk)? = nil,
+        timing: Timing = .standard, now: @escaping @Sendable () -> Date = { Date() }
+    ) {
+        let makeTransport = transport ?? { ConvexMobileTransport(deploymentURL: $0) }
+        let makeDisk = disk ?? { LiveDisk.forDeployment($0) }
         self.deploymentURL = deploymentURL
         self.token = token
+        self.deviceId = deviceId
+        self.makeTransport = makeTransport
+        self.makeDisk = makeDisk
+        self.transport = makeTransport(deploymentURL)
+        self.disk = makeDisk(deploymentURL)
+        self.timing = timing
+        self.now = now
+        self.cache = self.disk.loadCache() ?? LiveCache()
+        self.outbox = self.disk.loadOutbox()
     }
+
+    /// What to paint on launch before the network answers: the cached server state with any
+    /// queued actions applied on top.
+    public static func cachedSnapshot(disk: LiveDisk) -> LibrarySnapshot {
+        let cache = disk.loadCache() ?? LiveCache()
+        return overlay(cache.snapshot, disk.loadOutbox().pending)
+    }
+
+    static func overlay(_ base: LibrarySnapshot, _ entries: [OutboxEntry]) -> LibrarySnapshot {
+        var s = base
+        for e in entries { s.apply(e.mutation, now: e.at, newId: { "local-" + e.id.uuidString }) }
+        return s
+    }
+
+    private var nowMillis: Millis { now().timeIntervalSince1970 * 1000 }
+
+    private func current() -> LibrarySnapshot { Self.overlay(cache.snapshot, confirmed + outbox.pending) }
+
+    private func withToken(_ args: [String: JSONValue]) -> [String: JSONValue] {
+        var a = args
+        a["token"] = .string(token)
+        return a
+    }
+
+    // MARK: - Lifecycle
+
+    private func startIfNeeded() {
+        guard !started else { return }
+        started = true
+        let gen = generation
+        let states = transport.connectionStates()
+        tasks.append(Task { [weak self] in
+            for await up in states {
+                guard let self else { return }
+                await self.connectionChanged(up, gen: gen)
+            }
+        })
+        for feed in [Feed.library, .pastShows, .upNext, .inbox, .global] {
+            let stream = resilient(feed.name, feed.args)
+            tasks.append(Task { [weak self] in
+                for await data in stream {
+                    guard let self else { return }
+                    await self.merge(feed, data, gen: gen)
+                }
+            })
+        }
+        let every = timing.resyncEvery
+        tasks.append(Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: every)
+                guard let self, !Task.isCancelled else { return }
+                await self.catchUp()
+            }
+        })
+        kickDrain()
+    }
+
+    private func connectionChanged(_ up: Bool, gen: Int) {
+        guard gen == generation else { return }
+        let wasUp = connected
+        connected = up
+        publishStatus()
+        if up && !wasUp {
+            kickDrain()
+            Task { await self.catchUp() }
+        }
+    }
+
+    /// Cancels everything in flight. The outbox and cache stay on disk.
+    public func stop() {
+        for t in tasks { t.cancel() }
+        tasks = []
+        started = false
+        generation += 1
+        draining = false
+        syncing = false
+        saveNow()
+    }
+
+    /// Points at a different deployment or token (the Settings "Connection" row). Each deployment
+    /// keeps its own cache and outbox.
+    public func reconfigure(deploymentURL url: URL, token: String) {
+        stop()
+        self.token = token
+        if url != deploymentURL {
+            deploymentURL = url
+            disk = makeDisk(url)
+            cache = disk.loadCache() ?? LiveCache()
+            outbox = disk.loadOutbox()
+            confirmed = []
+            liveQueue = false
+            liveGlobal = false
+        }
+        transport = makeTransport(url)
+        connected = false
+        lastError = nil
+        if !listeners.isEmpty { startIfNeeded() }
+        changed(save: false)
+    }
+
+    /// Writes the cache now (on backgrounding, and in tests).
+    public func flush() { saveNow() }
+
+    // MARK: - Snapshots and status
 
     public func snapshots() async -> AsyncStream<LibrarySnapshot> {
-        // TODO: subscribe to podcasts, episodes, episodeStates, queue, globalSettings and
-        // podcastSettings, and yield a merged snapshot whenever any of them changes.
-        AsyncStream { $0.finish() }
+        let (stream, continuation) = AsyncStream.makeStream(of: LibrarySnapshot.self, bufferingPolicy: .bufferingNewest(1))
+        let id = UUID()
+        listeners[id] = continuation
+        continuation.onTermination = { [weak self] _ in Task { await self?.removeListener(id) } }
+        continuation.yield(current())
+        startIfNeeded()
+        return stream
     }
 
+    private func removeListener(_ id: UUID) { listeners[id] = nil }
+
+    public func connectionStatus() async -> AsyncStream<ConnectionStatus> {
+        let (stream, continuation) = AsyncStream.makeStream(of: ConnectionStatus.self, bufferingPolicy: .bufferingNewest(1))
+        let id = UUID()
+        statusListeners[id] = continuation
+        continuation.onTermination = { [weak self] _ in Task { await self?.removeStatusListener(id) } }
+        continuation.yield(status)
+        return stream
+    }
+
+    private func removeStatusListener(_ id: UUID) { statusListeners[id] = nil }
+
+    public var status: ConnectionStatus {
+        ConnectionStatus(
+            deploymentURL: deploymentURL, connected: connected, pending: outbox.pending.count,
+            failed: outbox.failed.count, lastSyncAt: cache.syncedAt, error: lastError
+        )
+    }
+
+    public var pendingEntries: [OutboxEntry] { outbox.pending }
+    public var failedEntries: [OutboxEntry] { outbox.failed }
+    public var cachedState: LiveCache { cache }
+
+    private func publishStatus() {
+        let s = status
+        for l in statusListeners.values { l.yield(s) }
+    }
+
+    private func changed(save: Bool = true) {
+        if save { scheduleSave() }
+        publishStatus()
+        guard !emitPending else { return }
+        emitPending = true
+        let delay = timing.emitDelay
+        Task {
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            self.emitNow()
+        }
+    }
+
+    private func emitNow() {
+        emitPending = false
+        let s = current()
+        for l in listeners.values { l.yield(s) }
+    }
+
+    private func scheduleSave() {
+        guard !savePending else { return }
+        savePending = true
+        let delay = timing.saveDelay
+        Task {
+            if delay > .zero { try? await Task.sleep(for: delay) }
+            self.saveNow()
+        }
+    }
+
+    private func saveNow() {
+        savePending = false
+        do { try disk.save(cache) } catch { lastError = "Couldn't save the cache: \(error.localizedDescription)" }
+    }
+
+    private func saveOutbox() {
+        do { try disk.save(outbox) } catch { lastError = "Couldn't save the outbox: \(error.localizedDescription)" }
+    }
+
+    private func note(_ error: Error) {
+        lastError = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
+        publishStatus()
+    }
+
+    // MARK: - Live queries
+
+    enum Feed: Sendable {
+        case library, pastShows, upNext, inbox, global
+        case podcastEpisodes(String), podcastSettings(String)
+
+        var name: String {
+            switch self {
+            case .library: "podcasts:list"
+            case .pastShows: "podcasts:pastShows"
+            case .upNext: "queue:upNext"
+            case .inbox: "episodes:inbox"
+            case .global: "settings:getGlobal"
+            case .podcastEpisodes: "podcasts:episodes"
+            case .podcastSettings: "settings:forPodcast"
+            }
+        }
+
+        var args: [String: JSONValue] {
+            switch self {
+            case let .podcastEpisodes(id):
+                ["podcastId": .string(id), "order": "newestFirst", "paginationOpts": ["numItems": 100, "cursor": nil]]
+            case let .podcastSettings(id): ["podcastId": .string(id)]
+            default: [:]
+            }
+        }
+    }
+
+    /// A subscription that survives errors and drops: it resubscribes with backoff until the
+    /// consumer goes away.
+    private func resilient(_ name: String, _ args: [String: JSONValue]) -> AsyncStream<Data> {
+        let transport = transport
+        let full = withToken(args)
+        let timing = timing
+        let (stream, continuation) = AsyncStream.makeStream(of: Data.self, bufferingPolicy: .bufferingNewest(1))
+        let task = Task { [weak self] in
+            var delay = timing.retry
+            while !Task.isCancelled {
+                do {
+                    for try await data in transport.subscribe(name, full) {
+                        continuation.yield(data)
+                        delay = timing.retry
+                    }
+                } catch {
+                    await self?.note(error)
+                }
+                if Task.isCancelled { break }
+                try? await Task.sleep(for: delay)
+                delay = min(delay * 2, timing.maxRetry)
+            }
+            continuation.finish()
+        }
+        continuation.onTermination = { _ in task.cancel() }
+        return stream
+    }
+
+    func merge(_ feed: Feed, _ data: Data, gen: Int) {
+        guard gen == generation else { return }
+        let d = JSONDecoder()
+        do {
+            switch feed {
+            case .library:
+                let pods = try d.decode([PodcastDoc].self, from: data)
+                let ids = Set(pods.map(\._id))
+                for p in pods { cache.snapshot.podcasts[p._id] = p.model }
+                for (id, p) in cache.snapshot.podcasts where p.subscribed && !ids.contains(id) {
+                    cache.snapshot.podcasts[id]?.subscribed = false
+                }
+            case .pastShows:
+                for p in try d.decode([PodcastDoc].self, from: data) { cache.snapshot.podcasts[p._id] = p.model }
+            case .upNext:
+                let entries = try d.decode([UpNextEntryDoc].self, from: data)
+                for e in entries { upsert(e.row) }
+                cache.snapshot.queue = entries.map(\.item.model).sorted { $0.orderKey < $1.orderKey }
+                liveQueue = true
+            case .inbox:
+                let rows = try d.decode([EpisodeRowDoc].self, from: data)
+                for r in rows { upsert(r) }
+                // The query caps at 500; below that, anything not in it has left the Inbox.
+                if rows.count < 500 {
+                    let ids = Set(rows.map(\.episode._id))
+                    for (id, s) in cache.snapshot.states where s.inboxAt != nil && !ids.contains(id) {
+                        cache.snapshot.states[id]?.inboxAt = nil
+                    }
+                }
+            case .global:
+                cache.snapshot.global = SettingsMapping.global(try d.decode([String: JSONValue].self, from: data))
+                liveGlobal = true
+            case let .podcastEpisodes(podcastId):
+                let page = try d.decode(Paginated<EpisodeRowDoc>.self, from: data)
+                for r in page.page where r.episode.podcastId == podcastId { upsert(r) }
+            case let .podcastSettings(podcastId):
+                let o = try d.decode(PodcastSettingsResponse.self, from: data).overrides
+                let s = SettingsMapping.podcast(podcastId, o)
+                cache.snapshot.podcastSettings[podcastId] = s.hasOverrides ? s : nil
+            }
+            if lastError != nil { lastError = nil }
+            changed()
+        } catch {
+            note(error)
+        }
+    }
+
+    private func upsert(_ row: EpisodeRowDoc) {
+        let ep = row.episode
+        cache.snapshot.episodes[ep._id] = ep.model
+        if let s = row.state { upsert(s) } else { cache.snapshot.states[ep._id] = nil }
+        if cache.snapshot.podcasts[row.podcast._id] == nil {
+            let p = row.podcast
+            cache.snapshot.podcasts[p._id] = Podcast(
+                id: p._id, feedURL: "", isPrivate: p.isPrivate, title: p.title, author: p.author ?? "",
+                artworkURL: p.artworkUrl, subscribed: false
+            )
+        }
+    }
+
+    private func upsert(_ s: EpisodeStateDoc) {
+        if let old = cache.snapshot.states[s.episodeId], old.updatedAt > s.updatedAt { return }
+        cache.snapshot.states[s.episodeId] = s.model
+    }
+
+    // MARK: - Catch-up (sync:changes)
+
+    /// Pages through every synced table changed since the last catch-up and upserts it.
+    public func catchUp() async {
+        guard !syncing else { return }
+        syncing = true
+        defer { syncing = false }
+        let gen = generation
+        let transport = transport
+        let fresh = cache.syncedAt.map { nowMillis - $0 > Self.tombstoneWindow } ?? true
+        let entriesBefore = Set(confirmed.map(\.id))
+        do {
+            for table in Self.syncTables {
+                let since = fresh ? 0 : cache.since[table] ?? 0
+                var cursor: JSONValue = .null
+                var maxSeen = since
+                while true {
+                    let args = withToken([
+                        "table": .string(table), "since": .number(since),
+                        "paginationOpts": ["numItems": .number(Self.syncPageSize), "cursor": cursor],
+                    ])
+                    let data = try await transport.query("sync:changes", args)
+                    guard gen == generation else { return }
+                    let done = try applySyncPage(table, data, maxSeen: &maxSeen, cursor: &cursor)
+                    changed()
+                    if done { break }
+                }
+                cache.since[table] = maxSeen
+            }
+            cache.syncedAt = nowMillis
+            // Whatever was confirmed before this pass started is in the synced state now.
+            confirmed.removeAll { entriesBefore.contains($0.id) }
+            lastError = nil
+            changed()
+        } catch {
+            if gen == generation { note(error) }
+        }
+    }
+
+    private struct SyncPageOf<T: Decodable & Sendable>: Decodable, Sendable {
+        var page: [T]
+        var isDone: Bool
+        var continueCursor: String
+        var maxUpdatedAt: Double?
+    }
+
+    private func applySyncPage(_ table: String, _ data: Data, maxSeen: inout Millis, cursor: inout JSONValue) throws -> Bool {
+        func page<T: Decodable & Sendable>(_ type: T.Type) throws -> SyncPageOf<T> {
+            let p = try JSONDecoder().decode(SyncPageOf<T>.self, from: data)
+            maxSeen = max(maxSeen, p.maxUpdatedAt ?? 0)
+            cursor = .string(p.continueCursor)
+            return p
+        }
+        switch table {
+        case "podcasts":
+            let p = try page(PodcastDoc.self)
+            for d in p.page { cache.snapshot.podcasts[d._id] = d.model }
+            return p.isDone
+        case "episodes":
+            let p = try page(EpisodeDoc.self)
+            for d in p.page { cache.snapshot.episodes[d._id] = d.model }
+            return p.isDone
+        case "episodeStates":
+            let p = try page(EpisodeStateDoc.self)
+            for d in p.page { upsert(d) }
+            return p.isDone
+        case "queueItems":
+            let p = try page(QueueItemDoc.self)
+            if !liveQueue {
+                for d in p.page {
+                    cache.snapshot.queue.removeAll { $0.id == d._id || $0.episodeId == d.episodeId }
+                    cache.snapshot.queue.append(d.model)
+                }
+                cache.snapshot.queue.sort { $0.orderKey < $1.orderKey }
+            }
+            return p.isDone
+        case "podcastSettings":
+            let p = try page([String: JSONValue].self)
+            for d in p.page {
+                guard let id = d["podcastId"]?.string else { continue }
+                let s = SettingsMapping.podcast(id, d)
+                cache.snapshot.podcastSettings[id] = s.hasOverrides ? s : nil
+            }
+            return p.isDone
+        case "globalSettings":
+            let p = try page([String: JSONValue].self)
+            if !liveGlobal, let d = p.page.last { cache.snapshot.global = SettingsMapping.global(d) }
+            return p.isDone
+        case "deletions":
+            let p = try page(DeletionDoc.self)
+            if !liveQueue {
+                for d in p.page where d.table == "queueItems" && !d.docId.isEmpty {
+                    cache.snapshot.queue.removeAll { $0.id == d.docId }
+                }
+            }
+            return p.isDone
+        default:
+            return try page(JSONValue.self).isDone
+        }
+    }
+
+    // MARK: - Outbox
+
     public func send(_ mutation: Mutation) async throws {
-        // TODO: switch over `mutation` and call the matching Convex mutation, e.g.
-        // .enqueue -> "queue:enqueue", .setPlayed -> "episodes:setPlayed",
-        // .updatePodcastSettings -> "settings:updatePodcast". Retry on network errors.
-        throw LiveStoreError.notWired
+        let at = nowMillis
+        let calls = Self.calls(for: mutation, at: at, base: current(), deviceId: deviceId)
+        guard !calls.isEmpty else { return }
+        let entry = OutboxEntry(mutation: mutation, at: at, calls: calls)
+        // Position saves arrive every few seconds while playing; only the newest one matters.
+        if case let .savePosition(episodeId, _, _) = mutation, outbox.pending.count >= 2,
+           case let .savePosition(lastId, _, _)? = outbox.pending.last?.mutation, lastId == episodeId {
+            outbox.pending[outbox.pending.count - 1] = entry
+        } else {
+            outbox.pending.append(entry)
+        }
+        saveOutbox()
+        changed(save: false)
+        kickDrain()
+    }
+
+    /// Puts rejected actions back in the queue (in their original order, with their original
+    /// times).
+    public func retryFailed() {
+        let again = outbox.failed.map { e -> OutboxEntry in var e = e; e.error = nil; return e }
+        outbox.failed = []
+        outbox.pending.append(contentsOf: again)
+        saveOutbox()
+        changed(save: false)
+        kickDrain()
+    }
+
+    public func discardFailed() {
+        outbox.failed = []
+        saveOutbox()
+        changed(save: false)
+    }
+
+    private func kickDrain() {
+        guard started, !draining, !outbox.pending.isEmpty else { return }
+        draining = true
+        Task { await self.drain() }
+    }
+
+    private func drain() async {
+        let gen = generation
+        defer { if gen == generation { draining = false } }
+        var delay = timing.retry
+        while let head = outbox.pending.first, gen == generation, !Task.isCancelled {
+            var entry = head
+            do {
+                while entry.done < entry.calls.count {
+                    let call = entry.calls[entry.done]
+                    var args = call.args
+                    if let key = call.resultArg {
+                        guard let result = entry.lastResult, result != .null else { entry.done += 1; continue }
+                        args[key] = result
+                    }
+                    let data = try await transport.mutation(call.name, withToken(args))
+                    guard gen == generation else { return }
+                    entry.lastResult = try? JSONValue.decode(data)
+                    entry.done += 1
+                    updateHead(entry)
+                }
+                finishHead(entry, failed: false)
+                delay = timing.retry
+                if lastError != nil { lastError = nil; publishStatus() }
+            } catch let error as TransportError where !error.isRetryable {
+                guard gen == generation else { return }
+                entry.error = error.errorDescription
+                finishHead(entry, failed: true)
+                note(error)
+            } catch {
+                guard gen == generation else { return }
+                entry.attempts += 1
+                updateHead(entry)
+                note(error)
+                try? await Task.sleep(for: delay)
+                delay = min(delay * 2, timing.maxRetry)
+            }
+        }
+        if gen == generation, outbox.pending.isEmpty, !confirmed.isEmpty {
+            // Pick up the server's view of what we just sent.
+            Task { await self.catchUp() }
+        }
+    }
+
+    private func updateHead(_ entry: OutboxEntry) {
+        guard outbox.pending.first?.id == entry.id else { return }
+        outbox.pending[0] = entry
+        saveOutbox()
+    }
+
+    private func finishHead(_ entry: OutboxEntry, failed: Bool) {
+        guard outbox.pending.first?.id == entry.id else { return }
+        outbox.pending.removeFirst()
+        if failed { outbox.failed.append(entry) } else { confirmed.append(entry) }
+        saveOutbox()
+        changed(save: false)
+    }
+
+    /// The backend calls for one user action. `base` is the state just before it, for the
+    /// actions whose API shape needs context (settings patches, clearing the queue).
+    static func calls(for m: Mutation, at: Millis, base: LibrarySnapshot, deviceId: String) -> [OutboxCall] {
+        let at = JSONValue.number(at)
+        func isLocal(_ id: String) -> Bool { id.hasPrefix("local-") }
+        switch m {
+        case let .enqueue(episodeId, position):
+            let pos: JSONValue = switch position {
+            case .top: "top"
+            case .next: "next"
+            case .last: "bottom"
+            }
+            return [OutboxCall("queue:add", ["episodeId": .string(episodeId), "position": pos, "at": at])]
+
+        case let .moveQueueItem(episodeId, after, before):
+            return [OutboxCall("queue:move", [
+                "episodeId": .string(episodeId), "afterEpisodeId": JSONValue(after), "beforeEpisodeId": JSONValue(before), "at": at,
+            ])]
+
+        case let .removeFromQueue(episodeId):
+            return [OutboxCall("queue:remove", ["episodeId": .string(episodeId), "at": at])]
+
+        case let .clearQueue(keeping):
+            // Remove exactly what the user saw, rather than `queue:clear`, which would also take
+            // the playing item.
+            return base.queue.filter { $0.episodeId != keeping }.map {
+                OutboxCall("queue:remove", ["episodeId": .string($0.episodeId), "at": at])
+            }
+
+        case let .setArchived(episodeId, archived):
+            var calls = [OutboxCall("episodes:setArchivedState", ["episodeId": .string(episodeId), "archived": .bool(archived), "at": at])]
+            // Locally, archiving also takes it out of Up Next; the server leaves the queue alone.
+            if archived && base.isQueued(episodeId) {
+                calls.append(OutboxCall("queue:remove", ["episodeId": .string(episodeId), "at": at]))
+            }
+            return calls
+
+        case let .setPlayed(episodeId, played):
+            return [OutboxCall("episodes:setPlayedState", ["episodeId": .string(episodeId), "played": .bool(played), "at": at])]
+
+        case let .setStarred(episodeId, starred):
+            return [OutboxCall("episodes:setStarredState", ["episodeId": .string(episodeId), "starred": .bool(starred), "at": at])]
+
+        case let .savePosition(episodeId, position, _):
+            return [OutboxCall("episodes:updatePosition", [
+                "episodeId": .string(episodeId), "position": .number(max(0, position)), "positionUpdatedAt": at,
+                "deviceId": .string(deviceId),
+            ])]
+
+        case let .markOlderPlayed(episodeId):
+            guard let ep = base.episodes[episodeId] else { return [] }
+            return [OutboxCall("podcasts:markAllPlayed", ["podcastId": .string(ep.podcastId), "at": at, "beforePubDate": .number(ep.pubDate)])]
+
+        case let .archiveOlder(episodeId):
+            return [OutboxCall("episodes:archiveAllOlder", ["episodeId": .string(episodeId), "at": at])]
+
+        case let .markAllPlayed(podcastId):
+            guard !isLocal(podcastId) else { return [] }
+            return [OutboxCall("podcasts:markAllPlayed", ["podcastId": .string(podcastId), "at": at])]
+
+        case let .subscribe(r):
+            var args: [String: JSONValue] = ["feedUrl": .string(r.feedURL), "at": at]
+            if let v = r.title { args["title"] = .string(v) }
+            if let v = r.author, !v.isEmpty { args["author"] = .string(v) }
+            if let v = r.artworkURL { args["artworkUrl"] = .string(v) }
+            if let v = r.appleId.flatMap(Double.init) { args["appleId"] = .number(v) }
+            var calls = [OutboxCall("podcasts:subscribe", args)]
+            if r.isPrivate {
+                calls.append(OutboxCall("podcasts:setPrivate", ["isPrivate": true], resultArg: "podcastId"))
+            }
+            return calls
+
+        case let .unsubscribe(podcastId):
+            guard !isLocal(podcastId) else { return [] }
+            return [OutboxCall("podcasts:unsubscribe", ["podcastId": .string(podcastId), "at": at])]
+
+        case let .setSpeed(value, scope):
+            let patch: JSONValue = ["playbackSpeed": .number(Speed.snap(value))]
+            switch scope {
+            case .allPodcasts: return [OutboxCall("settings:updateGlobal", ["patch": patch, "at": at])]
+            case let .show(podcastId):
+                guard !isLocal(podcastId) else { return [] }
+                return [OutboxCall("settings:updatePodcast", ["podcastId": .string(podcastId), "patch": patch, "at": at])]
+            }
+
+        case let .updatePodcastSettings(s):
+            guard !isLocal(s.podcastId) else { return [] }
+            let old = SettingsMapping.fields(base.podcastSettings[s.podcastId] ?? PodcastSettings(podcastId: s.podcastId))
+            let patch = SettingsMapping.patch(from: old, to: SettingsMapping.fields(s))
+            guard !patch.isEmpty else { return [] }
+            return [OutboxCall("settings:updatePodcast", ["podcastId": .string(s.podcastId), "patch": .object(patch), "at": at])]
+
+        case let .updateGlobalSettings(g):
+            let patch = SettingsMapping.patch(from: SettingsMapping.fields(base.global), to: SettingsMapping.fields(g))
+            guard !patch.isEmpty else { return [] }
+            return [OutboxCall("settings:updateGlobal", ["patch": .object(patch), "at": at])]
+        }
+    }
+
+    // MARK: - Stats
+
+    private static func localDay(_ date: Date) -> String {
+        let f = DateFormatter()
+        f.calendar = Calendar(identifier: .gregorian)
+        f.locale = Locale(identifier: "en_US_POSIX")
+        f.dateFormat = "yyyy-MM-dd"
+        return f.string(from: date)
+    }
+
+    private func statsArgs(year: Int) -> (anchor: String, today: String) {
+        let date = now()
+        let today = Self.localDay(date)
+        let currentYear = Calendar.current.component(.year, from: date)
+        return (year == currentYear ? today : "\(year)-06-01", today)
+    }
+
+    public func watchStats(year: Int) async -> AsyncThrowingStream<StatsSummary, Error> {
+        let (anchor, today) = statsArgs(year: year)
+        let key = String(year)
+        let cached = cache.stats[key]
+        let currentYear = Calendar.current.component(.year, from: now())
+        let streams = [
+            resilient("stats:summary", ["period": "year", "anchorDay": .string(anchor)]),
+            resilient("stats:summary", ["period": "all"]),
+            resilient("overcastImport:latestImport", [:]),
+        ]
+        return AsyncThrowingStream { continuation in
+            if let cached { continuation.yield(cached) }
+            let task = Task { [weak self] in
+                await combineLatest(streams) { [weak self] values in
+                    guard let y = values[0], let doc = try? JSONDecoder().decode(SummaryDoc.self, from: y) else { return }
+                    let all = values[1].flatMap { try? JSONDecoder().decode(SummaryDoc.self, from: $0) }
+                    let batch = values[2].flatMap { try? JSONDecoder().decode(ImportBatchDoc?.self, from: $0) }
+                    let summary = StatsMapping.summary(year: year, doc, allTime: all, today: today, estimatedBefore: batch?.finishedAt)
+                    continuation.yield(summary)
+                    await self?.remember(key, summary, years: all.map { StatsMapping.years(from: $0, current: currentYear) })
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func remember(_ key: String, _ summary: StatsSummary, years: [Int]?) {
+        cache.stats[key] = summary
+        if let years { cache.years = years }
+        scheduleSave()
     }
 
     public func stats(year: Int) async throws -> StatsSummary {
-        // TODO: query "stats:summary" { year }.
-        throw LiveStoreError.notWired
+        let (anchor, today) = statsArgs(year: year)
+        let y = try await transport.query("stats:summary", withToken(["period": "year", "anchorDay": .string(anchor)]))
+        let a = try await transport.query("stats:summary", withToken(["period": "all"]))
+        let all = try JSONDecoder().decode(SummaryDoc.self, from: a)
+        return StatsMapping.summary(year: year, try JSONDecoder().decode(SummaryDoc.self, from: y), allTime: all, today: today, estimatedBefore: nil)
     }
 
     public func availableYears() async throws -> [Int] {
-        // TODO: query "stats:years".
-        throw LiveStoreError.notWired
+        if !cache.years.isEmpty { return cache.years }
+        let data = try await transport.query("stats:summary", withToken(["period": "all"]))
+        let years = StatsMapping.years(from: try JSONDecoder().decode(SummaryDoc.self, from: data), current: Calendar.current.component(.year, from: now()))
+        cache.years = years
+        scheduleSave()
+        return years
+    }
+
+    public func watchYearInReview(year: Int) async -> AsyncThrowingStream<YearInReview, Error> {
+        let key = String(year)
+        let cached = cache.yearInReview[key]
+        let stream = resilient("stats:yearInReview", ["year": .number(Double(year)), "includePrivate": true])
+        return AsyncThrowingStream { continuation in
+            if let cached { continuation.yield(cached) }
+            let task = Task { [weak self] in
+                for await data in stream {
+                    guard let doc = try? JSONDecoder().decode(YearInReviewDoc.self, from: data) else { continue }
+                    let review = StatsMapping.yearInReview(doc)
+                    continuation.yield(review)
+                    await self?.remember(key, review)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
+    }
+
+    private func remember(_ key: String, _ review: YearInReview) {
+        cache.yearInReview[key] = review
+        scheduleSave()
     }
 
     public func yearInReview(year: Int) async throws -> YearInReview {
-        // TODO: query "stats:yearInReview" { year }. Private shows come back flagged.
-        throw LiveStoreError.notWired
+        let data = try await transport.query("stats:yearInReview", withToken(["year": .number(Double(year)), "includePrivate": true]))
+        return StatsMapping.yearInReview(try JSONDecoder().decode(YearInReviewDoc.self, from: data))
     }
+
+    // MARK: - Discover
 
     public func search(_ term: String) async throws -> SearchResponse {
-        // TODO: call the Convex action that proxies iTunes Search (debounced 400 ms by the UI,
-        // cached 24 h server-side), or hit itunes.apple.com directly.
-        throw LiveStoreError.notWired
+        let data = try await transport.action("directory:search", withToken(["term": .string(term), "limit": 50]))
+        let results = try JSONDecoder().decode([DirectoryResultDoc].self, from: data).compactMap(\.model)
+        return SearchResponse(results: results, totalCount: results.count)
     }
 
+    /// Apple and Overcast links go through the directory; anything else is fetched as a feed
+    /// (or a website with a feed link) by `feedActions:previewFeed`.
     public func resolve(url: String) async throws -> SearchResult? {
-        // TODO: "directory:resolveUrl" handles RSS, podcasts.apple.com, overcast.fm and websites.
-        throw LiveStoreError.notWired
+        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let isDirectory = trimmed.allSatisfy(\.isNumber) || trimmed.contains("podcasts.apple.com") || trimmed.contains("overcast.fm")
+        if isDirectory {
+            let data = try await transport.action("directory:lookup", withToken(["appleIdOrUrl": .string(trimmed)]))
+            if let hit = try JSONDecoder().decode(DirectoryResultDoc?.self, from: data)?.model { return hit }
+        }
+        let full = trimmed.contains("://") ? trimmed : "https://" + trimmed
+        let data = try await transport.action("feedActions:previewFeed", withToken(["url": .string(full)]))
+        return try JSONDecoder().decode(FeedPreviewDoc.self, from: data).model
     }
+
+    public func refresh(podcastId: String?) async throws {
+        var args: [String: JSONValue] = [:]
+        if let podcastId, !podcastId.hasPrefix("local-") { args["podcastId"] = .string(podcastId) }
+        _ = try await transport.action("feedActions:refreshNow", withToken(args))
+        await catchUp()
+    }
+
+    public func observePodcast(_ podcastId: String) async {
+        guard !podcastId.hasPrefix("local-") else { return }
+        let gen = generation
+        let feeds = [Feed.podcastEpisodes(podcastId), .podcastSettings(podcastId)]
+        let streams = feeds.map { resilient($0.name, $0.args) }
+        await withTaskGroup(of: Void.self) { group in
+            for (feed, stream) in zip(feeds, streams) {
+                group.addTask { [weak self] in
+                    for await data in stream { await self?.merge(feed, data, gen: gen) }
+                }
+            }
+        }
+    }
+
+    public func showNotes(episodeId: String) async -> String? {
+        guard let data = try? await transport.query("episodes:get", withToken(["episodeId": .string(episodeId)])) else { return nil }
+        return (try? JSONValue.decode(data))?["showNotesHtml"]?.string
+    }
+
+    // MARK: - Overcast import
 
     public func importOvercast(fileName: String, data: Data, assumedSpeed: Double) async -> AsyncThrowingStream<ImportProgress, Error> {
-        // TODO: upload `data` to Convex storage, start "import:overcast" with the assumed speed,
-        // then subscribe to the import batch document and map it to ImportProgress.
-        AsyncThrowingStream { $0.finish(throwing: LiveStoreError.notWired) }
+        let transport = transport
+        let token = token
+        let started = nowMillis
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                func args(_ a: [String: JSONValue]) -> [String: JSONValue] { var a = a; a["token"] = .string(token); return a }
+                do {
+                    continuation.yield(ImportProgress(phase: .reading, fileName: fileName, importedAt: started))
+                    let urlData = try await transport.mutation("overcastImport:generateUploadUrl", args([:]))
+                    guard let urlString = try JSONValue.decode(urlData).string, let url = URL(string: urlString) else {
+                        throw TransportError.server("No upload URL")
+                    }
+                    let uploaded = try await transport.upload(to: url, data: data, contentType: "text/xml")
+                    guard let storageId = try JSONValue.decode(uploaded)["storageId"]?.string else {
+                        throw TransportError.server("The upload didn't return a storage ID")
+                    }
+                    let batchData = try await transport.mutation("overcastImport:startOvercastImport", args([
+                        "storageId": .string(storageId), "assumedSpeed": .number(Speed.snap(assumedSpeed)),
+                    ]))
+                    guard let batchId = try JSONValue.decode(batchData).string else { throw TransportError.server("No import ID") }
+                    for try await update in transport.subscribe("overcastImport:getImport", args(["batchId": .string(batchId)])) {
+                        guard let batch = try JSONDecoder().decode(ImportBatchDoc?.self, from: update) else { continue }
+                        let progress = batch.progress(fileName: fileName)
+                        continuation.yield(progress)
+                        if progress.phase == .done || progress.phase == .failed { break }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
+    // MARK: - Chapters
+
+    private struct ChapterFile: Decodable {
+        struct Item: Decodable {
+            var startTime: Double
+            var endTime: Double?
+            var title: String?
+            var img: String?
+            var url: String?
+            var toc: Bool?
+        }
+        var chapters: [Item]
+    }
+
+    /// Podcasting 2.0 JSON chapters. Embedded ID3/MP4 chapters come from the downloaded file.
     public func chapters(for episode: Episode) async -> [Chapter] {
-        // TODO: fetch episode.chaptersURL (Podcasting 2.0 JSON); otherwise read ID3/MP4 chapters
-        // from the downloaded file via PoddlePlayback.
-        []
+        guard let s = episode.chaptersURL, let url = URL(string: s),
+              let (data, _) = try? await URLSession.shared.data(from: url),
+              let file = try? JSONDecoder().decode(ChapterFile.self, from: data) else { return [] }
+        let items = file.chapters.sorted { $0.startTime < $1.startTime }
+        return items.enumerated().map { i, c in
+            Chapter(
+                start: c.startTime, end: c.endTime ?? (i + 1 < items.count ? items[i + 1].startTime : episode.duration),
+                title: c.title ?? "Chapter \(i + 1)", img: c.img, url: c.url, toc: c.toc ?? true
+            )
+        }
+    }
+}
+
+/// Calls `body` with the latest value of every stream each time any of them yields.
+private func combineLatest(_ streams: [AsyncStream<Data>], _ body: @escaping @Sendable ([Data?]) async -> Void) async {
+    let box = LatestValues(count: streams.count, body: body)
+    await withTaskGroup(of: Void.self) { group in
+        for (i, stream) in streams.enumerated() {
+            group.addTask {
+                for await value in stream { await box.set(i, value) }
+            }
+        }
+    }
+}
+
+private actor LatestValues {
+    private var values: [Data?]
+    private let body: @Sendable ([Data?]) async -> Void
+    init(count: Int, body: @escaping @Sendable ([Data?]) async -> Void) {
+        values = Array(repeating: nil, count: count)
+        self.body = body
+    }
+    func set(_ i: Int, _ value: Data) async {
+        values[i] = value
+        await body(values)
     }
 }
 

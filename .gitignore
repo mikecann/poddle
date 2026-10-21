@@ -14,3 +14,5 @@ node_modules/
 *.p8
 # Simulator screenshots, regenerate with scripts/screenshots.sh
 designs/build-shots/
+# Xcode build secrets, written by scripts/write-secrets.sh
+Config/Secrets.xcconfig

@@ -70,12 +70,13 @@ struct EpisodeDetailView: View {
 
                     Text("Show notes").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
                         .padding(.horizontal, 20).padding(.top, 24)
-                    Text(item.episode.showNotesHTML.strippingHTML)
+                    Text((store.showNotes[episodeId] ?? item.episode.showNotesHTML).strippingHTML)
                         .font(.text(15)).foregroundStyle(Palette.body)
                         .textSelection(.enabled)
                         .padding(.horizontal, 20).padding(.top, 6).padding(.bottom, 30)
                 }
             }
+            .task(id: episodeId) { await store.loadShowNotes(episodeId) }
         } else {
             ContentUnavailableView("Episode not found", systemImage: "questionmark.circle")
         }

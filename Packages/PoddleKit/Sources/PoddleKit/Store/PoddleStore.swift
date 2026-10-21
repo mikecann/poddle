@@ -7,7 +7,9 @@ import Observation
 @MainActor
 @Observable
 public final class PoddleStore {
-    public private(set) var snapshot: LibrarySnapshot
+    public private(set) var snapshot: LibrarySnapshot {
+        didSet { byPodcastCache = nil }
+    }
     public private(set) var downloads: [String: Download]
     public private(set) var chapterCache: [String: [Chapter]] = [:]
 
@@ -18,6 +20,10 @@ public final class PoddleStore {
     public private(set) var lastError: String?
     /// Mutations sent but not yet acknowledged.
     public private(set) var pending: [Mutation] = []
+    /// Live backend health. Nil for the mock.
+    public private(set) var connection: ConnectionStatus?
+    /// Full show notes fetched on demand (the synced episodes only carry a summary).
+    public private(set) var showNotes: [String: String] = [:]
 
     public let deviceId: String
 
@@ -25,6 +31,7 @@ public final class PoddleStore {
     @ObservationIgnored public var now: () -> Date = Date.init
     @ObservationIgnored private var outbox: AsyncStream<Mutation>.Continuation?
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
+    @ObservationIgnored private var byPodcastCache: [String: [Episode]]?
 
     public init(
         dataSource: any PoddleDataSource, seed: LibrarySnapshot = .init(), downloads: [String: Download] = [:],
@@ -55,6 +62,21 @@ public final class PoddleStore {
                 if next != self.snapshot { self.snapshot = next }
             }
         })
+        tasks.append(Task { [weak self] in
+            for await status in await source.connectionStatus() {
+                guard let self else { return }
+                if self.connection != status { self.connection = status }
+            }
+        })
+    }
+
+    /// Episodes grouped by show, rebuilt only when the snapshot changes (the live library has
+    /// thousands of episodes, and the library grid asks per show).
+    private var byPodcast: [String: [Episode]] {
+        if let byPodcastCache { return byPodcastCache }
+        let grouped = Dictionary(grouping: snapshot.episodes.values, by: \.podcastId)
+        byPodcastCache = grouped
+        return grouped
     }
 
     var nowMillis: Millis { now().timeIntervalSince1970 * 1000 }
@@ -113,20 +135,21 @@ public final class PoddleStore {
 
     /// Unsubscribed shows that still have history, so imported history isn't orphaned.
     public var pastShows: [Podcast] {
-        snapshot.podcasts.values.filter { p in
-            !p.subscribed && snapshot.episodes.values.contains { $0.podcastId == p.id && snapshot.state($0.id).played }
+        let byPodcast = byPodcast
+        return snapshot.podcasts.values.filter { p in
+            !p.subscribed && (byPodcast[p.id] ?? []).contains { snapshot.states[$0.id].map { $0.played || $0.position > 1 || $0.isStarred } ?? false }
         }.sorted { $0.title < $1.title }
     }
 
     public func episodes(of podcastId: String, order: EpisodeOrder? = nil) -> [EpisodeItem] {
         let order = order ?? resolved(podcastId).episodeOrder.value
-        return snapshot.episodes.values.filter { $0.podcastId == podcastId }
+        return (byPodcast[podcastId] ?? [])
             .sorted { order == .newestFirst ? $0.pubDate > $1.pubDate : $0.pubDate < $1.pubDate }
             .compactMap { item($0.id) }
     }
 
     public func latestPubDate(_ podcastId: String) -> Millis? {
-        snapshot.episodes.values.filter { $0.podcastId == podcastId }.map(\.pubDate).max()
+        byPodcast[podcastId]?.map(\.pubDate).max()
     }
 
     public func latestEpisode(of podcastId: String) -> EpisodeItem? {
@@ -134,13 +157,13 @@ public final class PoddleStore {
     }
 
     public func unplayedCount(_ podcastId: String) -> Int {
-        snapshot.episodes.values.filter { $0.podcastId == podcastId && !snapshot.state($0.id).played && !snapshot.state($0.id).archived }.count
+        (byPodcast[podcastId] ?? []).count { !snapshot.state($0.id).played && !snapshot.state($0.id).archived }
     }
 
     /// "3 a week", "Weekly", "Daily"… from the last 30 days of episodes.
     public func cadence(_ podcastId: String) -> String? {
         let month = nowMillis - 30 * 86_400_000
-        let recent = snapshot.episodes.values.filter { $0.podcastId == podcastId && $0.pubDate >= month }.count
+        let recent = (byPodcast[podcastId] ?? []).count { $0.pubDate >= month }
         switch recent {
         case 0: return nil
         case 1: return "Monthly"
@@ -202,7 +225,11 @@ public final class PoddleStore {
 
     // MARK: - Library actions
 
-    public func subscribe(_ result: SearchResult) { perform(.subscribe(SubscribeRequest(result))) }
+    public func subscribe(_ result: SearchResult, isPrivate: Bool = false) {
+        var request = SubscribeRequest(result)
+        request.isPrivate = isPrivate
+        perform(.subscribe(request))
+    }
     public func subscribe(feedURL: String, isPrivate: Bool = false) {
         perform(.subscribe(SubscribeRequest(feedURL: feedURL, isPrivate: isPrivate)))
     }
@@ -256,15 +283,39 @@ public final class PoddleStore {
 
     // MARK: - Backend reads
 
+    /// Keeps `stats` live for a year until the calling task (the Stats screen) is cancelled.
     public func loadStats(year: Int) async {
+        let source = dataSource
+        let yearsTask = Task { [weak self] in
+            guard let years = try? await source.availableYears(), let self else { return }
+            if self.years != years { self.years = years }
+        }
+        defer { yearsTask.cancel() }
+        if stats?.year != year { stats = nil }
         do {
-            if years.isEmpty { years = try await dataSource.availableYears() }
-            stats = try await dataSource.stats(year: year)
+            for try await s in await source.watchStats(year: year) {
+                if stats != s { stats = s }
+            }
         } catch { lastError = error.localizedDescription }
     }
 
     public func loadYearInReview(year: Int) async {
-        do { yearInReview = try await dataSource.yearInReview(year: year) } catch { lastError = error.localizedDescription }
+        do {
+            for try await r in await dataSource.watchYearInReview(year: year) where yearInReview != r { yearInReview = r }
+        } catch { lastError = error.localizedDescription }
+    }
+
+    /// Pull-to-refresh and app foreground: re-check feeds (one show or all) and catch up.
+    public func refresh(podcastId: String? = nil) async {
+        do { try await dataSource.refresh(podcastId: podcastId) } catch { lastError = error.localizedDescription }
+    }
+
+    /// Keeps a podcast page live while it's on screen.
+    public func observePodcast(_ podcastId: String) async { await dataSource.observePodcast(podcastId) }
+
+    public func loadShowNotes(_ episodeId: String) async {
+        guard showNotes[episodeId] == nil, let html = await dataSource.showNotes(episodeId: episodeId), !html.isEmpty else { return }
+        showNotes[episodeId] = html
     }
 
     public func search(_ term: String) async throws -> SearchResponse { try await dataSource.search(term) }
