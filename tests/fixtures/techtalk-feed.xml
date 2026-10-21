@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Tech Talk Weekly</title>
+    <itunes:author>TTW</itunes:author>
+    <itunes:image href="https://cdn.example.com/ttw/art.jpg"/>
+    <item>
+      <title>TTW 6: Brand new</title>
+      <guid>ttw-6</guid>
+      <pubDate>Mon, 06 Oct 2025 14:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/ttw/6.mp3" type="audio/mpeg"/>
+      <itunes:duration>3000</itunes:duration>
+    </item>
+    <item>
+      <title>TTW 5: Barely started</title>
+      <guid>ttw-5</guid>
+      <pubDate>Mon, 29 Sep 2025 14:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/ttw/5.mp3" type="audio/mpeg"/>
+      <itunes:duration>3100</itunes:duration>
+    </item>
+    <item>
+      <title>TTW 4: Skipped</title>
+      <guid>ttw-4</guid>
+      <pubDate>Mon, 22 Sep 2025 14:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/ttw/4.mp3?ad=2" type="audio/mpeg"/>
+      <itunes:duration>3200</itunes:duration>
+    </item>
+    <item>
+      <title>TTW 3: Moved CDN</title>
+      <guid>ttw-3</guid>
+      <pubDate>Mon, 15 Sep 2025 14:00:00 GMT</pubDate>
+      <enclosure url="https://newcdn.example.com/ttw/3.mp3" type="audio/mpeg"/>
+      <itunes:duration>01:06:40</itunes:duration>
+    </item>
+    <item>
+      <title>TTW 2: Halfway</title>
+      <guid>ttw-2</guid>
+      <pubDate>Mon, 08 Sep 2025 14:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/ttw/2.mp3" type="audio/mpeg"/>
+      <itunes:duration>1:30:00</itunes:duration>
+    </item>
+    <item>
+      <title>TTW 1: Played</title>
+      <guid>ttw-1</guid>
+      <pubDate>Mon, 01 Sep 2025 14:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/ttw/1.mp3?source=feed" type="audio/mpeg"/>
+      <itunes:duration>3600</itunes:duration>
+    </item>
+  </channel>
+</rss>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Old Favourite</title>
+    <item>
+      <title>OF 1</title>
+      <guid>of-1</guid>
+      <pubDate>Wed, 02 Feb 2022 02:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/of/1.mp3" type="audio/mpeg"/>
+      <itunes:duration>30:00</itunes:duration>
+    </item>
+  </channel>
+</rss>

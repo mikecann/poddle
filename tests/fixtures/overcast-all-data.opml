@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<opml version="1.0">
+  <head><title>Overcast Podcast Subscriptions</title></head>
+  <body>
+    <outline text="playlists">
+      <outline type="podcast-playlist" title="All Episodes" smart="1" sorting="chronological" includePodcastIds="101,303" />
+      <outline type="podcast-playlist" title="Empty" smart="0" sorting="manual" />
+    </outline>
+    <outline text="feeds">
+      <outline type="rss" overcastId="101" text="Tech Talk Weekly" title="Tech Talk Weekly" xmlUrl="https://feeds.example.com/techtalk.xml" htmlUrl="https://techtalk.example.com" subscribed="1" notifications="1" overcastAddedDate="2023-03-04T09:15:00-05:00">
+        <outline type="podcast-episode" overcastId="1001" pubDate="2025-09-01T10:00:00-04:00" title="TTW 1: Played" url="https://techtalk.example.com/1" overcastUrl="https://overcast.fm/+AAA1001" enclosureUrl="https://cdn.example.com/ttw/1.mp3?source=overcast&amp;x=1" userUpdatedDate="2025-09-02T08:00:00+10:00" played="1" progress="0" userDeleted="1" />
+        <outline type="podcast-episode" overcastId="1002" pubDate="2025-09-08T10:00:00-04:00" title="TTW 2: Halfway" url="https://techtalk.example.com/2" overcastUrl="https://overcast.fm/+AAA1002" enclosureUrl="https://cdn.example.com/ttw/2.mp3" userUpdatedDate="2025-09-09T07:30:00+10:00" progress="1834" />
+        <outline type="podcast-episode" overcastId="1003" pubDate="Mon, 15 Sep 2025 14:00:00 GMT" title="TTW 3: Moved CDN" url="https://techtalk.example.com/3" overcastUrl="https://overcast.fm/+AAA1003" enclosureUrl="https://oldcdn.example.com/ttw/3.mp3" userUpdatedDate="2025-09-16T21:45:00+10:00" userRecommendedDate="2025-09-16T21:50:00+10:00" played="1" userDeleted="1" />
+        <outline type="podcast-episode" overcastId="1004" pubDate="2024-01-10T10:00:00-05:00" title="TTW 0: Gone from feed" url="https://techtalk.example.com/0" overcastUrl="https://overcast.fm/+AAA1004" enclosureUrl="https://oldcdn.example.com/ttw/0.mp3" userUpdatedDate="2024-01-11T12:00:00+11:00" played="1" progress="2400" userDeleted="1" />
+        <outline type="podcast-episode" overcastId="1005" pubDate="2025-09-22T10:00:00-04:00" title="TTW 4: Skipped" url="https://techtalk.example.com/4" overcastUrl="https://overcast.fm/+AAA1005" enclosureUrl="https://cdn.example.com/ttw/4.mp3" userUpdatedDate="2025-09-23T09:00:00+10:00" userDeleted="1" />
+        <outline type="podcast-episode" overcastId="1006" pubDate="2025-09-29T10:00:00-04:00" title="TTW 5: Barely started" url="https://techtalk.example.com/5" overcastUrl="https://overcast.fm/+AAA1006" enclosureUrl="https://cdn.example.com/ttw/5.mp3" userUpdatedDate="2025-09-30T09:00:00+10:00" progress="120" />
+      </outline>
+      <outline type="rss" overcastId="202" text="Old Favourite" title="Old Favourite" xmlUrl="https://feeds.example.com/oldfav.xml" htmlUrl="https://oldfav.example.com" subscribed="0" notifications="0" overcastAddedDate="2021-06-01T00:00:00Z">
+        <outline type="podcast-episode" overcastId="2001" pubDate="2022-02-02T02:00:00Z" title="OF 1" url="https://oldfav.example.com/1" overcastUrl="https://overcast.fm/+BBB2001" enclosureUrl="https://cdn.example.com/of/1.mp3" userUpdatedDate="2022-02-03T20:00:00Z" played="1" userDeleted="1" />
+      </outline>
+      <outline type="rss" overcastId="303" text="Dead Feed" title="Dead Feed" xmlUrl="https://feeds.example.com/dead.xml" subscribed="1" notifications="0" overcastAddedDate="2025-01-01T00:00:00Z">
+        <outline type="podcast-episode" overcastId="3001" pubDate="2025-01-05T00:00:00Z" title="DF 1" url="https://dead.example.com/1" overcastUrl="https://overcast.fm/+CCC3001" enclosureUrl="https://dead.example.com/1.mp3" userUpdatedDate="2025-01-06T00:00:00Z" played="1" />
+      </outline>
+    </outline>
+  </body>
+</opml>

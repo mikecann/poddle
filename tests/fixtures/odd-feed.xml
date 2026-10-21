@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0"
+  xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd"
+  xmlns:podcast="https://podcastindex.org/namespace/1.0"
+  xmlns:content="http://purl.org/rss/1.0/modules/content/"
+  xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>The Odd Show</title>
+    <link>https://odd.example.com</link>
+    <atom:link href="https://feeds.example.com/odd.xml" rel="self" type="application/rss+xml"/>
+    <language>en-au</language>
+    <itunes:author>Odd Person</itunes:author>
+    <description><![CDATA[A show with <b>odd</b> feeds &amp; things.]]></description>
+    <itunes:image href="https://cdn.example.com/odd-3000.jpg"/>
+    <image>
+      <url>https://cdn.example.com/odd-small.jpg</url>
+      <title>The Odd Show</title>
+      <link>https://odd.example.com</link>
+    </image>
+
+    <item>
+      <title>Episode 4: Chapters &amp; Transcripts</title>
+      <guid isPermaLink="false">odd-ep-4</guid>
+      <pubDate>Tue, 14 Oct 2025 18:00:00 +0000</pubDate>
+      <enclosure url="https://dts.example.com/redirect.mp3/cdn.example.com/odd/ep4.mp3?utm_source=rss" length="58923000" type="audio/mpeg"/>
+      <itunes:duration>01:02:03</itunes:duration>
+      <itunes:season>2</itunes:season>
+      <itunes:episode>4</itunes:episode>
+      <itunes:episodeType>Full</itunes:episodeType>
+      <itunes:image href="https://cdn.example.com/odd/ep4.jpg"/>
+      <podcast:chapters url="https://cdn.example.com/odd/ep4-chapters.json" type="application/json+chapters"/>
+      <podcast:transcript url="https://cdn.example.com/odd/ep4.vtt" type="text/vtt" language="en"/>
+      <podcast:transcript url="https://cdn.example.com/odd/ep4.json" type="application/json" rel="captions"/>
+      <description>Short description.</description>
+      <content:encoded><![CDATA[<p>Full <a href="https://example.com">show notes</a> for episode 4.</p>]]></content:encoded>
+    </item>
+
+    <item>
+      <title>Episode 3: Seconds</title>
+      <guid isPermaLink="true">https://odd.example.com/episodes/3</guid>
+      <pubDate>Tue, 07 Oct 2025 18:00:00 GMT</pubDate>
+      <enclosure url="https://cdn.example.com/odd/ep3.m4a" length="0" type="audio/x-m4a"/>
+      <itunes:duration>2732</itunes:duration>
+      <description>Seconds-only duration.</description>
+    </item>
+
+    <item>
+      <title>Episode 2: No GUID</title>
+      <pubDate>Mon, 29 Sep 2025 05:00:00 AEST</pubDate>
+      <enclosure url="https://cdn.example.com/odd/ep2.mp3" type="audio/mpeg"/>
+      <itunes:duration>45:30</itunes:duration>
+      <itunes:explicit>yes</itunes:explicit>
+      <description><![CDATA[No GUID &mdash; identity falls back to the enclosure URL.]]></description>
+    </item>
+
+    <item>
+      <title>Episode 1: Minutes</title>
+      <pubDate>2025-09-22T05:00:00Z</pubDate>
+      <enclosure url="https://cdn.example.com/odd/ep1.mp3" length="1234" type="audio/mpeg"/>
+      <itunes:duration>1:05</itunes:duration>
+    </item>
+
+    <item>
+      <title>A blog post with no audio</title>
+      <guid>odd-blog-1</guid>
+      <pubDate>Wed, 15 Oct 2025 01:00:00 +0000</pubDate>
+      <description>Not a podcast episode.</description>
+    </item>
+
+    <item>
+      <title>Episode 4: Chapters &amp; Transcripts (duplicate)</title>
+      <guid isPermaLink="false">odd-ep-4</guid>
+      <pubDate>Tue, 14 Oct 2025 18:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example.com/odd/ep4-dupe.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

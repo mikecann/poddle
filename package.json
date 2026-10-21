@@ -1,0 +1,28 @@
+{
+  "name": "poddle-backend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "convex dev",
+    "dev:local": "CONVEX_AGENT_MODE=anonymous convex dev",
+    "codegen": "convex codegen",
+    "deploy": "convex deploy",
+    "typecheck": "tsc --noEmit -p convex && tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "check": "npm run typecheck && npm test"
+  },
+  "dependencies": {
+    "convex": "^1.47.0",
+    "convex-helpers": "^0.1.128",
+    "fast-xml-parser": "^5.11.2",
+    "fractional-indexing": "^4.0.0"
+  },
+  "devDependencies": {
+    "@edge-runtime/vm": "^5.0.0",
+    "@types/node": "^26.6.5",
+    "convex-test": "^0.0.63",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  }
+}

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xml:lang="en">
+  <title>Atom Cast</title>
+  <subtitle>An Atom-only podcast</subtitle>
+  <link href="https://atom.example.com/" rel="alternate"/>
+  <link href="https://atom.example.com/feed.atom" rel="self"/>
+  <id>urn:uuid:atomcast</id>
+  <updated>2025-10-10T10:00:00Z</updated>
+  <author><name>Atom Author</name></author>
+  <logo>https://atom.example.com/logo.png</logo>
+  <entry>
+    <title>Second entry</title>
+    <id>urn:uuid:entry-2</id>
+    <published>2025-10-10T10:00:00Z</published>
+    <updated>2025-10-10T10:00:00Z</updated>
+    <link rel="alternate" href="https://atom.example.com/2"/>
+    <link rel="enclosure" href="https://atom.example.com/2.mp3" type="audio/mpeg" length="1000"/>
+    <itunes:duration>00:30:00</itunes:duration>
+    <summary>Second summary</summary>
+    <content type="html">&lt;p&gt;Second &lt;b&gt;content&lt;/b&gt;&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <title>First entry</title>
+    <id>urn:uuid:entry-1</id>
+    <updated>2025-10-01T10:00:00Z</updated>
+    <link rel="enclosure" href="https://atom.example.com/1.mp3" type="audio/mpeg"/>
+    <summary>First summary</summary>
+  </entry>
+  <entry>
+    <title>Text-only entry</title>
+    <id>urn:uuid:entry-0</id>
+    <updated>2025-09-01T10:00:00Z</updated>
+    <link rel="alternate" href="https://atom.example.com/0"/>
+  </entry>
+</feed>
