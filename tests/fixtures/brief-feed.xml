@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Morning Brief</title>
+    <item>
+      <title>Brief 5: Untouched</title>
+      <guid isPermaLink="false">brief-5</guid>
+      <link>https://brief.example.com/5</link>
+      <pubDate>Tue, 20 Oct 2026 10:00:00 GMT</pubDate>
+      <enclosure url="https://dts.podtrac.com/redirect.mp3/cdn.example.com/brief/5.mp3" type="audio/mpeg"/>
+      <itunes:duration>1800</itunes:duration>
+    </item>
+    <item>
+      <title>Brief 4: Halfway</title>
+      <guid isPermaLink="false">brief-4</guid>
+      <link>https://brief.example.com/4</link>
+      <pubDate>Mon, 19 Oct 2026 10:00:00 GMT</pubDate>
+      <enclosure url="https://dts.podtrac.com/redirect.mp3/cdn.example.com/brief/4.mp3" type="audio/mpeg"/>
+      <itunes:duration>1500</itunes:duration>
+    </item>
+    <item>
+      <title>Brief 3: Tracked</title>
+      <guid isPermaLink="false">brief-3</guid>
+      <link>https://brief.example.com/3</link>
+      <pubDate>Sun, 18 Oct 2026 10:00:00 GMT</pubDate>
+      <enclosure url="https://dts.podtrac.com/redirect.mp3/cdn.example.com/brief/3.mp3?awCollectionId=1" type="audio/mpeg"/>
+      <itunes:duration>1200</itunes:duration>
+    </item>
+    <item>
+      <title>Brief 2: New CDN (updated)</title>
+      <guid isPermaLink="false">brief-2</guid>
+      <link>https://brief.example.com/2</link>
+      <pubDate>Sat, 17 Oct 2026 10:00:00 GMT</pubDate>
+      <enclosure url="https://newcdn.example.com/brief/2.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

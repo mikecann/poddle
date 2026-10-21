@@ -4,6 +4,7 @@ import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
 import { discoverFeedLink, FeedParseError, parseFeed, type ParsedFeed } from "./feedParser";
 import type { IncomingEpisode, IngestMode } from "./ingest";
+import { truncate } from "./parse";
 
 // Fetch + parse + ingest, shared by the polling, refresh and import actions.
 
@@ -72,6 +73,8 @@ export type RefreshResult = {
   status: "updated" | "notModified" | "unchanged" | "busy" | "error";
   newEpisodes: number;
   error?: string;
+  /** HTTP status of a failed fetch (absent for network and parse errors before a response). */
+  httpStatus?: number;
 };
 
 export async function refreshPodcast(
@@ -107,7 +110,7 @@ async function fetchAndIngest(
 
   const fail = async (status: number, error: string): Promise<RefreshResult> => {
     await ctx.runMutation(internal.feeds.recordFetch, { podcastId, status, error, changed: false });
-    return { status: "error", newEpisodes: 0, error };
+    return { status: "error", newEpisodes: 0, error, httpStatus: status || undefined };
   };
 
   let res: Response;
@@ -177,7 +180,7 @@ export function toIncoming(ep: ParsedFeed["episodes"][number]): IncomingEpisode 
   const out: Record<string, unknown> = {};
   for (const [k, val] of Object.entries(ep)) if (val !== undefined) out[k] = val;
   if (typeof out.showNotesHtml === "string" && out.showNotesHtml.length > MAX_NOTES_CHARS) {
-    out.showNotesHtml = (out.showNotesHtml as string).slice(0, MAX_NOTES_CHARS);
+    out.showNotesHtml = truncate(out.showNotesHtml as string, MAX_NOTES_CHARS);
   }
   return out as IncomingEpisode;
 }

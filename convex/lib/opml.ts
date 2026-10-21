@@ -1,5 +1,5 @@
 import { XMLParser } from "fast-xml-parser";
-import { enclosureKey, normalizeFeedUrl, parseDate, parseIntOrUndefined } from "./parse";
+import { normalizeFeedUrl, parseDate, parseIntOrUndefined, stripQuery } from "./parse";
 
 // Overcast "All data" export (https://overcast.fm/account/export_opml/extended).
 // Format per hbmartin/overcast-to-sqlite: <body><outline text="playlists">…</outline>
@@ -36,8 +36,16 @@ export type OvercastFeed = {
 export type OvercastPlaylist = {
   title: string;
   smart: boolean;
+  /** "chronological" or "reverse-chronological" (newest first). */
   sorting?: string;
+  /** Shows a smart playlist is limited to. Empty means every show. */
   includePodcastIds: number[];
+  /** Shows a smart playlist puts first. */
+  priorityPodcastIds: number[];
+  /** A manual playlist's episodes, in order. */
+  includeEpisodeIds: number[];
+  /** Episodes a smart playlist has been hand-sorted to put first, in order. */
+  sortedEpisodeIds: number[];
 };
 
 export type OvercastExport = {
@@ -68,38 +76,49 @@ export function parseOvercastOpml(xml: string): OvercastExport {
   const playlists: OvercastPlaylist[] = [];
   let hasEpisodeData = false;
 
+  // The extended export marks every show subscribed="1" or leaves it off for
+  // ones he's unsubscribed from. A plain subscriptions OPML never has it, and
+  // everything in it is a subscription.
+  const rss: Outline[] = [];
   const walk = (outlines: Outline[] | undefined) => {
     for (const o of outlines ?? []) {
       const type = str(o.type);
-      if (type === "rss") {
-        const feed = parseFeedOutline(o);
-        if (feed) {
-          if (feed.episodes.length) hasEpisodeData = true;
-          feeds.push(feed);
-        }
-      } else if (type === "podcast-playlist") {
-        const ids = str(o.includePodcastIds);
-        if (ids) {
-          playlists.push({
-            title: str(o.title) ?? str(o.text) ?? "Playlist",
-            smart: str(o.smart) === "1",
-            sorting: str(o.sorting),
-            includePodcastIds: ids
-              .split(",")
-              .map((x) => parseIntOrUndefined(x))
-              .filter((x): x is number => x !== undefined),
-          });
-        }
-      } else {
-        walk(o.outline);
-      }
+      if (type === "rss") rss.push(o);
+      else if (type === "podcast-playlist") playlists.push(parsePlaylistOutline(o));
+      else walk(o.outline);
     }
   };
   walk(body.outline);
+  const hasSubscribedFlags = rss.some((o) => o.subscribed !== undefined);
+  for (const o of rss) {
+    const feed = parseFeedOutline(o, hasSubscribedFlags);
+    if (!feed) continue;
+    if (feed.episodes.length) hasEpisodeData = true;
+    feeds.push(feed);
+  }
   return { feeds, playlists, hasEpisodeData };
 }
 
-function parseFeedOutline(o: Outline): OvercastFeed | undefined {
+function parsePlaylistOutline(o: Outline): OvercastPlaylist {
+  return {
+    title: str(o.title) ?? str(o.text) ?? "Playlist",
+    smart: str(o.smart) === "1",
+    sorting: str(o.sorting),
+    includePodcastIds: idList(o.includePodcastIds),
+    priorityPodcastIds: idList(o.priorityPodcastIds),
+    includeEpisodeIds: idList(o.includeEpisodeIds),
+    sortedEpisodeIds: idList(o.sortedEpisodeIds),
+  };
+}
+
+function idList(x: unknown): number[] {
+  return (str(x) ?? "")
+    .split(",")
+    .map((id) => parseIntOrUndefined(id))
+    .filter((id): id is number => id !== undefined);
+}
+
+function parseFeedOutline(o: Outline, hasSubscribedFlags: boolean): OvercastFeed | undefined {
   const xmlUrl = str(o.xmlUrl);
   if (!xmlUrl) return undefined;
   const episodes: OvercastEpisode[] = [];
@@ -112,7 +131,7 @@ function parseFeedOutline(o: Outline): OvercastFeed | undefined {
       title: str(e.title) ?? "",
       url: str(e.url),
       overcastUrl: str(e.overcastUrl),
-      enclosureUrl: enclosureKey(str(e.enclosureUrl)),
+      enclosureUrl: stripQuery(str(e.enclosureUrl)),
       pubDate: parseDate(str(e.pubDate)),
       played: str(e.played) === "1",
       progress: parseIntOrUndefined(e.progress),
@@ -126,8 +145,7 @@ function parseFeedOutline(o: Outline): OvercastFeed | undefined {
     title: str(o.title) ?? str(o.text) ?? xmlUrl,
     feedUrl: normalizeFeedUrl(xmlUrl),
     htmlUrl: str(o.htmlUrl),
-    // A plain OPML has no `subscribed` attribute: everything in it is a subscription.
-    subscribed: o.subscribed === undefined ? true : str(o.subscribed) === "1",
+    subscribed: hasSubscribedFlags ? str(o.subscribed) === "1" : true,
     notifications: str(o.notifications) === "1",
     addedAt: parseDate(str(o.overcastAddedDate)),
     episodes,
@@ -143,4 +161,30 @@ function str(x: unknown): string | undefined {
 /** overcast-to-sqlite's rule: an episode counts as listened if played or progress > 300 s. */
 export function countsAsListened(e: Pick<OvercastEpisode, "played" | "progress">): boolean {
   return e.played || (e.progress ?? 0) > 300;
+}
+
+/**
+ * How to seed Up Next from Overcast's playlists (decisions.md). Overcast has no
+ * Inbox: its main smart playlist ("All Episodes") is the queue. Its hand-sorted
+ * episodes and every manual playlist's episodes go first, then its priority
+ * shows, then everything else in its sort order.
+ */
+export type UpNextPlan = {
+  /** Overcast episode IDs to put first, in order. */
+  leadingEpisodeIds: number[];
+  priorityPodcastIds: number[];
+  newestFirst: boolean;
+};
+
+export function upNextPlan(playlists: OvercastPlaylist[]): UpNextPlan {
+  const main =
+    playlists.find((p) => p.smart && /^all episodes$/i.test(p.title)) ??
+    playlists.find((p) => p.smart && (p.priorityPodcastIds.length > 0 || p.sortedEpisodeIds.length > 0)) ??
+    playlists.find((p) => p.smart && p.includePodcastIds.length === 0);
+  const leading = [...playlists.filter((p) => !p.smart).flatMap((p) => p.includeEpisodeIds), ...(main?.sortedEpisodeIds ?? [])];
+  return {
+    leadingEpisodeIds: [...new Set(leading)],
+    priorityPodcastIds: main?.priorityPodcastIds ?? [],
+    newestFirst: main?.sorting !== "chronological",
+  };
 }

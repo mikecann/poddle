@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { discoverFeedLink, parseFeed } from "../convex/lib/feedParser";
-import { enclosureKey, normalizeFeedUrl, parseAppleId, parseDate, parseDuration } from "../convex/lib/parse";
+import { enclosureKey, normalizeFeedUrl, parseAppleId, parseDate, parseDuration, snippet, truncate } from "../convex/lib/parse";
 import { fixture } from "./helpers";
 
 describe("parseDuration", () => {
@@ -123,8 +123,46 @@ describe("helpers", () => {
     expect(discoverFeedLink(html, "https://show.example.com/about")).toBe("https://show.example.com/feed.xml");
   });
 
-  test("enclosure keys strip the query", () => {
-    expect(enclosureKey("https://cdn.example.com/a.mp3?x=1#t=3")).toBe("https://cdn.example.com/a.mp3");
+  test("enclosure keys strip the query and scheme", () => {
+    expect(enclosureKey("https://cdn.example.com/a.mp3?x=1#t=3")).toBe("cdn.example.com/a.mp3");
+    expect(enclosureKey("http://CDN.example.com/A.mp3")).toBe("cdn.example.com/A.mp3");
+  });
+
+  test("enclosure keys peel tracking redirects", () => {
+    const real = "traffic.megaphone.fm/ABC123.mp3";
+    for (const url of [
+      "https://traffic.megaphone.fm/ABC123.mp3?updated=1",
+      "http://dts.podtrac.com/redirect.mp3/traffic.megaphone.fm/ABC123.mp3",
+      "https://www.podtrac.com/pts/redirect.mp3/pdst.fm/e/chtbl.com/track/42D/traffic.megaphone.fm/ABC123.mp3",
+      "https://tracking.swap.fm/track/xYz123/traffic.megaphone.fm/ABC123.mp3",
+      "https://chrt.fm/track/15E3G4/traffic.megaphone.fm/ABC123.mp3",
+      "https://pdst.fm/e/https://traffic.megaphone.fm/ABC123.mp3",
+      "https://op3.dev/e,pg=abc/traffic.megaphone.fm/ABC123.mp3",
+      "https://mgln.ai/e/89/traffic.megaphone.fm/ABC123.mp3",
+    ]) {
+      expect(enclosureKey(url), url).toBe(real);
+    }
+    expect(enclosureKey("https://anchor.fm/s/abc/podcast/play/123/https%3A%2F%2Fcdn.example.com%2Fstaging%2Fx.m4a")).toBe(
+      "cdn.example.com/staging/x.m4a",
+    );
+    // A host's own path isn't mistaken for a wrapped URL.
+    expect(enclosureKey("https://media.blubrry.com/show/file.mp3")).toBe("media.blubrry.com/show/file.mp3");
+    expect(enclosureKey("https://media.blubrry.com/show/content.blubrry.com/show/file.mp3")).toBe("content.blubrry.com/show/file.mp3");
+  });
+
+  test("snippets never split an emoji", () => {
+    const text = "a".repeat(278) + "🎙️ and more";
+    const s = snippet(`<p>${text}</p>`)!;
+    expect(s).toBe("a".repeat(278) + "…");
+    expect(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/.test(s)).toBe(false);
+    expect(truncate("ab🎙", 3)).toBe("ab");
+    expect(truncate("ab🎙", 4)).toBe("ab🎙");
+  });
+
+  test("Overcast's date formats", () => {
+    expect(parseDate("Tue, 04 Oct 2016 05:24:50 +0000")).toBe(Date.UTC(2016, 9, 4, 5, 24, 50));
+    expect(parseDate("2026-10-19T03:40:06-04:00")).toBe(Date.UTC(2026, 9, 19, 7, 40, 6));
+    expect(parseDate("2016-02-18T21:03:11+11:00")).toBe(Date.UTC(2016, 1, 18, 10, 3, 11));
   });
 
   test("feed URL normalisation", () => {

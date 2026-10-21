@@ -72,6 +72,26 @@ export async function findByTitleDate(ctx: QueryCtx, podcastId: Id<"podcasts">, 
   );
 }
 
+/** The episode with this web page link, if exactly one has it (many feeds use the show's homepage for every item). */
+export async function findByLink(ctx: QueryCtx, podcastId: Id<"podcasts">, link: string | undefined) {
+  if (!link) return null;
+  const hits = await ctx.db
+    .query("episodes")
+    .withIndex("by_podcast_link", (q) => q.eq("podcastId", podcastId).eq("link", link))
+    .take(2);
+  return hits.length === 1 ? hits[0]! : null;
+}
+
+/** The only feed episode with this exact title, whatever its date (re-published back catalogues). */
+export async function findByUniqueTitle(ctx: QueryCtx, podcastId: Id<"podcasts">, title: string | undefined) {
+  if (!title) return null;
+  const hits = await ctx.db
+    .query("episodes")
+    .withIndex("by_podcast_title", (q) => q.eq("podcastId", podcastId).eq("title", title))
+    .take(2);
+  return hits.length === 1 && !hits[0]!.isGhost ? hits[0]! : null;
+}
+
 /**
  * Episode identity: GUID, then enclosure URL (query stripped), then title + pubDate.
  * The fallbacks only match episodes that have no GUID of their own (or ghosts

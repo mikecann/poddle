@@ -74,12 +74,69 @@ export function parseIntOrUndefined(raw: unknown): number | undefined {
   return Number.isFinite(n) ? n : undefined;
 }
 
-/** Enclosure URL without query string or fragment, for matching across sources. */
-export function enclosureKey(url: string | undefined): string | undefined {
+/** URL without query string or fragment. */
+export function stripQuery(url: string | undefined): string | undefined {
   if (!url) return undefined;
   const trimmed = url.trim();
   if (!trimmed) return undefined;
   return trimmed.split("#")[0]!.split("?")[0]!;
+}
+
+/**
+ * Analytics redirects that wrap the real file URL as a path prefix, e.g.
+ * `dts.podtrac.com/redirect.mp3/traffic.megaphone.fm/X.mp3`. Feeds add and
+ * drop these over time, so Overcast's stored URL often differs from today's feed.
+ */
+const TRACKING_PREFIXES = [
+  /^(?:dts\.|www\.)?podtrac\.com\/(?:pts\/)?redirect\.[a-z0-9]+\//,
+  /^(?:tracking\.)?swap\.fm\/track\/[^/]+\//,
+  /^chrt\.fm\/track\/[^/]+\//,
+  /^chtbl\.com\/track\/[^/]+\//,
+  /^pdst\.fm\/e\//,
+  /^pdcn\.co\/e\//,
+  /^mgln\.ai\/e\/[^/]+\//,
+  /^op3\.dev\/e(?:,[^/]*)?\//,
+  /^pfx\.vpixl\.com\/[^/]+\//,
+  /^(?:verifi\.podscribe\.com|pscrb\.fm)\/rss\/p\//,
+  /^arttrk\.com\/p\/[^/]+\//,
+  /^prfx\.byspotify\.com\/e\//,
+  /^media\.blubrry\.com\/[^/]+\//,
+  /^claritaspod\.com\/measure\//,
+];
+/** What's left after a prefix must look like a host, so a plain file path is never eaten. */
+const LOOKS_LIKE_HOST = /^[a-z0-9-]+(\.[a-z0-9-]+)+(:\d+)?\//i;
+
+/**
+ * Key for matching an enclosure across sources: no query or fragment, no scheme
+ * (http and https match), tracking redirect prefixes peeled off, host lowercased.
+ * Anchor's `/play/<id>/https%3A%2F%2F…` wrapper is unwrapped too.
+ */
+export function enclosureKey(url: string | undefined): string | undefined {
+  const stripped = stripQuery(url);
+  if (!stripped) return undefined;
+  let s: string = stripped;
+  const anchor = /\/play\/\d+\/(https?%3A%2F%2F.+)$/i.exec(s);
+  if (anchor) {
+    try {
+      s = stripQuery(decodeURIComponent(anchor[1]!)) ?? s;
+    } catch {
+      // Keep the wrapped URL.
+    }
+  }
+  s = s.replace(/^[a-z]+:\/\//i, "");
+  for (let peeled = true; peeled; ) {
+    peeled = false;
+    for (const prefix of TRACKING_PREFIXES) {
+      const m = prefix.exec(s.toLowerCase());
+      if (!m) continue;
+      const rest: string = s.slice(m[0].length).replace(/^[a-z]+:\/\//i, "");
+      if (!LOOKS_LIKE_HOST.test(rest)) continue;
+      s = rest;
+      peeled = true;
+    }
+  }
+  const slash = s.indexOf("/");
+  return slash < 0 ? s.toLowerCase() : s.slice(0, slash).toLowerCase() + s.slice(slash);
 }
 
 export function normalizeFeedUrl(raw: string): string {
@@ -153,7 +210,14 @@ export function snippet(html: string | undefined, max = 280): string | undefined
   if (!html) return undefined;
   const text = htmlToText(html).replace(/\n+/g, " ");
   if (!text) return undefined;
-  return text.length > max ? text.slice(0, max - 1).trimEnd() + "…" : text;
+  return text.length > max ? truncate(text, max - 1).trimEnd() + "…" : text;
+}
+
+/** First `max` UTF-16 units, never splitting an emoji's surrogate pair (Convex rejects lone surrogates). */
+export function truncate(s: string, max: number): string {
+  if (s.length <= max) return s;
+  const code = s.charCodeAt(max - 1);
+  return s.slice(0, code >= 0xd800 && code <= 0xdbff ? max - 1 : max);
 }
 
 /** Pull an Apple ID out of a podcasts.apple.com link, an overcast.fm/itunes link, or a bare number. */

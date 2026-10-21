@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Deep Dive</title>
+    <link>https://deep.example.com/</link>
+    <item>
+      <title>Deep 3: Untouched</title>
+      <guid isPermaLink="false">deep-3</guid>
+      <link>https://deep.example.com/</link>
+      <pubDate>Wed, 21 Oct 2026 07:00:00 GMT</pubDate>
+      <enclosure url="https://chrt.fm/track/AB12/traffic.example.com/DEEP0003.mp3" type="audio/mpeg"/>
+      <itunes:duration>5400</itunes:duration>
+    </item>
+    <item>
+      <title>Deep 2: In progress</title>
+      <guid isPermaLink="false">deep-2</guid>
+      <link>https://deep.example.com/</link>
+      <pubDate>Thu, 15 Oct 2026 07:00:00 GMT</pubDate>
+      <enclosure url="https://chrt.fm/track/AB12/traffic.example.com/DEEP0002.mp3" type="audio/mpeg"/>
+      <itunes:duration>5000</itunes:duration>
+    </item>
+    <item>
+      <title>Deep 1.5: Skipped</title>
+      <guid isPermaLink="false">deep-15</guid>
+      <link>https://deep.example.com/</link>
+      <pubDate>Thu, 01 Oct 2026 07:00:00 GMT</pubDate>
+      <enclosure url="https://chrt.fm/track/AB12/traffic.example.com/DEEP0015.mp3" type="audio/mpeg"/>
+      <itunes:duration>4000</itunes:duration>
+    </item>
+    <item>
+      <title>Deep 1: Origins</title>
+      <guid isPermaLink="false">deep-1-rerun</guid>
+      <link>https://deep.example.com/</link>
+      <pubDate>Mon, 01 Mar 2021 07:00:00 GMT</pubDate>
+      <enclosure url="https://chrt.fm/track/AB12/traffic.example.com/DEEP9001.mp3" type="audio/mpeg"/>
+      <itunes:duration>3000</itunes:duration>
+    </item>
+  </channel>
+</rss>

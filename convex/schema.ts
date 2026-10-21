@@ -92,7 +92,7 @@ export default defineSchema({
     podcastId: v.id("podcasts"),
     guid: v.optional(v.string()),
     enclosureUrl: v.optional(v.string()),
-    /** Enclosure URL without query or fragment, for matching. */
+    /** Enclosure URL normalised for matching: no query, scheme or tracking redirect prefixes (`parse.enclosureKey`). */
     enclosureKey: v.optional(v.string()),
     enclosureType: v.optional(v.string()),
     enclosureLength: v.optional(v.number()),
@@ -119,6 +119,7 @@ export default defineSchema({
     .index("by_podcast_guid", ["podcastId", "guid"])
     .index("by_podcast_enclosureKey", ["podcastId", "enclosureKey"])
     .index("by_podcast_title", ["podcastId", "title"])
+    .index("by_podcast_link", ["podcastId", "link"])
     .index("by_updatedAt", ["updatedAt"]),
 
   /** Show notes HTML, split out so episode lists stay light. */
@@ -276,18 +277,57 @@ export default defineSchema({
       episodes: v.number(),
       episodesMatched: v.number(),
       ghostEpisodes: v.number(),
+      /** Why the ghosts are ghosts: older than anything the feed still lists, */
+      ghostsOlderThanFeed: v.optional(v.number()),
+      /** inside the feed's date range but removed from it, */
+      ghostsMissingFromFeed: v.optional(v.number()),
+      /** or the feed couldn't be fetched. */
+      ghostsFeedFailed: v.optional(v.number()),
       playedEpisodes: v.number(),
       inProgressEpisodes: v.number(),
       starredEpisodes: v.number(),
       sessions: v.number(),
+      /** Sessions whose length used a show (or overall) median duration. */
+      estimatedDurationSessions: v.optional(v.number()),
       estimatedListenSeconds: v.number(),
       earliestListenAt: v.optional(v.number()),
+      /** Episodes put in Up Next at the end of the import. */
+      upNextEpisodes: v.optional(v.number()),
     }),
     playlists: v.array(
       v.object({
         title: v.string(),
         smart: v.boolean(),
+        sorting: v.optional(v.string()),
+        /** Shows the playlist is limited to (empty: every show). */
         podcastIds: v.array(v.id("podcasts")),
+        /** Shows it puts first. */
+        priorityPodcastIds: v.optional(v.array(v.id("podcasts"))),
+        /** How many episodes it lists by hand (manual episodes or a smart playlist's pinned order). */
+        episodeCount: v.optional(v.number()),
+      }),
+    ),
+    /** Feeds that couldn't be fetched, so the app can list them. */
+    failedFeeds: v.optional(
+      v.array(
+        v.object({
+          podcastId: v.id("podcasts"),
+          title: v.string(),
+          feedUrl: v.string(),
+          /** HTTP status, absent for network and parse errors. */
+          status: v.optional(v.number()),
+          error: v.string(),
+        }),
+      ),
+    ),
+    /** Median episode length across the imported feeds, for estimating unknown durations. */
+    medianDuration: v.optional(v.number()),
+    /** Overcast's main playlist, resolved, for seeding Up Next once matching is done. */
+    upNextPlan: v.optional(
+      v.object({
+        leadingEpisodeIds: v.array(v.number()),
+        priorityPodcastIds: v.array(v.id("podcasts")),
+        newestFirst: v.boolean(),
       }),
     ),
     updatedAt: v.number(),
@@ -311,10 +351,32 @@ export default defineSchema({
     userRecommendedAt: v.optional(v.number()),
   }).index("by_batch_podcast", ["batchId", "podcastId"]),
 
-  /** Podcasts still to fetch and match for an import batch. */
+  /** Podcasts still to fetch ("fetch"), then to match ("match"), for an import batch. */
   importQueue: defineTable({
     batchId: v.id("importBatches"),
     podcastId: v.id("podcasts"),
+    phase: v.union(v.literal("fetch"), v.literal("match")),
+    /** Newest pubDate among the show's exported episodes, and Overcast's added date. */
+    newestExportedAt: v.optional(v.number()),
+    addedAt: v.optional(v.number()),
+    /** Set once fetched. */
+    feedOk: v.optional(v.boolean()),
+    oldestFeedPubDate: v.optional(v.number()),
+    medianDuration: v.optional(v.number()),
+    /** Known durations, for the batch-wide median. */
+    durations: v.optional(v.array(v.number())),
+  }).index("by_batch_phase", ["batchId", "phase"]),
+
+  /** Episodes to put in Up Next when an import finishes. */
+  importUpNext: defineTable({
+    batchId: v.id("importBatches"),
+    episodeId: v.id("episodes"),
+    podcastId: v.id("podcasts"),
+    /** Overcast's episode ID, when it came from the export. */
+    overcastId: v.optional(v.number()),
+    pubDate: v.optional(v.number()),
+    /** LWW time for the queue add: Overcast's `userUpdatedDate`, or the pubDate for untouched episodes. */
+    at: v.number(),
   }).index("by_batch", ["batchId"]),
 
   // ---- Stats rollups (maintained on every session write) ----

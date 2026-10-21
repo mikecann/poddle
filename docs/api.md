@@ -44,7 +44,7 @@ These are the shapes returned by queries and by `sync:changes`. Every synced tab
 `_id`, `feedUrl`, `title`, `author?`, `description?`, `artworkUrl?`, `link?`, `language?`, `appleId?: Int`, `overcastId?: Int`, `isPrivate: Bool`, `subscribed: Bool`, `subscribedAt?` (first subscribe; Overcast's added date on import), `unsubscribedAt?`, `subscriptionUpdatedAt` (LWW clock), `latestEpisodeAt?`, `episodeCount: Int`, `lastFetchedAt?`, `createdAt`, `updatedAt`.
 
 ### Episode (`episodes`)
-Feed data only, never user state. `_id`, `podcastId`, `guid?`, `enclosureUrl?`, `enclosureKey?` (URL without query), `enclosureType?`, `enclosureLength?: Int`, `title`, `summary?` (plain text, ≤280 chars), `link?`, `pubDate?`, `duration?` (seconds; absent if the feed doesn't say), `chaptersUrl?`, `chaptersType?`, `transcripts: [{ url, type, language?, rel? }]`, `artworkUrl?` (episode art; fall back to the show's), `season?`, `episodeNumber?`, `episodeType?` (`full`/`trailer`/`bonus`), `explicit?: Bool`, `isGhost: Bool` (only known from the Overcast import; no longer in the feed, may have no enclosure), `firstSeenAt`, `updatedAt`.
+Feed data only, never user state. `_id`, `podcastId`, `guid?`, `enclosureUrl?`, `enclosureKey?` (for matching: no query, scheme or tracking-redirect prefixes), `enclosureType?`, `enclosureLength?: Int`, `title`, `summary?` (plain text, ≤280 chars), `link?`, `pubDate?`, `duration?` (seconds; absent if the feed doesn't say), `chaptersUrl?`, `chaptersType?`, `transcripts: [{ url, type, language?, rel? }]`, `artworkUrl?` (episode art; fall back to the show's), `season?`, `episodeNumber?`, `episodeType?` (`full`/`trailer`/`bonus`), `explicit?: Bool`, `isGhost: Bool` (only known from the Overcast import; no longer in the feed, may have no enclosure), `firstSeenAt`, `updatedAt`.
 
 ### Episode notes (`episodeNotes`)
 `_id`, `episodeId`, `html` (show notes HTML, capped at 50k chars), `updatedAt`. Split out so episode lists stay light. Returned by `episodes:get`.
@@ -69,7 +69,7 @@ See [Settings](#settings). Both also carry `fieldTimes: { [field]: ms }` (per-fi
 `_id`, `deviceId`, `name`, `platform`, `apnsToken?`, `apnsEnvironment?` (`sandbox`/`production`), `lastSeenAt`, `updatedAt`.
 
 ### Import batch (`importBatches`)
-`_id`, `source: "overcast"`, `status` (`parsing` → `fetching` → `done`, or `failed`), `assumedSpeed`, `startedAt`, `finishedAt?`, `error?`, `warning?`, `playlists: [{ title, smart: Bool, podcastIds: [Id] }]`, `updatedAt`, and `counts`:
+`_id`, `source: "overcast"`, `status` (`parsing` → `fetching` → `done`, or `failed`), `assumedSpeed`, `startedAt`, `finishedAt?`, `error?`, `warning?`, `playlists: [{ title, smart: Bool, sorting?, podcastIds: [Id], priorityPodcastIds?: [Id], episodeCount? }]` (every Overcast playlist; `podcastIds` is what a smart playlist is limited to, `episodeCount` how many episodes it lists by hand), `failedFeeds?: [{ podcastId, title, feedUrl, status?: Int, error }]` (feeds that couldn't be fetched; `status` is the HTTP status when there was one), `medianDuration?` (seconds, used for unknown durations), `upNextPlan?` (internal: how Up Next gets seeded), `updatedAt`, and `counts`:
 
 | Count | Meaning |
 |---|---|
@@ -77,8 +77,11 @@ See [Settings](#settings). Both also carry `fieldTimes: { [field]: ms }` (per-fi
 | `podcastsProcessed`, `feedsFailed` | Progress through the feed fetches. Done when `podcastsProcessed == podcasts`. |
 | `episodes` | Episode rows in the file |
 | `episodesMatched`, `ghostEpisodes` | Matched to a feed episode / created as ghosts |
+| `ghostsOlderThanFeed?`, `ghostsMissingFromFeed?`, `ghostsFeedFailed?` | Why: older than anything the feed still lists / removed from inside the feed's range / feed failed |
 | `playedEpisodes`, `inProgressEpisodes`, `starredEpisodes` | For the receipt |
 | `sessions`, `estimatedListenSeconds` | Estimated sessions created and their wall time (hours = /3600) |
+| `estimatedDurationSessions?` | Sessions whose episode length was unknown and used the show's (or overall) median |
+| `upNextEpisodes?` | In Up Next when the import finished |
 | `earliestListenAt?` | Earliest estimated listen, for "since {date}" |
 
 ### Deletion (`deletions`)
@@ -236,9 +239,11 @@ Private shows are left out of `topShows`, `topEpisode`, `first/lastEpisode` and 
 2. `overcastImport:startOvercastImport` (mutation) `{ storageId?, opml?, assumedSpeed }` → `Id<"importBatches">`. Pass either the uploaded `storageId` (preferred) or the file text as `opml` (fine up to a few MB). `assumedSpeed` is 0.5–3.0, default 1.0 in the UI.
 3. Subscribe to `overcastImport:getImport { batchId }` → `ImportBatch | null` and fill in the receipt as the counts grow. `overcastImport:latestImport` → the newest batch or null.
 
-What it does: parses the extended export; creates every show (Overcast's `subscribed=0` shows become past shows); fetches each feed (6 at a time); matches episodes by enclosure URL (query stripped), then GUID, then title + pubDate (within a day); creates archived ghost episodes for ones no longer in the feed; sets played / position / starred / archived with Overcast's `userUpdatedDate` as the LWW time; creates one estimated session per listened episode (played, or progress > 300 s) ending at `userUpdatedDate`, lasting content ÷ `assumedSpeed`. Imported shows' new episodes don't go to the Inbox. `notifications="1"` turns on the show's notification override. Playlists come back in `playlists` so the app can offer "make these shows Priority?".
+What it does: parses the extended export; creates every show (only `subscribed="1"` shows are subscribed; the rest become past shows); fetches every feed (6 at a time), then matches each show's episodes by enclosure (query, http/https and tracking redirects like `dts.podtrac.com/redirect.mp3/` ignored), then GUID, then link (Overcast's `url`, if only one feed item has it), then title + pubDate (within a day), then a title only one feed item has; creates ghost episodes for ones no longer in the feed; sets played / position / starred with Overcast's `userUpdatedDate` as the LWW time; creates one estimated session per listened episode (played, or progress > 300 s) ending at `userUpdatedDate`, lasting content ÷ `assumedSpeed`, where content is the episode's duration if played (the show's median duration if unknown, else the overall median) or the progress if not. `notifications="1"` turns on the show's notification override.
 
-Re-running is safe: shows match by Overcast ID or feed URL, sessions and events have deterministic IDs, and state only changes where Overcast's date is newer than what Poddle has. If the file is the plain subscriptions export, the batch finishes with `warning` set and only subscriptions imported.
+Up Next (decisions.md): Overcast has no Inbox, so unplayed, undeleted episodes of subscribed shows go to Up Next, plus episodes a subscribed show has published since the newest one in the export (the export only lists episodes he's touched). Order follows Overcast's main playlist ("All Episodes"): manual playlists' `includeEpisodeIds` and its `sortedEpisodeIds` first, then its `priorityPodcastIds` shows, then the rest, by its `sorting` (newest first unless `chronological`). Everything else in the export is archived, so the Inbox is empty afterwards. `priorityPodcastIds` shows get the `newEpisodes = upNextTop` override.
+
+Re-running is safe: shows match by Overcast ID or feed URL, sessions and events have deterministic IDs, and state only changes where Overcast's date is newer than what Poddle has. A show an earlier import wrongly subscribed is unsubscribed again unless it's been changed in Poddle since. Up Next never gets duplicates, and episodes removed from Up Next, played or archived in Poddle since aren't re-added. If the file is the plain subscriptions export, the batch finishes with `warning` set and only subscriptions imported.
 
 ### Devices and push (`devices:*`, `apns:*`)
 

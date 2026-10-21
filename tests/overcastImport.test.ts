@@ -33,7 +33,18 @@ describe("parseOvercastOpml", () => {
     expect(ep).toMatchObject({ overcastId: 1001, played: true, userDeleted: true, enclosureUrl: "https://cdn.example.com/ttw/1.mp3" });
     expect(x.feeds[0]!.episodes[2]!.userRecommendedAt).toBe(Date.parse("2025-09-16T21:50:00+10:00"));
     expect(x.feeds[0]!.episodes[2]!.pubDate).toBe(Date.UTC(2025, 8, 15, 14));
-    expect(x.playlists).toEqual([{ title: "All Episodes", smart: true, sorting: "chronological", includePodcastIds: [101, 303] }]);
+    expect(x.playlists).toEqual([
+      {
+        title: "All Episodes",
+        smart: true,
+        sorting: "chronological",
+        includePodcastIds: [101, 303],
+        priorityPodcastIds: [],
+        includeEpisodeIds: [],
+        sortedEpisodeIds: [],
+      },
+      { title: "Empty", smart: false, sorting: "manual", includePodcastIds: [], priorityPodcastIds: [], includeEpisodeIds: [], sortedEpisodeIds: [] },
+    ]);
   });
 
   test("plain subscription OPML parses with no episode data", () => {
@@ -87,13 +98,19 @@ describe("Overcast import", () => {
       playedEpisodes: 5,
       inProgressEpisodes: 2,
       starredEpisodes: 1,
-      sessions: 5,
+      sessions: 6,
+      estimatedDurationSessions: 2,
       earliestListenAt: Date.parse("2022-02-03T20:00:00Z") - 1200_000,
+      upNextEpisodes: 3,
     });
-    // (3600 + 1834 + 4000 + 2400 + 1800) / 1.5
-    expect(batch.counts.estimatedListenSeconds).toBeCloseTo(13634 / 1.5, 6);
-    expect(batch.playlists).toHaveLength(1);
+    // TTW 1, TTW 2 (progress), TTW 3, TTW 0 (ghost: show median 3400), OF 1, DF 1 (dead feed: overall median 3200)
+    expect(batch.counts.estimatedListenSeconds).toBeCloseTo((3600 + 1834 + 4000 + 3400 + 1800 + 3200) / 1.5, 6);
+    expect(batch.medianDuration).toBe(3200);
+    expect(batch.playlists).toHaveLength(2);
     expect(batch.playlists[0]!.podcastIds).toHaveLength(2);
+    expect(batch.failedFeeds).toEqual([
+      expect.objectContaining({ title: "Dead Feed", feedUrl: "https://feeds.example.com/dead.xml", status: 404, error: "HTTP 404" }),
+    ]);
 
     const db = await snapshot(t);
     const show = (title: string) => db.podcasts.find((p) => p.title === title)!;
@@ -118,17 +135,28 @@ describe("Overcast import", () => {
     expect(st("TTW 4: Skipped")).toMatchObject({ archived: true, played: false });
     expect(db.events.some((e) => e.type === "skipped" && e.episodeId === ep("TTW 4: Skipped")._id)).toBe(true);
     expect(st("TTW 5: Barely started").position).toBe(120);
-    // New in the feed, not in Overcast: no Inbox flood from an import.
+    // Overcast has no Inbox: unplayed episodes go to Up Next (chronological, as
+    // the main playlist sorts), including the one he hadn't touched yet.
     expect(await t.query(api.episodes.inbox, { token: TOKEN })).toEqual([]);
     expect(db.states.find((s) => s.episodeId === ep("TTW 6: Brand new")._id)).toBeUndefined();
-    // The dead feed's episode is a ghost, played, but with no duration it has no session.
+    const queue = await t.query(api.queue.upNext, { token: TOKEN });
+    expect(queue.map((q) => q.row.episode.title)).toEqual(["TTW 2: Halfway", "TTW 5: Barely started", "TTW 6: Brand new"]);
+    // The dead feed's episode is a ghost; its session uses the overall median.
     expect(ep("DF 1").isGhost).toBe(true);
+    expect(db.sessions.find((s) => s.sessionId === "overcast:3001")).toMatchObject({ contentEnd: 3200, isEstimated: true });
 
     const session = db.sessions.find((s) => s.sessionId === "overcast:1003")!;
     expect(session).toMatchObject({ isEstimated: true, source: "overcastImport", rate: 1.5, contentEnd: 4000 });
     expect(session.endedAt).toBe(Date.parse("2025-09-16T21:45:00+10:00"));
     expect(session.endedAt - session.startedAt).toBe(Math.round((4000 / 1.5) * 1000));
-    expect(db.sessions.map((s) => s.sessionId).sort()).toEqual(["overcast:1001", "overcast:1002", "overcast:1003", "overcast:1004", "overcast:2001"]);
+    expect(db.sessions.map((s) => s.sessionId).sort()).toEqual([
+      "overcast:1001",
+      "overcast:1002",
+      "overcast:1003",
+      "overcast:1004",
+      "overcast:2001",
+      "overcast:3001",
+    ]);
 
     // Past shows: unsubscribed with history.
     expect((await t.query(api.podcasts.pastShows, { token: TOKEN })).map((p) => p.title)).toEqual(["Old Favourite"]);
@@ -146,7 +174,7 @@ describe("Overcast import", () => {
     await t.mutation(api.episodes.updatePosition, { token: TOKEN, episodeId: ttw2._id, position: 4000, positionUpdatedAt: NOW, deviceId: "phone" });
 
     const again = await runImport(t);
-    expect(again.counts.sessions).toBe(5);
+    expect(again.counts.sessions).toBe(6);
     const after = await snapshot(t);
     expect(after.podcasts).toHaveLength(before.podcasts.length);
     expect(after.episodes).toHaveLength(before.episodes.length);
@@ -155,7 +183,8 @@ describe("Overcast import", () => {
     expect(after.events).toHaveLength(before.events.length);
     expect(after.states.find((s) => s.episodeId === ttw2._id)?.position).toBe(4000);
     const y = await t.query(api.stats.summary, { token: TOKEN, period: "all" });
-    expect(y.totals.sessions).toBe(5);
+    expect(y.totals.sessions).toBe(6);
+    expect(await t.query(api.queue.upNext, { token: TOKEN })).toHaveLength(3);
   });
 
   test("warns on the plain subscriptions export", async () => {
