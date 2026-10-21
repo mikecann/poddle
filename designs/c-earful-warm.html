@@ -1,0 +1,1005 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earful · Direction C · Warm and tactile</title>
+<style>
+:root{
+  --paper:#F5EEE3; --paper-2:#EDE3D4; --card:#FBF7F0; --well:#E6DAC8;
+  --ink:#2B2320; --ink-2:#6E6259; --ink-3:#A39587; --line:rgba(70,45,25,.12);
+  --tomato:#DD5530; --tomato-d:#B9411F; --mustard:#E7B24A; --gold-bg:#F5E1B3; --gold-ink:#7E5410;
+  --on:#3F7F6B; --teal:#2E6E68;
+  --sans:-apple-system,BlinkMacSystemFont,"SF Pro Text","Helvetica Neue",Helvetica,Arial,sans-serif;
+  --round:ui-rounded,"SF Pro Rounded",-apple-system,BlinkMacSystemFont,"SF Pro Display","Helvetica Neue",sans-serif;
+  --serif:ui-serif,"New York",Georgia,"Times New Roman",serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+  --grain:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .22  0 0 0 0 .1  0 0 0 .55 0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)'/></svg>");
+  --raise:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -1px 0 rgba(90,60,30,.06),0 1px 2px rgba(70,40,20,.16),0 4px 10px rgba(70,40,20,.07);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+body{font-family:var(--sans);color:var(--ink);background:#E8DFD1;-webkit-font-smoothing:antialiased;min-height:100vh;position:relative}
+body::before{content:"";position:fixed;inset:0;background-image:var(--grain);opacity:.35;mix-blend-mode:multiply;pointer-events:none}
+.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+
+/* ---------- page ---------- */
+.page{max-width:1420px;margin:0 auto;padding:56px 40px 96px;position:relative}
+.hero{display:grid;grid-template-columns:1.25fr 1fr;gap:48px;align-items:end;margin-bottom:56px}
+.eyebrow{font:700 12px/16px var(--round);letter-spacing:.14em;text-transform:uppercase;color:var(--tomato)}
+.hero h1{font:800 60px/1 var(--round);letter-spacing:-.02em;margin:12px 0 20px}
+.appname{display:flex;align-items:center;gap:14px;margin-bottom:20px}
+.appicon{width:60px;height:60px;border-radius:15px;background:linear-gradient(160deg,#E7653D,#C9461F);position:relative;box-shadow:0 1px 0 rgba(255,255,255,.4) inset,0 6px 16px rgba(160,60,20,.3);overflow:hidden}
+.appicon::before{content:"";position:absolute;left:12px;right:12px;top:16px;height:22px;border-radius:22px 22px 0 0;border:3px solid #F7ECDC;border-bottom:0}
+.appicon::after{content:"";position:absolute;left:28.5px;top:18px;width:3px;height:20px;border-radius:2px;background:#F2C14E;transform:rotate(28deg);transform-origin:50% 100%}
+.appicon i{position:absolute;left:12px;right:12px;bottom:12px;height:6px;border-radius:3px;background:repeating-linear-gradient(90deg,#F7ECDC 0 3px,transparent 3px 6px)}
+.appname b{font:800 30px/1 var(--round);letter-spacing:-.01em}
+.appname span{display:block;font:500 14px/18px var(--sans);color:var(--ink-2);margin-top:4px}
+.hero p{font:400 17px/26px var(--sans);color:#4A3F38;max-width:640px}
+.side{display:flex;flex-direction:column;gap:20px;align-items:flex-start}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{display:flex;flex-direction:column;gap:6px;font:600 11px/14px var(--sans);color:var(--ink-2)}
+.sw i{width:64px;height:48px;border-radius:12px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.06),0 1px 2px rgba(70,40,20,.12)}
+.sw em{font-style:normal;font-weight:400;color:var(--ink-3)}
+.typespec{display:flex;gap:28px;align-items:baseline}
+.typespec div{font:500 12px/16px var(--sans);color:var(--ink-2)}
+.typespec b{display:block;color:var(--ink);font:700 28px/1.1 var(--round);margin-bottom:4px}
+.typespec b.t{font:500 22px/1.2 var(--sans)}
+.typespec b.m{font:500 18px/1.4 var(--mono)}
+.toggle{display:inline-flex;align-items:center;gap:10px;padding:10px 16px 10px 12px;border-radius:999px;background:var(--card);box-shadow:var(--raise);font:600 14px/20px var(--sans)}
+.toggle .knob{width:36px;height:22px;border-radius:11px;background:var(--ink);position:relative;transition:background .25s}
+.toggle .knob::after{content:"";position:absolute;top:2px;left:16px;width:18px;height:18px;border-radius:50%;background:#F4EADB;transition:left .25s cubic-bezier(.3,1.4,.5,1)}
+.toggle.light .knob{background:var(--well)}
+.toggle.light .knob::after{left:2px;background:#fff;box-shadow:0 1px 2px rgba(0,0,0,.2)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(430px,1fr));gap:64px 24px;justify-items:center}
+.shot{width:417px}
+.shot figcaption{margin:20px 8px 0;font:400 14.5px/21px var(--sans);color:#4A3F38}
+.shot figcaption b{display:block;font:700 15px/20px var(--round);color:var(--ink);margin-bottom:4px}
+.shot figcaption b span{color:var(--tomato);margin-right:6px}
+
+/* ---------- phone ---------- */
+.phone{width:417px;height:876px;padding:12px;border-radius:67px;background:linear-gradient(145deg,#3a302a,#17120f 40%,#2a221d);box-shadow:inset 0 0 0 1.5px #4a3d34,inset 0 0 0 4px #120e0b,0 40px 70px -30px rgba(70,40,15,.55),0 12px 24px rgba(70,40,15,.14)}
+.screen{position:relative;width:393px;height:852px;border-radius:55px;overflow:hidden;background:var(--paper);color:var(--ink);isolation:isolate}
+.screen::after{content:"";position:absolute;inset:0;background-image:var(--grain);opacity:.32;mix-blend-mode:multiply;pointer-events:none;z-index:60}
+.screen.dark::after{opacity:.5;mix-blend-mode:overlay}
+.status{position:absolute;top:0;left:0;right:0;height:54px;display:flex;justify-content:space-between;align-items:center;z-index:50;padding-top:6px}
+.status .t{width:140px;text-align:center;font:600 17px/22px var(--sans);letter-spacing:-.01em}
+.status .s{width:140px;display:flex;justify-content:center;gap:6px;align-items:center}
+.status svg{height:12px;fill:currentColor}
+.island{position:absolute;top:11px;left:50%;margin-left:-63px;width:126px;height:37px;border-radius:19px;background:#000;z-index:55}
+.homebar{position:absolute;bottom:8px;left:50%;margin-left:-67px;width:134px;height:5px;border-radius:3px;background:var(--ink);z-index:55}
+.dark .homebar{background:#F4EADB}
+.content{position:absolute;inset:54px 0 0 0}
+
+/* ---------- shared bits ---------- */
+.nav{height:44px;display:flex;align-items:center;justify-content:space-between;padding:0 8px}
+.nav .grp{display:flex;align-items:center}
+.nb{min-width:44px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--tomato);font:400 17px/22px var(--sans);gap:2px}
+.nb.txt{padding:0 8px}
+.nb .i{width:22px;height:22px}
+.nb.round{width:36px;min-width:36px;height:36px;border-radius:50%;background:var(--card);box-shadow:var(--raise);margin:0 4px}
+.nb.round .i{width:19px;height:19px}
+.lt{font:800 34px/41px var(--round);letter-spacing:-.01em;padding:0 20px}
+.sub{font:500 14px/20px var(--sans);color:var(--ink-2);padding:2px 20px 0}
+.cap{font:700 12px/16px var(--round);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.hair{height:1px;background:var(--line)}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--tomato);flex:none}
+.ovr{display:inline-flex;align-items:center;gap:2px;padding:1px 6px 1px 4px;border-radius:6px;background:var(--gold-bg);color:var(--gold-ink);font:700 11px/15px var(--round);letter-spacing:0;text-transform:none}
+.ovr .i{width:11px;height:11px;stroke-width:2.4}
+.priv{display:inline-flex;align-items:center;gap:3px;padding:1px 6px 1px 4px;border-radius:6px;background:rgba(43,35,32,.08);color:var(--ink-2);font:700 11px/15px var(--round);letter-spacing:0;text-transform:none}
+.priv .i{width:11px;height:11px;stroke-width:2.4}
+.prog{width:40px;height:4px;border-radius:2px;background:rgba(43,35,32,.12);overflow:hidden;flex:none}
+.prog i{display:block;height:100%;background:var(--tomato);border-radius:2px}
+.dl{width:15px;height:15px;color:var(--on)}
+.cl{width:15px;height:15px;color:var(--ink-3)}
+.skip{position:relative;display:inline-flex;align-items:center;justify-content:center}
+.skip em{position:absolute;font:800 7.5px/1 var(--round);font-style:normal;top:52%;left:50%;transform:translate(-50%,-50%)}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:6px;height:36px;padding:0 14px;border-radius:12px;background:var(--card);box-shadow:var(--raise);font:600 15px/20px var(--sans);color:var(--ink)}
+.btn .i{width:18px;height:18px}
+.btn.primary{background:linear-gradient(180deg,#E5623B,#CF4A25);color:#FFF6EC;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -2px 0 rgba(120,30,10,.2),0 2px 4px rgba(160,60,20,.3),0 6px 14px rgba(160,60,20,.18)}
+.btn.lg{height:50px;border-radius:16px;font:600 17px/22px var(--sans);width:100%}
+.switch{width:51px;height:31px;border-radius:16px;background:var(--on);position:relative;flex:none;box-shadow:inset 0 1px 2px rgba(0,0,0,.18)}
+.switch::after{content:"";position:absolute;top:2px;left:22px;width:27px;height:27px;border-radius:50%;background:#FFFCF7;box-shadow:0 2px 4px rgba(0,0,0,.2),0 0 0 .5px rgba(0,0,0,.04)}
+.switch.off{background:#DED2C0}
+.switch.off::after{left:2px}
+
+/* tab bar + mini player */
+.tabbar{position:absolute;left:0;right:0;bottom:0;height:83px;display:grid;grid-template-columns:repeat(4,1fr);padding-top:7px;background:rgba(245,238,227,.96);border-top:1px solid var(--line);z-index:30}
+.tabbar a{display:flex;flex-direction:column;align-items:center;gap:3px;font:600 10px/12px var(--sans);color:var(--ink-3);text-decoration:none}
+.tabbar a .i{width:25px;height:25px}
+.tabbar a.on{color:var(--tomato)}
+.mini{position:absolute;left:8px;right:8px;bottom:91px;height:64px;border-radius:20px;background:linear-gradient(180deg,#352B26,#271F1B);color:#F4EADB;display:flex;align-items:center;gap:12px;padding:0 6px 0 10px;z-index:31;box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 8px 20px rgba(50,30,15,.28),0 2px 4px rgba(50,30,15,.2);overflow:hidden}
+.mini .mt{flex:1;min-width:0}
+.mini .mt b{display:block;font:600 15px/20px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mini .mt span{display:flex;align-items:center;gap:5px;font:500 12.5px/16px var(--sans);color:rgba(244,234,219,.6);white-space:nowrap}
+.mini .mt .ovr{background:rgba(231,178,74,.18);color:#F2C979}
+.mini button{width:44px;height:44px;display:flex;align-items:center;justify-content:center}
+.mini button .i{width:26px;height:26px}
+.mini .mp{position:absolute;left:66px;right:16px;bottom:6px;height:3px;border-radius:2px;background:rgba(244,234,219,.12)}
+.mini .mp i{display:block;height:100%;width:36%;border-radius:2px;background:var(--mustard)}
+
+/* ---------- artwork ---------- */
+.art{width:var(--s);height:var(--s);border-radius:calc(var(--s)*.2);position:relative;overflow:hidden;flex:none;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.14),0 1px 2px rgba(60,35,20,.18)}
+.art b,.art i{position:absolute;font-style:normal;white-space:nowrap}
+.a-syntax{background:#F3C53E}
+.a-syntax b{left:11%;bottom:9%;font:900 calc(var(--s)*.31)/.82 var(--round);color:#1B1A17;letter-spacing:-.04em}
+.a-syntax i{left:11%;top:9%;font:800 calc(var(--s)*.15)/1 var(--mono);color:#1B1A17}
+.a-hardfork{background:#D8432E}
+.a-hardfork b{left:11%;bottom:10%;font:900 calc(var(--s)*.2)/.88 var(--round);color:#F7EAD7;letter-spacing:-.01em}
+.a-hardfork::after{content:"";position:absolute;right:13%;top:12%;width:22%;height:32%;background:repeating-linear-gradient(90deg,#F7EAD7 0 18%,transparent 18% 41%);border-radius:0 0 40% 40%;-webkit-mask:linear-gradient(#000 70%,#000);}
+.a-conan{background:#EF8A26}
+.a-conan b{left:0;right:0;text-align:center;top:30%;font:900 calc(var(--s)*.25)/1 var(--round);color:#1F2A44;letter-spacing:-.03em}
+.a-conan i{left:0;right:0;text-align:center;top:58%;font:700 calc(var(--s)*.095)/1 var(--serif);font-style:italic;color:#1F2A44}
+.a-latent{background:#123F3F radial-gradient(rgba(240,228,206,.32) 12%,transparent 14%) 0 0/calc(var(--s)*.125) calc(var(--s)*.125)}
+.a-latent b{left:11%;bottom:10%;font:700 calc(var(--s)*.18)/.95 var(--round);color:#F2E6D0;letter-spacing:-.02em}
+.a-mike{background:#2B2320}
+.a-mike b{left:11%;top:11%;font:900 calc(var(--s)*.2)/.9 var(--round);color:#F2C14E;letter-spacing:-.02em}
+.a-mike::after{content:"";position:absolute;left:11%;right:11%;bottom:12%;height:30%;background:repeating-linear-gradient(90deg,#E5623B 0 4%,transparent 4% 8%);clip-path:polygon(0 42%,8% 22%,16% 46%,24% 0,32% 30%,40% 12%,48% 36%,56% 5%,64% 26%,72% 16%,80% 40%,88% 24%,100% 44%,100% 56%,88% 76%,80% 60%,72% 84%,64% 74%,56% 95%,48% 64%,40% 88%,32% 70%,24% 100%,16% 54%,8% 78%,0 58%)}
+.a-atp{background:#1E2B47 linear-gradient(180deg,transparent 56%,#E0812F 56% 63%,#F2E6D0 63% 70%,#3E8C86 70% 77%,transparent 77%)}
+.a-atp b{left:11%;top:11%;font:900 calc(var(--s)*.27)/1 var(--round);color:#F2E6D0;letter-spacing:-.02em}
+.a-dwarkesh{background:#EADBC0}
+.a-dwarkesh b{left:11%;top:34%;font:600 calc(var(--s)*.175)/1 var(--serif);font-style:italic;color:#5A1F18;letter-spacing:-.01em}
+.a-dwarkesh i{left:11%;top:58%;font:700 calc(var(--s)*.075)/1 var(--sans);letter-spacing:.2em;color:#5A1F18}
+.a-dwarkesh::before{content:"";position:absolute;left:11%;top:54%;width:30%;height:calc(var(--s)*.018);background:#8F3326}
+.a-dwarkesh::after{content:"";position:absolute;right:-12%;bottom:-12%;width:52%;height:52%;border-radius:50%;background:#8F3326;opacity:.9}
+.a-changelog{background:#1E3A32 repeating-radial-gradient(circle at 85% 85%,#2E5A4C 0 4%,transparent 4% 8%)}
+.a-changelog b{left:11%;top:11%;font:800 calc(var(--s)*.17)/.95 var(--round);color:#EFE4CF}
+.a-lex{background:#141414}
+.a-lex::after{content:"";position:absolute;left:25%;top:18%;width:50%;height:50%;border-radius:50%;border:calc(var(--s)*.012 + .5px) solid #EDE3D3}
+.a-lex b{left:0;right:0;text-align:center;bottom:12%;font:600 calc(var(--s)*.075)/1 var(--sans);letter-spacing:.24em;color:#EDE3D3}
+.a-practical{background:#2D4C7C}
+.a-practical b{left:11%;bottom:10%;font:800 calc(var(--s)*.19)/.92 var(--round);color:#F4EADB}
+.a-practical::after{content:"";position:absolute;right:12%;top:12%;width:20%;height:20%;border-radius:50%;background:#EF8A26}
+.a-cogrev{background:#C9D4BD}
+.a-cogrev b{left:11%;bottom:10%;font:700 calc(var(--s)*.13)/1 var(--serif);color:#263022}
+.a-cogrev::after{content:"";position:absolute;left:11%;top:12%;width:34%;height:34%;border-radius:50%;border:calc(var(--s)*.03) solid #4E6A47;border-right-color:transparent}
+.a-nopriors{background:#F1ECE2}
+.a-nopriors b{left:11%;top:14%;font:700 calc(var(--s)*.21)/.92 var(--serif);color:#151515}
+.a-nopriors::after{content:"";position:absolute;left:11%;right:11%;bottom:14%;height:calc(var(--s)*.03);background:#151515}
+
+/* ---------- 1 Up Next ---------- */
+.chips{display:flex;gap:8px;padding:12px 20px 8px}
+.chip{height:30px;padding:0 12px;border-radius:15px;display:inline-flex;align-items:center;gap:5px;font:600 13px/18px var(--sans);background:var(--card);box-shadow:var(--raise);color:var(--ink)}
+.chip em{font-style:normal;color:var(--ink-3);font-weight:600}
+.chip.on{background:var(--ink);color:#F4EADB;box-shadow:0 1px 2px rgba(40,25,15,.3)}
+.chip.on em{color:rgba(244,234,219,.55)}
+.queue{position:relative}
+.rw{position:relative;height:88px;overflow:hidden}
+.rw+.rw::before{content:"";position:absolute;left:92px;right:0;top:0;height:1px;background:var(--line);z-index:3}
+.row{position:absolute;inset:0;display:flex;align-items:center;gap:12px;padding:0 4px 0 20px;background:var(--paper);z-index:2}
+.qt{flex:1;min-width:0}
+.qs{display:flex;align-items:center;gap:6px;font:700 11px/15px var(--round);letter-spacing:.06em;text-transform:uppercase;color:var(--ink-2)}
+.qtt{font:600 15.5px/20px var(--sans);letter-spacing:-.01em;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;margin-top:2px}
+.qm{display:flex;align-items:center;gap:7px;font:500 12.5px/16px var(--sans);color:var(--ink-2);margin-top:4px;font-variant-numeric:tabular-nums}
+.qm b{color:var(--ink);font-weight:600}
+.grip{width:40px;height:44px;display:flex;align-items:center;justify-content:center;color:var(--ink-3)}
+.grip .i{width:20px;height:20px;stroke-width:1.6}
+.rw.swiped .row{transform:translateX(-156px);box-shadow:8px 0 16px -6px rgba(70,40,20,.25)}
+.acts{position:absolute;top:0;bottom:0;right:0;width:164px;display:flex;gap:6px;padding:8px 8px 8px 0;justify-content:flex-end}
+.act{width:72px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;font:600 12px/14px var(--sans);color:#FFF6EC}
+.act .i{width:22px;height:22px;stroke-width:2}
+.act.teal{background:linear-gradient(180deg,#4A8C78,#3A7563)}
+.act.red{background:linear-gradient(180deg,#E3613B,#C9461F)}
+.act.gold{background:linear-gradient(180deg,#EDBE5A,#DDA43A);color:#3B2A0B}
+.rw.lift .row{transform:translateY(-2px) scale(1.02);box-shadow:0 10px 24px rgba(70,40,20,.22),0 1px 2px rgba(70,40,20,.2);border-radius:14px;z-index:5;background:var(--card)}
+.endnote{text-align:center;font:500 13px/18px var(--sans);color:var(--ink-3);padding:14px 0}
+
+/* ---------- 2 Now Playing ---------- */
+.np{--fg:#F4EADB;--fg2:rgba(244,234,219,.62);--fg3:rgba(244,234,219,.34);--wellbg:rgba(0,0,0,.32);--track:rgba(244,234,219,.16);--util:rgba(244,234,219,.07);
+  background:radial-gradient(130% 55% at 50% 24%,#6A2C22 0%,#3A231C 45%,#211915 75%,#1C1512 100%);color:var(--fg);transition:background .4s}
+.np.light{--fg:#2B2320;--fg2:#6E6259;--fg3:#A39587;--wellbg:#E3D6C3;--track:rgba(43,35,32,.13);--util:rgba(255,255,255,.55);
+  background:radial-gradient(130% 55% at 50% 24%,#EFCDBA 0%,#F2E3D4 45%,#F5EEE3 80%);}
+.np.light .homebar{background:var(--ink)}
+.np.light::after{opacity:.3;mix-blend-mode:multiply}
+.grabber{width:36px;height:5px;border-radius:3px;background:var(--fg3);margin:6px auto 0}
+.np-top{display:flex;align-items:center;justify-content:space-between;padding:0 8px;height:44px;margin-top:-2px}
+.np-top .mid{text-align:center}
+.np-top .mid small{display:block;font:700 10.5px/14px var(--round);letter-spacing:.12em;text-transform:uppercase;color:var(--fg2)}
+.np-top .mid span{font:600 13px/17px var(--sans)}
+.np-top .nb{color:var(--fg)}
+.np-art{margin:10px auto 0;width:268px;--s:268px;border-radius:26px;box-shadow:0 30px 50px -18px rgba(0,0,0,.6),0 8px 16px rgba(0,0,0,.25)}
+.np.light .np-art{box-shadow:0 30px 50px -18px rgba(110,45,25,.45),0 8px 16px rgba(110,45,25,.15)}
+.chpill{display:flex;align-items:center;gap:6px;margin:18px auto 0;width:max-content;height:28px;padding:0 12px 0 8px;border-radius:14px;background:var(--util);font:600 12.5px/16px var(--sans);color:var(--fg)}
+.chpill .i{width:15px;height:15px;color:var(--mustard)}
+.chpill em{font-style:normal;color:var(--fg2);font-weight:500}
+.np-t{padding:12px 24px 0;display:flex;align-items:flex-end;gap:12px}
+.np-t div{flex:1;min-width:0}
+.np-t h3{font:700 22px/27px var(--round);letter-spacing:-.01em}
+.np-t p{font:500 16px/21px var(--sans);color:var(--mustard);margin-top:2px}
+.np.light .np-t p{color:var(--tomato-d)}
+.scrub{padding:16px 24px 0}
+.track{position:relative;height:6px;display:flex;gap:3px}
+.track i{height:100%;border-radius:3px;background:var(--track);position:relative;overflow:hidden}
+.track i.f{background:var(--fg)}
+.track i.p::after{content:"";position:absolute;left:0;top:0;bottom:0;width:var(--p);background:var(--fg)}
+.thumb{position:absolute;top:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;background:var(--fg);box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.times{display:flex;justify-content:space-between;align-items:center;margin-top:8px;font:600 12px/16px var(--round);font-variant-numeric:tabular-nums;color:var(--fg2)}
+.times b{font:600 12px/16px var(--sans);color:var(--fg)}
+.transport{display:flex;align-items:center;justify-content:center;gap:36px;margin-top:10px}
+.transport .skip{width:64px;height:64px;color:var(--fg)}
+.transport .skip .i{width:38px;height:38px;stroke-width:1.7}
+.transport .skip em{font-size:11px}
+.bigplay{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#FFF6EC;background:radial-gradient(circle at 40% 30%,#EE7149,#D24C26 55%,#B53D1C);box-shadow:inset 0 2px 0 rgba(255,255,255,.28),inset 0 -3px 6px rgba(100,20,5,.35),0 10px 22px rgba(0,0,0,.35),0 0 0 6px rgba(221,85,48,.14)}
+.bigplay .i{width:34px;height:34px}
+.tuner{margin:14px 16px 0;height:64px;border-radius:20px;background:var(--wellbg);box-shadow:inset 0 2px 6px rgba(0,0,0,.35),inset 0 -1px 0 rgba(255,255,255,.06);display:flex;align-items:center;overflow:hidden}
+.np.light .tuner{box-shadow:inset 0 2px 5px rgba(90,55,25,.22),inset 0 -1px 0 rgba(255,255,255,.7)}
+.tn-read{width:118px;padding-left:16px;flex:none}
+.tn-read b{display:block;font:800 26px/28px var(--round);letter-spacing:-.02em;font-variant-numeric:tabular-nums}
+.tn-read span{display:flex;align-items:center;gap:3px;font:700 11px/14px var(--round);color:var(--mustard);margin-top:2px}
+.np.light .tn-read span{color:var(--gold-ink)}
+.tn-read span .i{width:11px;height:11px;stroke-width:2.4}
+.tn-win{position:relative;flex:1;height:100%;margin-right:8px;-webkit-mask:linear-gradient(90deg,transparent,#000 18%,#000 82%,transparent)}
+.tn-win .mn,.tn-win .mj{position:absolute;left:0;right:0;bottom:18px}
+.tn-win .mn{height:8px;background:repeating-linear-gradient(90deg,var(--fg3) 0 1px,transparent 1px 8px);background-position:4px 0}
+.tn-win .mj{height:15px;background:repeating-linear-gradient(90deg,var(--fg2) 0 1.5px,transparent 1.5px 16px);background-position:3.5px 0}
+.tn-win .nums span{position:absolute;bottom:3px;transform:translateX(-50%);font:600 10px/12px var(--round);color:var(--fg2);font-variant-numeric:tabular-nums}
+.needle{position:absolute;left:100px;top:8px;bottom:14px;width:3px;margin-left:-1.5px;border-radius:2px;background:var(--tomato);box-shadow:0 0 8px rgba(221,85,48,.6)}
+.needle::before{content:"";position:absolute;top:-2px;left:-3.5px;width:10px;height:6px;border-radius:3px;background:var(--tomato)}
+.defmark{position:absolute;left:164px;top:7px;transform:translateX(-50%);font:700 8.5px/10px var(--round);letter-spacing:.06em;color:var(--fg2);text-transform:uppercase}
+.defmark::after{content:"";display:block;margin:2px auto 0;width:0;height:0;border:4px solid transparent;border-top:5px solid var(--fg2);border-bottom:0}
+.utils{display:grid;grid-template-columns:repeat(5,1fr);padding:14px 10px 0}
+.util{display:flex;flex-direction:column;align-items:center;gap:5px;font:600 10.5px/13px var(--sans);color:var(--fg2);text-align:center}
+.util .ic{width:44px;height:44px;border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--util);color:var(--fg)}
+.util .ic .i{width:22px;height:22px}
+.util.on .ic{background:rgba(231,178,74,.2);color:var(--mustard)}
+.np.light .util.on .ic{background:var(--gold-bg);color:var(--gold-ink)}
+.util.on{color:var(--fg)}
+.util b{display:block;font-weight:700}
+
+/* ---------- sheets ---------- */
+.behind{position:absolute;inset:0;background:radial-gradient(130% 55% at 50% 24%,#6A2C22 0%,#3A231C 45%,#211915 75%,#1C1512 100%)}
+.behind::after{content:"";position:absolute;inset:0;background:rgba(20,12,8,.45)}
+.behind .ghost{position:absolute;top:70px;left:50%;margin-left:-110px;opacity:.55;transform:scale(.9)}
+.sheet{position:absolute;left:0;right:0;bottom:0;background:var(--paper);border-radius:38px 38px 0 0;box-shadow:0 -10px 30px rgba(0,0,0,.25);z-index:5;overflow:hidden}
+.sheet::before{content:"";position:absolute;inset:0;background-image:var(--grain);opacity:.3;mix-blend-mode:multiply;pointer-events:none}
+.sheet .grab{width:36px;height:5px;border-radius:3px;background:#CDBFAC;margin:6px auto 0}
+.sh-head{display:flex;align-items:center;justify-content:space-between;height:48px;padding:0 8px}
+.sh-head h4{font:600 17px/22px var(--sans)}
+.sh-head .nb.b{font-weight:600}
+
+/* 3 speed sheet */
+.readout{text-align:center;margin-top:2px}
+.readout b{font:800 54px/58px var(--round);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+.readout b small{font-size:30px;font-weight:700;color:var(--ink-2);margin-left:2px}
+.readout p{font:500 13.5px/18px var(--sans);color:var(--ink-2)}
+.readout p .ovr{vertical-align:1px;margin-right:2px}
+.dialwrap{position:relative;height:236px;margin-top:4px}
+.dialwrap svg.scale{position:absolute;left:50%;top:0;margin-left:-118px;width:236px;height:236px;overflow:visible}
+.ridges{position:absolute;left:50%;top:118px;width:150px;height:150px;margin:-75px 0 0 -75px;border-radius:50%;background:repeating-conic-gradient(#D6C6AE 0 2.5deg,#F4EBDD 2.5deg 6deg);box-shadow:0 14px 26px rgba(70,40,20,.28),0 3px 6px rgba(70,40,20,.2)}
+.knob{position:absolute;left:50%;top:118px;width:128px;height:128px;margin:-64px 0 0 -64px;border-radius:50%;background:radial-gradient(circle at 38% 30%,#FFFCF6 0%,#F3EADC 45%,#DDCDB6 100%);box-shadow:inset 0 2px 2px #fff,inset 0 -4px 8px rgba(90,60,30,.16),0 1px 2px rgba(70,40,20,.25)}
+.knob .ind{position:absolute;inset:0;transform:rotate(-37.8deg)}
+.knob .ind::before{content:"";position:absolute;left:50%;top:10px;width:7px;height:22px;margin-left:-3.5px;border-radius:4px;background:linear-gradient(180deg,#E8673F,#C9461F);box-shadow:inset 0 1px 1px rgba(0,0,0,.25)}
+.knob .cap2{position:absolute;inset:34px;border-radius:50%;background:radial-gradient(circle at 60% 70%,#FBF5EC,#EADFCF);box-shadow:inset 0 2px 4px rgba(90,60,30,.18),0 1px 0 #fff}
+.step{position:absolute;top:96px;width:48px;height:48px;border-radius:50%;background:var(--card);box-shadow:var(--raise);display:flex;align-items:center;justify-content:center;flex-direction:column;color:var(--ink)}
+.step .i{width:20px;height:20px;stroke-width:2.2}
+.step small{position:absolute;top:52px;font:600 11px/14px var(--round);color:var(--ink-3);white-space:nowrap}
+.step.l{left:22px}.step.r{right:22px}
+.presets{display:flex;gap:6px;justify-content:center;padding:6px 16px 0}
+.pre{height:34px;min-width:44px;padding:0 9px;border-radius:12px;background:var(--card);box-shadow:var(--raise);font:700 14px/18px var(--round);display:flex;align-items:center;justify-content:center;position:relative;font-variant-numeric:tabular-nums}
+.pre.on{background:var(--ink);color:#F4EADB;box-shadow:0 1px 2px rgba(40,25,15,.3)}
+.pre.def::after{content:"";position:absolute;top:4px;right:4px;width:5px;height:5px;border-radius:50%;background:var(--mustard)}
+.seg{display:flex;margin:16px 16px 0;height:40px;padding:3px;border-radius:13px;background:var(--well);box-shadow:inset 0 1px 3px rgba(90,55,25,.15)}
+.seg span{flex:1;display:flex;align-items:center;justify-content:center;gap:5px;border-radius:10px;font:600 14px/18px var(--sans);color:var(--ink-2)}
+.seg span.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(70,40,20,.18),0 0 0 .5px rgba(70,40,20,.06)}
+.seg span .i{width:15px;height:15px;stroke-width:2.2;color:var(--gold-ink)}
+.seg.sm{height:34px;margin:0}
+.seg.sm span{font-size:13px}
+.group{margin:16px 16px 0;background:var(--card);border-radius:16px;box-shadow:0 1px 2px rgba(70,40,20,.08),0 0 0 .5px rgba(70,40,20,.06);position:relative}
+.gl{padding:14px 32px 6px;font:700 12px/16px var(--round);letter-spacing:.08em;text-transform:uppercase;color:var(--ink-2)}
+.gl+.group{margin-top:0}
+.cell{display:flex;align-items:center;gap:12px;min-height:44px;padding:0 16px;position:relative}
+.cell+.cell::before,.mslider+.cell::before{content:"";position:absolute;top:0;left:16px;right:0;height:1px;background:var(--line)}
+.cell.ic+.cell::before,.cell+.cell.ic::before{left:56px}
+.cell .ci{width:30px;height:30px;border-radius:9px;display:flex;align-items:center;justify-content:center;color:#FFF6EC;flex:none}
+.cell .ci .i{width:18px;height:18px;stroke-width:2}
+.cell .lbl{flex:1;min-width:0;font:400 16px/21px var(--sans)}
+.cell .lbl small{display:block;font:400 12.5px/16px var(--sans);color:var(--ink-2)}
+.cell .val{font:400 16px/21px var(--sans);color:var(--ink-2);display:flex;align-items:center;gap:4px}
+.cell .val .i{width:14px;height:14px;stroke-width:2.2;color:var(--ink-3)}
+.cell.tall{min-height:60px}
+.foot{display:flex;gap:10px;align-items:flex-start;padding:14px 32px 0;font:400 12.5px/17px var(--sans);color:var(--ink-2)}
+.foot .i{width:16px;height:16px;color:var(--ink-3);margin-top:1px}
+
+/* 5 per-podcast sheet */
+.behind.light{background:var(--paper)}
+.behind.light::after{background:rgba(30,18,10,.32)}
+.ps-head{display:flex;align-items:center;gap:12px;padding:6px 16px 4px}
+.ps-head div{flex:1;min-width:0}
+.ps-head h4{font:700 17px/22px var(--round);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ps-head p{font:500 13px/17px var(--sans);color:var(--ink-2)}
+.ps-head .nb{font-weight:600}
+.stepper{display:flex;align-items:center;height:32px;border-radius:10px;background:var(--well);box-shadow:inset 0 1px 2px rgba(90,55,25,.14)}
+.stepper button{width:34px;height:32px;display:flex;align-items:center;justify-content:center;color:var(--ink)}
+.stepper button .i{width:15px;height:15px;stroke-width:2.4}
+.stepper span{min-width:46px;text-align:center;font:700 14px/18px var(--round);font-variant-numeric:tabular-nums}
+.stepper span.mute{color:var(--ink-3)}
+.mslider{padding:4px 16px 12px}
+.mslider .tr{position:relative;height:30px;margin-top:4px}
+.mslider .tr .bar{position:absolute;left:0;right:0;top:13px;height:5px;border-radius:3px;background:var(--well);box-shadow:inset 0 1px 1px rgba(90,55,25,.15)}
+.mslider .tr .bar i{position:absolute;left:0;top:0;bottom:0;width:28%;border-radius:3px;background:var(--mustard)}
+.mslider .tr .tk{position:absolute;left:0;right:0;top:22px;height:5px;background:repeating-linear-gradient(90deg,var(--ink-3) 0 1px,transparent 1px 10%);opacity:.6}
+.mslider .tr .th{position:absolute;left:28%;top:3px;width:26px;height:26px;margin-left:-13px;border-radius:50%;background:radial-gradient(circle at 40% 30%,#fff,#EFE5D6);box-shadow:0 2px 6px rgba(70,40,20,.3),0 0 0 .5px rgba(70,40,20,.1)}
+.mslider .tr .th::after{content:"";position:absolute;left:50%;top:7px;width:2px;height:12px;margin-left:-1px;border-radius:1px;background:var(--tomato)}
+.mslider .tr .dm{position:absolute;left:52%;top:-4px;transform:translateX(-50%);font:700 9px/10px var(--round);color:var(--ink-3);letter-spacing:.04em;text-transform:uppercase}
+.mslider .lab{display:flex;justify-content:space-between;font:600 10.5px/12px var(--round);color:var(--ink-3);margin-top:2px}
+.mslider .top{display:flex;align-items:center;justify-content:space-between}
+.mslider .top b{font:800 22px/26px var(--round);font-variant-numeric:tabular-nums}
+.seg3{display:flex;padding:3px;border-radius:12px;background:var(--well);box-shadow:inset 0 1px 3px rgba(90,55,25,.15);margin:10px 12px 12px}
+.seg3 span{flex:1;height:30px;display:flex;align-items:center;justify-content:center;border-radius:9px;font:600 13px/16px var(--sans);color:var(--ink-2)}
+.seg3 span.on{background:var(--card);color:var(--ink);box-shadow:0 1px 3px rgba(70,40,20,.18)}
+
+/* 4 podcast page */
+.pod-h{display:flex;gap:16px;padding:6px 20px 0;align-items:flex-end}
+.pod-h .art{box-shadow:0 14px 24px -10px rgba(110,70,10,.55),0 2px 4px rgba(60,35,20,.2)}
+.pod-h h2{font:800 30px/34px var(--round);letter-spacing:-.02em}
+.pod-h p{font:500 14px/19px var(--sans);color:var(--ink-2);margin-top:2px}
+.pod-h .meta{display:flex;gap:6px;margin-top:10px;flex-wrap:wrap}
+.tag{height:22px;padding:0 8px;border-radius:7px;background:rgba(43,35,32,.07);font:600 11.5px/22px var(--sans);color:var(--ink-2)}
+.desc{padding:14px 20px 0;font:400 14.5px/20px var(--sans);color:#4A3F38}
+.desc b{color:var(--tomato);font-weight:600}
+.pod-btns{display:flex;gap:8px;padding:14px 20px 0}
+.pod-btns .btn{flex:none}
+.pod-btns .btn.set{flex:1;justify-content:flex-start;gap:8px;padding:0 12px}
+.pod-btns .btn.set span{flex:1;text-align:left;font:500 13px/16px var(--sans);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pod-btns .btn.set strong{font-weight:600;color:var(--ink)}
+.ep-head{display:flex;align-items:center;justify-content:space-between;padding:20px 20px 4px}
+.ep-head h5{font:800 20px/24px var(--round)}
+.ep-head span{display:flex;align-items:center;gap:4px;font:600 14px/18px var(--sans);color:var(--tomato)}
+.ep-head span .i{width:14px;height:14px;stroke-width:2.4}
+.ep{position:relative;height:80px;overflow:hidden}
+.ep+.ep::before{content:"";position:absolute;left:20px;right:0;top:0;height:1px;background:var(--line);z-index:3}
+.ep .row{padding:0 12px 0 20px;gap:10px}
+.ep .d{font:600 12px/16px var(--sans);color:var(--ink-2);display:flex;align-items:center;gap:6px}
+.ep .d .new{color:var(--tomato);font:800 10.5px/14px var(--round);letter-spacing:.08em}
+.ep .tt{font:600 15.5px/20px var(--sans);letter-spacing:-.01em;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ep .m{display:flex;align-items:center;gap:7px;margin-top:4px;font:500 12.5px/16px var(--sans);color:var(--ink-2)}
+.ep.played .row>div:first-child{opacity:.45}
+.ep .add{width:36px;height:36px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;background:var(--card);box-shadow:var(--raise);color:var(--tomato)}
+.ep .add .i{width:18px;height:18px;stroke-width:2.2}
+.ep .add.in{background:rgba(63,127,107,.12);box-shadow:none;color:var(--on)}
+.ep.swiped .row{transform:translateX(112px);box-shadow:-8px 0 16px -6px rgba(70,40,20,.25)}
+.ep .acts{left:0;right:auto;width:120px;padding:8px 0 8px 8px;justify-content:flex-start}
+.ep .act{width:104px}
+.ep.played .add{opacity:.6}
+
+/* 6 discover */
+.search{display:flex;align-items:center;gap:10px;padding:10px 16px 0}
+.field{flex:1;height:40px;border-radius:12px;background:var(--well);box-shadow:inset 0 1px 3px rgba(90,55,25,.16);display:flex;align-items:center;gap:6px;padding:0 10px;font:400 17px/22px var(--sans)}
+.field .i{width:18px;height:18px;color:var(--ink-2);stroke-width:2.2}
+.field .caret{width:2px;height:22px;background:var(--tomato);border-radius:1px;margin-left:-4px}
+.field .x{margin-left:auto;width:18px;height:18px;border-radius:50%;background:var(--ink-3);color:var(--paper);display:flex;align-items:center;justify-content:center}
+.field .x .i{width:10px;height:10px;stroke-width:3}
+.search>span{font:400 17px/22px var(--sans);color:var(--tomato)}
+.urlcard{margin:14px 16px 0;padding:12px 12px 12px 14px;border-radius:18px;background:var(--card);box-shadow:var(--raise);display:flex;gap:12px;align-items:center;position:relative}
+.urlcard .ui{width:42px;height:42px;border-radius:13px;background:var(--ink);color:var(--mustard);display:flex;align-items:center;justify-content:center;flex:none}
+.urlcard .ui .i{width:22px;height:22px}
+.urlcard div{flex:1;min-width:0}
+.urlcard b{display:block;font:600 15.5px/20px var(--sans)}
+.urlcard small{display:block;font:400 12.5px/16px var(--sans);color:var(--ink-2)}
+.urlcard code{font:500 12px/16px var(--mono);color:var(--ink);background:rgba(43,35,32,.06);padding:1px 4px;border-radius:4px}
+.urlcard .btn{height:32px;padding:0 12px;font-size:14px;border-radius:10px}
+.sec{display:flex;align-items:baseline;justify-content:space-between;padding:20px 20px 6px}
+.sec h5{font:800 20px/24px var(--round)}
+.sec span{font:500 13px/16px var(--sans);color:var(--ink-2)}
+.res{display:flex;align-items:center;gap:12px;padding:8px 16px 8px 20px;position:relative}
+.res+.res::before{content:"";position:absolute;left:88px;right:0;top:0;height:1px;background:var(--line)}
+.res div{flex:1;min-width:0}
+.res b{display:block;font:600 15.5px/20px var(--sans);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res small{display:block;font:400 13px/17px var(--sans);color:var(--ink-2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res small em{font-style:normal;color:var(--ink-3)}
+.sub-b{height:32px;padding:0 12px;border-radius:16px;display:inline-flex;align-items:center;gap:4px;font:700 13.5px/16px var(--round);background:var(--card);box-shadow:var(--raise);color:var(--tomato);flex:none}
+.sub-b .i{width:14px;height:14px;stroke-width:2.6}
+.sub-b.done{background:rgba(63,127,107,.12);box-shadow:none;color:var(--on)}
+
+/* 7 import */
+.steps{padding:18px 16px 0;position:relative}
+.stp{display:flex;gap:14px;position:relative;padding-bottom:18px}
+.stp::before{content:"";position:absolute;left:15px;top:34px;bottom:2px;border-left:2px dotted #CDBDA6}
+.stp:last-child::before{display:none}
+.num{width:32px;height:32px;border-radius:50%;flex:none;display:flex;align-items:center;justify-content:center;font:800 15px/1 var(--round);background:var(--on);color:#FFF6EC;box-shadow:inset 0 -2px 0 rgba(0,0,0,.15),0 1px 2px rgba(0,0,0,.2)}
+.num .i{width:16px;height:16px;stroke-width:3}
+.num.cur{background:var(--tomato)}
+.stp .body{flex:1;min-width:0;padding-top:5px}
+.stp h6{font:700 16px/21px var(--round)}
+.stp p{font:400 14px/19px var(--sans);color:var(--ink-2);margin-top:2px}
+.stp p b{color:var(--ink);font-weight:600}
+.urlbar{margin-top:10px;display:flex;align-items:center;gap:8px;height:38px;padding:0 6px 0 12px;border-radius:12px;background:var(--card);box-shadow:var(--raise);font:500 13.5px/18px var(--sans)}
+.urlbar .i{width:14px;height:14px;color:var(--ink-3);stroke-width:2.2}
+.urlbar span{flex:1}
+.urlbar .btn{height:28px;font-size:13px;padding:0 10px;border-radius:9px;box-shadow:none;background:rgba(221,85,48,.1);color:var(--tomato)}
+.filechip{margin-top:10px;display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:12px;background:var(--card);box-shadow:var(--raise)}
+.filechip .fi{width:30px;height:36px;border-radius:5px;background:linear-gradient(180deg,#F3C53E,#E7A93A);position:relative;flex:none}
+.filechip .fi::after{content:"OPML";position:absolute;bottom:5px;left:0;right:0;text-align:center;font:800 7px/1 var(--round);color:#3B2A0B}
+.filechip div{flex:1}
+.filechip b{display:block;font:600 14px/18px var(--sans)}
+.filechip small{font:400 12px/16px var(--sans);color:var(--ink-2)}
+.filechip span{font:500 14px/18px var(--sans);color:var(--tomato)}
+.receipt{margin-top:10px;background:#FFFDF8;border-radius:4px;padding:16px 16px 18px;position:relative;box-shadow:0 6px 16px rgba(70,40,20,.14),0 1px 2px rgba(70,40,20,.12);font-family:var(--mono)}
+.receipt::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:6px;background:linear-gradient(-45deg,transparent 4px,#FFFDF8 0) 0 0/8px 6px,linear-gradient(45deg,transparent 4px,#FFFDF8 0) 0 0/8px 6px;filter:drop-shadow(0 2px 1px rgba(70,40,20,.08))}
+.receipt .rh{display:flex;justify-content:space-between;font:600 10px/14px var(--mono);letter-spacing:.1em;color:var(--ink-3);text-transform:uppercase}
+.big3{display:grid;grid-template-columns:repeat(3,1fr);margin-top:10px;border-top:1px dashed #D5C7B3;border-bottom:1px dashed #D5C7B3;padding:10px 0}
+.big3 div{text-align:center}
+.big3 div+div{border-left:1px dashed #D5C7B3}
+.big3 b{display:block;font:800 22px/26px var(--round);letter-spacing:-.02em;color:var(--ink)}
+.big3 small{font:500 11px/14px var(--sans);color:var(--ink-2)}
+.receipt p{font:400 12.5px/17px var(--sans);color:var(--ink-2);margin-top:10px}
+.receipt p b{color:var(--ink)}
+
+/* 8 stats */
+.ticket{margin:12px 16px 0;height:76px;display:flex;align-items:stretch;border-radius:16px;position:relative;background:linear-gradient(180deg,#EDBE5A,#E2A93E);color:#3B2A0B;box-shadow:inset 0 1px 0 rgba(255,255,255,.4),0 2px 4px rgba(120,80,10,.2),0 8px 18px rgba(120,80,10,.16);mask:radial-gradient(circle 9px at 76% 0,transparent 98%,#000) top/100% 51% no-repeat,radial-gradient(circle 9px at 76% 100%,transparent 98%,#000) bottom/100% 51% no-repeat;-webkit-mask:radial-gradient(circle 9px at 76% 0,transparent 98%,#000) top/100% 51% no-repeat,radial-gradient(circle 9px at 76% 100%,transparent 98%,#000) bottom/100% 51% no-repeat}
+.ticket .tl{flex:1;padding:14px 16px;display:flex;flex-direction:column;justify-content:center}
+.ticket .tl small{font:800 10.5px/14px var(--round);letter-spacing:.14em;text-transform:uppercase;opacity:.7}
+.ticket .tl b{font:800 19px/23px var(--round);letter-spacing:-.01em}
+.ticket .tr2{width:24%;border-left:2px dashed rgba(59,42,11,.3);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;font:800 13px/16px var(--round)}
+.ticket .tr2 .i{width:20px;height:20px;stroke-width:2.2}
+.tiles{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 16px 0}
+.tile{background:var(--card);border-radius:18px;padding:12px 14px 14px;box-shadow:0 1px 2px rgba(70,40,20,.08),0 0 0 .5px rgba(70,40,20,.06)}
+.tile .cap{font-size:11px}
+.tile .n{font:800 34px/40px var(--round);letter-spacing:-.03em;margin-top:2px;font-variant-numeric:tabular-nums}
+.tile .n small{font-size:18px;font-weight:700;color:var(--ink-2);margin-left:2px}
+.tile p{font:500 12.5px/16px var(--sans);color:var(--ink-2)}
+.split{display:flex;height:8px;border-radius:4px;overflow:hidden;gap:2px;margin:6px 0 6px}
+.split i{display:block;height:100%}
+.legend{display:flex;gap:10px;font:600 11px/14px var(--sans);color:var(--ink-2)}
+.legend span{display:flex;align-items:center;gap:4px}
+.legend span::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--c)}
+.streak{display:flex;align-items:center;gap:12px;margin:10px 16px 0;padding:10px 14px;background:var(--card);border-radius:16px;box-shadow:0 1px 2px rgba(70,40,20,.08),0 0 0 .5px rgba(70,40,20,.06)}
+.streak .si{width:32px;height:32px;border-radius:10px;background:rgba(221,85,48,.12);color:var(--tomato);display:flex;align-items:center;justify-content:center}
+.streak .si .i{width:19px;height:19px;stroke-width:2}
+.streak div{flex:1}
+.streak b{display:block;font:700 15px/19px var(--round)}
+.streak small{font:500 12px/15px var(--sans);color:var(--ink-2)}
+.streak .days{display:flex;gap:3px}
+.streak .days i{width:6px;height:18px;border-radius:2px;background:var(--tomato)}
+.streak .days i.lo{opacity:.45}
+.hm{margin:10px 16px 0;padding:12px 14px;background:var(--card);border-radius:18px;box-shadow:0 1px 2px rgba(70,40,20,.08),0 0 0 .5px rgba(70,40,20,.06)}
+.hm .hh{display:flex;justify-content:space-between;align-items:baseline}
+.hm .hh b{font:700 15px/19px var(--round)}
+.hm .hh small{font:500 12px/15px var(--sans);color:var(--ink-2)}
+.hmg{display:grid;grid-template-columns:14px 1fr;gap:6px;margin-top:10px}
+.hmd{display:grid;grid-template-rows:repeat(7,10px);gap:2px;font:700 8.5px/10px var(--round);color:var(--ink-3)}
+.cells{display:grid;grid-template-columns:repeat(24,1fr);grid-template-rows:repeat(7,10px);gap:2px}
+.cells i{border-radius:2.5px}
+.hma{display:flex;justify-content:space-between;margin:4px 0 0 20px;font:600 9px/11px var(--round);color:var(--ink-3)}
+.tops{margin:10px 16px 0;padding:12px 14px 4px;background:var(--card);border-radius:18px;box-shadow:0 1px 2px rgba(70,40,20,.08),0 0 0 .5px rgba(70,40,20,.06)}
+.tops .hh{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+.tops .hh b{font:700 15px/19px var(--round)}
+.tops .hh small{font:500 13px/15px var(--sans);color:var(--tomato)}
+.top{display:flex;align-items:center;gap:10px;height:44px}
+.top .rk{width:14px;font:800 13px/1 var(--round);color:var(--ink-3)}
+.top div{flex:1;min-width:0}
+.top b{display:flex;justify-content:space-between;font:600 14px/18px var(--sans)}
+.top b span{font:700 13px/18px var(--round);color:var(--ink-2);font-variant-numeric:tabular-nums}
+.top .bar{height:4px;border-radius:2px;background:rgba(43,35,32,.08);margin-top:4px}
+.top .bar i{display:block;height:100%;border-radius:2px;background:var(--tomato)}
+
+/* 9 year in review */
+.yir{background:#241C17;color:#F4EADB}
+.yir .nb{color:#F4EADB}
+.yir-top{display:flex;align-items:center;justify-content:space-between;height:44px;padding:0 8px}
+.yir-top h4{font:600 17px/22px var(--sans)}
+.yir-top .nb.round{background:rgba(244,234,219,.1);box-shadow:none}
+.card916{width:300px;height:533px;margin:6px auto 0;border-radius:24px;position:relative;overflow:hidden;background:#DD5530;box-shadow:0 30px 50px -20px rgba(0,0,0,.7),0 6px 14px rgba(0,0,0,.3)}
+.card916::before{content:"";position:absolute;left:50%;bottom:-60%;width:200%;height:120%;margin-left:-100%;background:repeating-conic-gradient(from 0deg at 50% 50%,rgba(255,236,210,.09) 0 6deg,transparent 6deg 12deg)}
+.card916::after{content:"";position:absolute;inset:0;background-image:var(--grain);opacity:.45;mix-blend-mode:multiply}
+.c-top{position:relative;z-index:2;padding:22px 22px 0;color:#FFF3E4}
+.c-top small{display:flex;justify-content:space-between;font:800 10px/12px var(--round);letter-spacing:.16em;text-transform:uppercase;opacity:.85}
+.c-top h2{font:800 34px/34px var(--round);letter-spacing:-.03em;margin-top:12px}
+.c-top h2 em{font-style:normal;color:#F7CF6E}
+.rcpt{position:relative;z-index:2;width:236px;margin:16px auto 0;background:#FFFCF5;color:#2B2320;padding:14px 14px 12px;font:500 10px/14.5px var(--mono);transform:rotate(-2.2deg);box-shadow:0 14px 24px -8px rgba(80,20,5,.55),0 2px 4px rgba(80,20,5,.25)}
+.rcpt::before,.rcpt::after{content:"";position:absolute;left:0;right:0;height:6px}
+.rcpt::before{top:-6px;background:linear-gradient(-135deg,transparent 4px,#FFFCF5 0) 0 0/8px 6px,linear-gradient(135deg,transparent 4px,#FFFCF5 0) 0 0/8px 6px}
+.rcpt::after{bottom:-6px;background:linear-gradient(-45deg,transparent 4px,#FFFCF5 0) 0 0/8px 6px,linear-gradient(45deg,transparent 4px,#FFFCF5 0) 0 0/8px 6px}
+.rcpt .c{text-align:center}
+.rcpt .brand{font:800 15px/18px var(--round);letter-spacing:.24em}
+.rcpt .dash{border-top:1px dashed #BFAF98;margin:7px 0}
+.rcpt .ln{display:flex;justify-content:space-between;white-space:nowrap}
+.rcpt .ln.tot{font-weight:800;font-size:12px;line-height:17px}
+.rcpt .ln.sv{color:#B9411F}
+.rcpt .bc{height:28px;margin:8px 6px 4px;background:repeating-linear-gradient(90deg,#2B2320 0 1px,transparent 1px 3px,#2B2320 3px 5px,transparent 5px 6px,#2B2320 6px 7px,transparent 7px 10px,#2B2320 10px 13px,transparent 13px 14px)}
+.rcpt .mut{color:#8A7B6C}
+.c-foot{position:absolute;z-index:2;left:22px;right:22px;bottom:18px;display:flex;justify-content:space-between;align-items:center;color:#FFF3E4;font:700 11px/14px var(--round);letter-spacing:.04em}
+.c-foot .mk{display:flex;align-items:center;gap:6px;font:800 14px/1 var(--round);letter-spacing:0}
+.c-foot .mk i{width:18px;height:18px;border-radius:5px;background:#FFF3E4;position:relative}
+.c-foot .mk i::after{content:"";position:absolute;left:4px;right:4px;top:5px;height:6px;border:2px solid #DD5530;border-bottom:0;border-radius:6px 6px 0 0}
+.styles{display:flex;justify-content:center;gap:6px;margin-top:16px}
+.styles span{height:28px;padding:0 12px;border-radius:14px;font:600 13px/28px var(--sans);color:rgba(244,234,219,.55)}
+.styles span.on{background:rgba(244,234,219,.12);color:#F4EADB}
+.yir-btns{display:flex;gap:10px;padding:14px 20px 0}
+.yir-btns .btn{flex:1;height:50px;border-radius:16px;font:600 17px/22px var(--sans)}
+.yir-btns .btn.sec2{background:rgba(244,234,219,.1);color:#F4EADB;box-shadow:inset 0 1px 0 rgba(255,255,255,.08)}
+
+@media (max-width:1000px){.hero{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<!-- icon sprite -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M7.5 5.2v13.6a1 1 0 0 0 1.53.85l10.6-6.8a1 1 0 0 0 0-1.7L9.03 4.35A1 1 0 0 0 7.5 5.2z" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4.2" height="15" rx="1.3" fill="currentColor" stroke="none"/><rect x="13.8" y="4.5" width="4.2" height="15" rx="1.3" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M4.6 13.2A7.6 7.6 0 1 0 7 6.6"/><path d="M7.4 2.8 6.8 6.9l4 .7"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M19.4 13.2A7.6 7.6 0 1 1 17 6.6"/><path d="m16.6 2.8.6 4.1-4 .7"/></symbol>
+  <symbol id="i-down" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></symbol>
+  <symbol id="i-left" viewBox="0 0 24 24"><path d="m15 5-7 7 7 7"/></symbol>
+  <symbol id="i-right" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+  <symbol id="i-updown" viewBox="0 0 24 24"><path d="m8 9 4-4 4 4M8 15l4 4 4-4"/></symbol>
+  <symbol id="i-more" viewBox="0 0 24 24"><circle cx="6" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/><circle cx="18" cy="12" r="1.6" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-airplay" viewBox="0 0 24 24"><path d="M6.5 17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-1.5"/><path d="m12 14.5 4.8 6H7.2z" fill="currentColor"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M19.5 14.6A7.8 7.8 0 0 1 9.4 4.5a7.8 7.8 0 1 0 10.1 10.1z"/></symbol>
+  <symbol id="i-smart" viewBox="0 0 24 24"><path d="M3.5 9.5v5M6.5 6.5v11M17.5 6.5v11M20.5 9.5v5"/><path d="M9.5 12h5M11 10.3 9.4 12l1.6 1.7M13 10.3l1.6 1.7-1.6 1.7"/></symbol>
+  <symbol id="i-voice" viewBox="0 0 24 24"><path d="M3.5 9.5h3l4.5-4v13l-4.5-4h-3z"/><path d="M15 9a4.2 4.2 0 0 1 0 6M18 6.3a8 8 0 0 1 0 11.4"/></symbol>
+  <symbol id="i-queue" viewBox="0 0 24 24"><path d="M4 6h13M4 11h13M4 16h7"/><path d="M15 14.2v6l5-3z" fill="currentColor"/></symbol>
+  <symbol id="i-chap" viewBox="0 0 24 24"><circle cx="5" cy="6" r="1.2" fill="currentColor"/><circle cx="5" cy="12" r="1.2" fill="currentColor"/><circle cx="5" cy="18" r="1.2" fill="currentColor"/><path d="M9.5 6H20M9.5 12H20M9.5 18H20"/></symbol>
+  <symbol id="i-dlok" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.5v8M8.6 12.3l3.4 3.4 3.4-3.4" stroke="#FBF7F0" stroke-width="2.2"/></symbol>
+  <symbol id="i-cloud" viewBox="0 0 24 24"><path d="M7 18.5a4.5 4.5 0 0 1-.6-9 6 6 0 0 1 11.4 1.6A3.8 3.8 0 0 1 17.4 18.5z"/><path d="M12 11v5M10 14l2 2 2-2"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="5" y="10.5" width="14" height="10" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></symbol>
+  <symbol id="i-grip" viewBox="0 0 24 24"><path d="M5 8.5h14M5 12h14M5 15.5h14"/></symbol>
+  <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.8" cy="10.8" r="6.3"/><path d="m15.6 15.6 4.4 4.4"/></symbol>
+  <symbol id="i-plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="i-minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7.5"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 14a4 4 0 0 0 5.7 0l3-3A4 4 0 0 0 13 5.3l-1 1"/><path d="M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></symbol>
+  <symbol id="i-stack" viewBox="0 0 24 24"><rect x="4" y="9.5" width="16" height="11" rx="2.6"/><path d="M6.5 6.3h11M9 3.3h6"/></symbol>
+  <symbol id="i-lib" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="7" height="7" rx="2"/><rect x="13.5" y="3.5" width="7" height="7" rx="2"/><rect x="3.5" y="13.5" width="7" height="7" rx="2"/><rect x="13.5" y="13.5" width="7" height="7" rx="2"/></symbol>
+  <symbol id="i-compass" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="m15.6 8.4-2.1 5.1-5.1 2.1 2.1-5.1z"/></symbol>
+  <symbol id="i-chart" viewBox="0 0 24 24"><path d="M5 20v-7M10 20V5M15 20v-9M20 20v-5"/></symbol>
+  <symbol id="i-share" viewBox="0 0 24 24"><path d="M12 3.5v11M8 7.3l4-3.8 4 3.8"/><path d="M8.5 10.5h-2a1.5 1.5 0 0 0-1.5 1.5v7a1.5 1.5 0 0 0 1.5 1.5h11a1.5 1.5 0 0 0 1.5-1.5v-7a1.5 1.5 0 0 0-1.5-1.5h-2"/></symbol>
+  <symbol id="i-copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="11.5" rx="2.5"/><path d="M15.5 8.5V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v7.5a2 2 0 0 0 2 2h2.5"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13M10 11v5M14 11v5"/></symbol>
+  <symbol id="i-dial" viewBox="0 0 24 24"><path d="M4 16.5a8 8 0 1 1 16 0"/><path d="m12 16.5 3.6-4.6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2.8v2.4M12 18.8v2.4M2.8 12h2.4M18.8 12h2.4M5.5 5.5l1.7 1.7M16.8 16.8l1.7 1.7M5.5 18.5l1.7-1.7M16.8 7.2l1.7-1.7"/></symbol>
+  <symbol id="i-bell" viewBox="0 0 24 24"><path d="M6 16.5V11a6 6 0 0 1 12 0v5.5l1.5 2h-15z"/><path d="M10 21h4"/></symbol>
+  <symbol id="i-dlarrow" viewBox="0 0 24 24"><path d="M12 4v11M7.5 10.5 12 15l4.5-4.5M5 20h14"/></symbol>
+  <symbol id="i-skipf" viewBox="0 0 24 24"><path d="M4 6.5v11l7-5.5zM12 6.5v11l7-5.5z"/></symbol>
+  <symbol id="i-tune" viewBox="0 0 24 24"><path d="M9 3v7a3 3 0 0 0 6 0V3M12 13v8M8.5 21h7"/></symbol>
+  <symbol id="i-safari" viewBox="0 0 24 24"><path d="M7 17 17 7M9 7h8v8"/></symbol>
+  <symbol id="i-sort" viewBox="0 0 24 24"><path d="M7 4.5v15M3.8 16.3 7 19.5l3.2-3.2M17 19.5v-15M13.8 7.7 17 4.5l3.2 3.2"/></symbol>
+  <symbol id="i-gift" viewBox="0 0 24 24"><path d="M5 9.5h14v3H5zM6.5 12.5v8h11v-8M12 9.5v11M12 9.5S10.5 4 8 5s1 4.5 4 4.5zM12 9.5S13.5 4 16 5s-1 4.5-4 4.5z"/></symbol>
+</svg>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="sb-sig" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx=".8"/><rect x="5" y="5.5" width="3" height="6.5" rx=".8"/><rect x="10" y="3" width="3" height="9" rx=".8"/><rect x="15" y="0" width="3" height="12" rx=".8"/></symbol>
+  <symbol id="sb-wifi" viewBox="0 0 16 12"><path d="M8 2.2c2.4 0 4.6.9 6.3 2.5l1.2-1.3A10.8 10.8 0 0 0 8 .4 10.8 10.8 0 0 0 .5 3.4l1.2 1.3A9 9 0 0 1 8 2.2zm0 3.6c1.4 0 2.7.5 3.7 1.4l1.2-1.3A7.3 7.3 0 0 0 8 4a7.3 7.3 0 0 0-4.9 1.9l1.2 1.3c1-.9 2.3-1.4 3.7-1.4zM8 9.4a2 2 0 0 0-1.4.6L8 11.6 9.4 10A2 2 0 0 0 8 9.4z"/></symbol>
+  <symbol id="sb-bat" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.6" fill="none" stroke="currentColor" opacity=".4"/><rect x="2" y="2" width="17" height="9" rx="2.2"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" opacity=".45"/></symbol>
+</svg>
+
+<div class="page">
+  <header class="hero">
+    <div>
+      <div class="eyebrow">Design direction C</div>
+      <h1>Warm and tactile</h1>
+      <div class="appname">
+        <div class="appicon"><i></i></div>
+        <div><b>Earful</b><span>A podcast player for Mike, built to replace Overcast</span></div>
+      </div>
+      <p>Earful should feel like a well-made radio on the kitchen bench. It's warm paper and deep ink, with a tomato needle for "now" and a gold pin wherever a show has its own settings. Headings and numbers use SF Pro Rounded and everything else uses SF Pro Text, with a receipt mono kept for the fun bits. Depth comes from soft shadows, pressed-in wells and a fine paper grain instead of glass. Controls move like hardware: the speed dial clicks in 0.05× detents with a haptic tick, sheets settle with a small spring, and buttons sink a point when you press them.</p>
+    </div>
+    <div class="side">
+      <div class="swatches">
+        <div class="sw"><i style="background:#F5EEE3"></i>Paper<em>#F5EEE3</em></div>
+        <div class="sw"><i style="background:#2B2320"></i>Ink<em>#2B2320</em></div>
+        <div class="sw"><i style="background:#DD5530"></i>Tomato<em>#DD5530</em></div>
+        <div class="sw"><i style="background:#E7B24A"></i>Gold pin<em>#E7B24A</em></div>
+        <div class="sw"><i style="background:#3F7F6B"></i>Fern<em>#3F7F6B</em></div>
+        <div class="sw"><i style="background:#211915"></i>Walnut<em>#211915</em></div>
+      </div>
+      <div class="typespec">
+        <div><b>1.8×</b>SF Pro Rounded</div>
+        <div><b class="t">Up Next</b>SF Pro Text</div>
+        <div><b class="m">612 h</b>SF Mono, receipts</div>
+      </div>
+      <button class="toggle" id="npToggle" type="button"><span class="knob"></span><span id="npLabel">Now Playing: warm dark</span></button>
+    </div>
+  </header>
+
+  <main class="grid">
+
+<!-- ===================== 1 UP NEXT ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="nav"><span></span><div class="grp"><button class="nb round"><svg class="i"><use href="#i-sort"/></svg></button><button class="nb txt">Edit</button></div></div>
+    <div class="lt">Up Next</div>
+    <div class="sub">6 episodes · 4h 42m at your speeds</div>
+    <div class="chips"><span class="chip on">All <em>6</em></span><span class="chip">Downloaded <em>5</em></span><span class="chip">Under 20 min <em>1</em></span></div>
+    <div class="queue">
+      <div class="rw"><div class="row">
+        <div class="art a-syntax" style="--s:60px"><i>{ }</i><b>syn<br>tax</b></div>
+        <div class="qt"><div class="qs">Syntax</div><div class="qtt">Svelte 5 runes, one year later</div>
+          <div class="qm"><span class="prog"><i style="width:42%"></i></span><b>38m left</b> at 1.8× <svg class="i dl"><use href="#i-dlok"/></svg></div></div>
+        <span class="grip"><svg class="i"><use href="#i-grip"/></svg></span></div></div>
+
+      <div class="rw swiped">
+        <div class="acts"><span class="act teal"><svg class="i"><use href="#i-check"/></svg>Played</span><span class="act red"><svg class="i"><use href="#i-trash"/></svg>Remove</span></div>
+        <div class="row">
+        <div class="art a-hardfork" style="--s:60px"><b>HARD<br>FORK</b></div>
+        <div class="qt"><div class="qs"><span class="dot"></span>Hard Fork</div><div class="qtt">The week AI agents learned to shop for us</div>
+          <div class="qm"><b>41m</b> at 1.8× <svg class="i dl"><use href="#i-dlok"/></svg></div></div>
+        <span class="grip"><svg class="i"><use href="#i-grip"/></svg></span></div></div>
+
+      <div class="rw"><div class="row">
+        <div class="art a-conan" style="--s:60px"><b>CONAN</b><i>needs a friend</i></div>
+        <div class="qt"><div class="qs">Conan O'Brien Needs… <span class="ovr"><svg class="i"><use href="#i-dial"/></svg>1.2×</span></div><div class="qtt">Sona and Matt answer your mail</div>
+          <div class="qm"><b>52m</b> at 1.2× <svg class="i dl"><use href="#i-dlok"/></svg></div></div>
+        <span class="grip"><svg class="i"><use href="#i-grip"/></svg></span></div></div>
+
+      <div class="rw"><div class="row">
+        <div class="art a-latent" style="--s:60px"><b>latent<br>space</b></div>
+        <div class="qt"><div class="qs">Latent Space</div><div class="qtt">Why every agent needs a sandbox</div>
+          <div class="qm"><b>1h 4m</b> at 1.8× <svg class="i cl"><use href="#i-cloud"/></svg><span style="color:var(--ink-3)">Not downloaded</span></div></div>
+        <span class="grip"><svg class="i"><use href="#i-grip"/></svg></span></div></div>
+
+      <div class="rw"><div class="row">
+        <div class="art a-mike" style="--s:60px"><b>Mike<br>Pod</b></div>
+        <div class="qt"><div class="qs"><span class="dot"></span>Mike Pod <span class="priv"><svg class="i"><use href="#i-lock"/></svg>Private</span></div><div class="qtt">Tuesday briefing: Convex, Bun 2 and a new Opus</div>
+          <div class="qm"><b>9m</b> at 1.8× <svg class="i dl"><use href="#i-dlok"/></svg></div></div>
+        <span class="grip"><svg class="i"><use href="#i-grip"/></svg></span></div></div>
+
+      <div class="rw"><div class="row">
+        <div class="art a-atp" style="--s:60px"><b>ATP</b></div>
+        <div class="qt"><div class="qs">Accidental Tech Podcast</div><div class="qtt">649: Six Months of Liquid Glass</div>
+          <div class="qm"><b>1h 18m</b> at 1.8× <svg class="i dl"><use href="#i-dlok"/></svg></div></div>
+        <span class="grip"><svg class="i"><use href="#i-grip"/></svg></span></div></div>
+    </div>
+  </div>
+  <div class="mini">
+    <div class="art a-dwarkesh" style="--s:44px;border-radius:10px"><b>Dwarkesh</b><i>PODCAST</i></div>
+    <div class="mt"><b>Inside the RL scaling race</b><span>52m left at 1.4× <span class="ovr"><svg class="i"><use href="#i-dial"/></svg></span></span></div>
+    <button><svg class="i"><use href="#i-pause"/></svg></button>
+    <button><span class="skip"><svg class="i"><use href="#i-fwd"/></svg><em>30</em></span></button>
+    <span class="mp"><i></i></span>
+  </div>
+  <nav class="tabbar"><a class="on"><svg class="i"><use href="#i-stack"/></svg>Up Next</a><a><svg class="i"><use href="#i-lib"/></svg>Library</a><a><svg class="i"><use href="#i-compass"/></svg>Discover</a><a><svg class="i"><use href="#i-chart"/></svg>Stats</a></nav>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>01</span>Up Next</b>Swipe left on a row for Played and Remove (Hard Fork is caught mid-swipe), swipe right to send it to the top, and hold the grip to drag it anywhere. Time left is worked out at each show's own speed, so the gold 1.2× pin on Conan means it really is 52 minutes. Tap the mini player or swipe it up for Now Playing.</figcaption>
+</figure>
+
+<!-- ===================== 2 NOW PLAYING ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen dark np" id="np">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="grabber"></div>
+    <div class="np-top">
+      <button class="nb"><svg class="i"><use href="#i-down"/></svg></button>
+      <div class="mid"><small>Playing from Up Next</small><span>6 more · 4h 42m</span></div>
+      <button class="nb"><svg class="i"><use href="#i-more"/></svg></button>
+    </div>
+    <div class="art a-dwarkesh np-art"><b>Dwarkesh</b><i>PODCAST</i></div>
+    <div class="chpill"><svg class="i"><use href="#i-chap"/></svg>Ch 5 of 9 <em>· Why the evals keep breaking</em></div>
+    <div class="np-t"><div><h3>Inside the RL scaling race</h3><p>Dwarkesh Podcast</p></div></div>
+    <div class="scrub">
+      <div class="track">
+        <i class="f" style="width:9%"></i><i class="f" style="width:14%"></i><i class="f" style="width:6%"></i><i class="p" style="width:12%;--p:55%"></i><i style="width:16%"></i><i style="width:11%"></i><i style="width:13%"></i><i style="width:8%"></i><i style="width:11%"></i>
+        <span class="thumb" style="left:35.6%"></span>
+      </div>
+      <div class="times"><span>41:08</span><b>52m left at 1.4×</b><span>−1:12:40</span></div>
+    </div>
+    <div class="transport">
+      <span class="skip"><svg class="i"><use href="#i-back"/></svg><em>15</em></span>
+      <span class="bigplay"><svg class="i"><use href="#i-pause"/></svg></span>
+      <span class="skip"><svg class="i"><use href="#i-fwd"/></svg><em>30</em></span>
+    </div>
+    <div class="tuner">
+      <div class="tn-read"><b>1.4×</b><span><svg class="i"><use href="#i-dial"/></svg>Dwarkesh only</span></div>
+      <div class="tn-win">
+        <div class="mn"></div><div class="mj"></div>
+        <div class="nums"><span style="left:4px">0.8</span><span style="left:36px">1.0</span><span style="left:68px">1.2</span><span style="left:100px;color:var(--fg)">1.4</span><span style="left:132px">1.6</span><span style="left:164px">1.8</span><span style="left:196px">2.0</span></div>
+        <div class="defmark">default</div>
+        <div class="needle"></div>
+      </div>
+    </div>
+    <div class="utils">
+      <div class="util on"><span class="ic"><svg class="i"><use href="#i-smart"/></svg></span><span><b>Smart</b>4m 12s saved</span></div>
+      <div class="util on"><span class="ic"><svg class="i"><use href="#i-voice"/></svg></span><span><b>Boost</b>On</span></div>
+      <div class="util"><span class="ic"><svg class="i"><use href="#i-moon"/></svg></span><span><b>Sleep</b>Off</span></div>
+      <div class="util"><span class="ic"><svg class="i"><use href="#i-airplay"/></svg></span><span><b>AirPlay</b>Kitchen</span></div>
+      <div class="util"><span class="ic"><svg class="i"><use href="#i-queue"/></svg></span><span><b>Queue</b>& chapters</span></div>
+    </div>
+  </div>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>02</span>Now Playing</b>Swipe down anywhere to drop back to the mini player. The speed control is a tuning strip: flick it sideways to nudge, or tap for the full sheet. The gold "Dwarkesh only" pin says this speed is the show's own setting, and the faint "default" mark shows where you'd normally sit. Chapters are gaps in the scrubber, and the toggle at the top of the page flips this screen between warm dark and paper.</figcaption>
+</figure>
+
+<!-- ===================== 3 SPEED SHEET ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen dark">
+  <div class="behind"><div class="art a-dwarkesh ghost" style="--s:220px"><b>Dwarkesh</b><i>PODCAST</i></div></div>
+  <div class="status" style="color:#F4EADB"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="sheet" style="top:128px">
+    <div class="grab"></div>
+    <div class="sh-head"><button class="nb txt">Reset</button><h4>Playback speed</h4><button class="nb txt b">Done</button></div>
+    <div class="readout"><b>1.40<small>×</small></b><p><span class="ovr"><svg class="i"><use href="#i-dial"/></svg>Dwarkesh</span> Your default is 1.80×</p></div>
+    <div class="dialwrap">
+      <svg class="scale" viewBox="0 0 236 236" id="dialScale"></svg>
+      <div class="ridges"></div>
+      <div class="knob"><div class="ind"></div><div class="cap2"></div></div>
+      <button class="step l"><svg class="i"><use href="#i-minus"/></svg><small>0.05×</small></button>
+      <button class="step r"><svg class="i"><use href="#i-plus"/></svg><small>0.05×</small></button>
+    </div>
+    <div class="presets"><span class="pre">1.0</span><span class="pre">1.25</span><span class="pre on">1.4</span><span class="pre">1.6</span><span class="pre def">1.8</span><span class="pre">2.0</span><span class="pre">2.5</span></div>
+    <div class="seg"><span>All podcasts</span><span class="on"><svg class="i"><use href="#i-dial"/></svg>Just this show</span></div>
+    <div class="group">
+      <div class="cell tall ic"><span class="ci" style="background:#E2A93E"><svg class="i"><use href="#i-smart"/></svg></span><span class="lbl">Smart Speed<small>Trims silences · saved 27h this year</small></span><span class="switch"></span></div>
+      <div class="cell tall ic"><span class="ci" style="background:#3F7F6B"><svg class="i"><use href="#i-voice"/></svg></span><span class="lbl">Voice Boost<small>Evens out loud and quiet voices</small></span><span class="switch"></span></div>
+    </div>
+    <div class="foot"><svg class="i"><use href="#i-tune"/></svg><span>Pitch is corrected at every speed, so nobody sounds like a chipmunk. Not even at 3×.</span></div>
+  </div>
+  <div class="homebar" style="background:var(--ink)"></div>
+ </div></div>
+ <figcaption><b><span>03</span>Speed sheet</b>Turn the knob or drag anywhere on the sheet. It clicks in 0.05× steps from 0.5× to 3.0×, with a firmer haptic bump at 1.0× and at your default (the gold dot). Presets get you there in one tap, and the scope switch decides whether the change is for every podcast or just this show.</figcaption>
+</figure>
+
+<!-- ===================== 4 PODCAST PAGE ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="nav"><button class="nb txt" style="padding-left:0"><svg class="i"><use href="#i-left"/></svg>Library</button><div class="grp"><button class="nb round"><svg class="i"><use href="#i-share"/></svg></button><button class="nb round"><svg class="i"><use href="#i-more"/></svg></button></div></div>
+    <div class="pod-h">
+      <div class="art a-syntax" style="--s:128px;border-radius:24px"><i>{ }</i><b>syn<br>tax</b></div>
+      <div><h2>Syntax</h2><p>Wes Bos &amp; Scott Tolinski</p><div class="meta"><span class="tag">Technology</span><span class="tag">3 a week</span></div></div>
+    </div>
+    <p class="desc">Full-stack web dev with a side of tasty treats. Frameworks, CSS, tooling and the odd rant about build configs. <b>More</b></p>
+    <div class="pod-btns">
+      <button class="btn"><svg class="i" style="color:var(--on)"><use href="#i-check"/></svg>Following</button>
+      <button class="btn set"><svg class="i"><use href="#i-sliders"/></svg><span><strong>Settings</strong> · Top of queue</span><svg class="i" style="width:14px;height:14px;color:var(--ink-3)"><use href="#i-right"/></svg></button>
+    </div>
+    <div class="ep-head"><h5>Episodes</h5><span>Newest first<svg class="i"><use href="#i-updown"/></svg></span></div>
+
+    <div class="ep swiped">
+      <div class="acts"><span class="act gold"><svg class="i"><use href="#i-stack"/></svg>Add to Up Next</span></div>
+      <div class="row"><div class="qt"><div class="d"><span class="new">NEW</span>Today · 54m</div><div class="tt">912: Vite 7, Rolldown and the end of config</div><div class="m">30m at 1.8× · <svg class="i dl"><use href="#i-dlok"/></svg></div></div><span class="add"><svg class="i"><use href="#i-plus"/></svg></span></div>
+    </div>
+    <div class="ep"><div class="row"><div class="qt"><div class="d"><span class="new">NEW</span>Mon 19 Oct · 22m</div><div class="tt">911: CSS anchor positioning finally lands</div><div class="m">12m at 1.8× · <svg class="i cl"><use href="#i-cloud"/></svg></div></div><span class="add"><svg class="i"><use href="#i-plus"/></svg></span></div></div>
+    <div class="ep"><div class="row"><div class="qt"><div class="d">Fri 16 Oct · 1h 8m</div><div class="tt">910: Svelte 5 runes, one year later</div><div class="m"><span class="prog"><i style="width:42%"></i></span><b style="color:var(--ink);font-weight:600">38m left</b> · In Up Next</div></div><span class="add in"><svg class="i"><use href="#i-check"/></svg></span></div></div>
+    <div class="ep played"><div class="row"><div class="qt"><div class="d">Wed 14 Oct · 47m</div><div class="tt">909: Local-first is having a moment</div><div class="m"><svg class="i" style="width:14px;height:14px;color:var(--on);stroke-width:2.4"><use href="#i-check"/></svg>Played</div></div><span class="add"><svg class="i"><use href="#i-plus"/></svg></span></div></div>
+  </div>
+  <div class="mini">
+    <div class="art a-dwarkesh" style="--s:44px;border-radius:10px"><b>Dwarkesh</b><i>PODCAST</i></div>
+    <div class="mt"><b>Inside the RL scaling race</b><span>52m left at 1.4× <span class="ovr"><svg class="i"><use href="#i-dial"/></svg></span></span></div>
+    <button><svg class="i"><use href="#i-pause"/></svg></button>
+    <button><span class="skip"><svg class="i"><use href="#i-fwd"/></svg><em>30</em></span></button>
+    <span class="mp"><i></i></span>
+  </div>
+  <nav class="tabbar"><a><svg class="i"><use href="#i-stack"/></svg>Up Next</a><a class="on"><svg class="i"><use href="#i-lib"/></svg>Library</a><a><svg class="i"><use href="#i-compass"/></svg>Discover</a><a><svg class="i"><use href="#i-chart"/></svg>Stats</a></nav>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>04</span>Podcast page</b>Swipe right on an episode to add it to Up Next (shown on 912), or tap its + button. New episodes are marked in tomato, in-progress ones get a bar and played ones fade back. Show settings sits under the header with a one-line summary, so you can tell what's overridden without opening it.</figcaption>
+</figure>
+
+<!-- ===================== 5 PER-PODCAST SETTINGS ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen">
+  <div class="behind light"></div>
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="sheet" style="top:62px;background:var(--paper-2)">
+    <div class="grab"></div>
+    <div class="ps-head">
+      <div class="art a-conan" style="--s:44px;border-radius:10px"><b>CONAN</b><i>needs a friend</i></div>
+      <div><h4>Conan O'Brien Needs a Friend</h4><p>Settings for this show only</p></div>
+      <button class="nb txt" style="font-weight:600">Done</button>
+    </div>
+    <div class="gl" style="padding-top:12px">Playback</div>
+    <div class="group">
+      <div class="cell" style="padding-top:10px;padding-bottom:4px"><div class="seg sm" style="flex:1"><span>Use default · 1.8×</span><span class="on"><svg class="i"><use href="#i-dial"/></svg>Custom</span></div></div>
+      <div class="mslider">
+        <div class="top"><span class="lbl" style="font:400 16px/21px var(--sans)">Speed</span><div class="stepper"><button><svg class="i"><use href="#i-minus"/></svg></button><span style="font-size:15px">1.20×</span><button><svg class="i"><use href="#i-plus"/></svg></button></div></div>
+        <div class="tr"><div class="bar"><i></i></div><div class="tk"></div><div class="dm">default</div><div class="th"></div></div>
+        <div class="lab"><span>0.5×</span><span>1.0×</span><span>1.5×</span><span>2.0×</span><span>2.5×</span><span>3.0×</span></div>
+      </div>
+      <div class="cell"><span class="lbl">Smart Speed</span><span class="val">Default (on)<svg class="i"><use href="#i-updown"/></svg></span></div>
+      <div class="cell"><span class="lbl">Voice Boost</span><span class="val" style="color:var(--gold-ink);font-weight:600">Off for this show<svg class="i"><use href="#i-updown"/></svg></span></div>
+    </div>
+    <div class="gl">Skip</div>
+    <div class="group">
+      <div class="cell"><span class="lbl">Skip first<small>Jumps the cold-open ads</small></span><div class="stepper"><button><svg class="i"><use href="#i-minus"/></svg></button><span style="color:var(--gold-ink)">45 s</span><button><svg class="i"><use href="#i-plus"/></svg></button></div></div>
+      <div class="cell"><span class="lbl">Skip last</span><div class="stepper"><button><svg class="i"><use href="#i-minus"/></svg></button><span class="mute">Off</span><button><svg class="i"><use href="#i-plus"/></svg></button></div></div>
+    </div>
+    <div class="gl">New episodes</div>
+    <div class="group"><div class="seg3"><span>Top of queue</span><span class="on">Bottom</span><span>Don't add</span></div></div>
+    <div class="gl">Library</div>
+    <div class="group">
+      <div class="cell"><span class="lbl">Auto-download</span><span class="switch"></span></div>
+      <div class="cell"><span class="lbl">Keep latest</span><div class="stepper"><button><svg class="i"><use href="#i-minus"/></svg></button><span>5 eps</span><button><svg class="i"><use href="#i-plus"/></svg></button></div></div>
+      <div class="cell"><span class="lbl">Episode order</span><span class="val">Newest first<svg class="i"><use href="#i-updown"/></svg></span></div>
+      <div class="cell"><span class="lbl">Notifications</span><span class="switch off"></span></div>
+    </div>
+  </div>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>05</span>Per-podcast settings</b>Everything that can differ per show, in one sheet you pull up from the podcast page or a long-press on any row. Rows still following your defaults say "Default" in grey, and anything overridden turns gold, the same gold pin you see on queue rows. Steppers press and hold to repeat.</figcaption>
+</figure>
+
+<!-- ===================== 6 DISCOVER ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="nav"></div>
+    <div class="lt">Discover</div>
+    <div class="search"><div class="field"><svg class="i"><use href="#i-search"/></svg>ai pod<span class="caret"></span><span class="x"><svg class="i"><use href="#i-x"/></svg></span></div><span>Cancel</span></div>
+    <div class="urlcard">
+      <span class="ui"><svg class="i"><use href="#i-link"/></svg></span>
+      <div><b>Add by URL</b><small>Found on your clipboard:</small><small><code>podcast.mikecann.app/feed…</code></small></div>
+      <button class="btn primary">Paste</button>
+    </div>
+    <div class="sec"><h5>Apple Podcasts</h5><span>142 results</span></div>
+    <div class="res"><div class="art a-latent" style="--s:56px"><b>latent<br>space</b></div><div><b>Latent Space</b><small>swyx &amp; Alessio <em>· Technology</em></small></div><span class="sub-b done"><svg class="i"><use href="#i-check"/></svg>Following</span></div>
+    <div class="res"><div class="art a-practical" style="--s:56px"><b>Practical<br>AI</b></div><div><b>Practical AI</b><small>Changelog Media <em>· Technology</em></small></div><span class="sub-b"><svg class="i"><use href="#i-plus"/></svg>Follow</span></div>
+    <div class="res"><div class="art a-nopriors" style="--s:56px"><b>No<br>Priors</b></div><div><b>No Priors</b><small>Sarah Guo &amp; Elad Gil <em>· Business</em></small></div><span class="sub-b"><svg class="i"><use href="#i-plus"/></svg>Follow</span></div>
+    <div class="res"><div class="art a-cogrev" style="--s:56px"><b>The Cognitive<br>Revolution</b></div><div><b>The Cognitive Revolution</b><small>Nathan Labenz <em>· Technology</em></small></div><span class="sub-b"><svg class="i"><use href="#i-plus"/></svg>Follow</span></div>
+    <div class="res"><div class="art a-dwarkesh" style="--s:56px"><b>Dwarkesh</b><i>PODCAST</i></div><div><b>Dwarkesh Podcast</b><small>Dwarkesh Patel <em>· Science</em></small></div><span class="sub-b done"><svg class="i"><use href="#i-check"/></svg>Following</span></div>
+  </div>
+  <div class="mini">
+    <div class="art a-dwarkesh" style="--s:44px;border-radius:10px"><b>Dwarkesh</b><i>PODCAST</i></div>
+    <div class="mt"><b>Inside the RL scaling race</b><span>52m left at 1.4× <span class="ovr"><svg class="i"><use href="#i-dial"/></svg></span></span></div>
+    <button><svg class="i"><use href="#i-pause"/></svg></button>
+    <button><span class="skip"><svg class="i"><use href="#i-fwd"/></svg><em>30</em></span></button>
+    <span class="mp"><i></i></span>
+  </div>
+  <nav class="tabbar"><a><svg class="i"><use href="#i-stack"/></svg>Up Next</a><a><svg class="i"><use href="#i-lib"/></svg>Library</a><a class="on"><svg class="i"><use href="#i-compass"/></svg>Discover</a><a><svg class="i"><use href="#i-chart"/></svg>Stats</a></nav>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>06</span>Search and Discover</b>Search goes straight to the Apple Podcasts directory and Follow is one tap, no detour through the show page. Add by URL takes any RSS feed, including private ones with a token in the URL, and if there's a feed URL on the clipboard Earful offers to paste it for you.</figcaption>
+</figure>
+
+<!-- ===================== 7 IMPORT ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="nav"><button class="nb txt" style="padding-left:0"><svg class="i"><use href="#i-left"/></svg>Settings</button></div>
+    <div class="lt" style="font-size:32px;line-height:38px">Moving from Overcast</div>
+    <div class="sub">Bring your shows and every episode you've played. It takes about a minute.</div>
+    <div class="steps">
+      <div class="stp"><span class="num"><svg class="i"><use href="#i-check"/></svg></span><div class="body"><h6>Export from Overcast</h6><p>Sign in at overcast.fm/account and tap <b>All data</b> under OPML export. That one includes your play history.</p>
+        <div class="urlbar"><svg class="i"><use href="#i-lock"/></svg><span>overcast.fm/account</span><button class="btn">Open<svg class="i" style="width:12px;height:12px;color:var(--tomato)"><use href="#i-safari"/></svg></button></div></div></div>
+      <div class="stp"><span class="num"><svg class="i"><use href="#i-check"/></svg></span><div class="body"><h6>Choose the file</h6>
+        <div class="filechip"><span class="fi"></span><div><b>overcast-all-data.opml</b><small>2.3 MB · Downloads</small></div><span>Change</span></div></div></div>
+      <div class="stp"><span class="num cur">3</span><div class="body"><h6>All moved in</h6>
+        <div class="receipt">
+          <div class="rh"><span>Import · 21 Oct 2026</span><span>Done</span></div>
+          <div class="big3"><div><b>84</b><small>podcasts</small></div><div><b>3,412</b><small>played episodes</small></div><div><b>1,920</b><small>hours</small></div></div>
+          <p>All of it is in your stats now, going back to <b>March 2014</b>. 37 half-finished episodes kept their place.</p>
+        </div></div></div>
+    </div>
+    <div style="padding:6px 16px 0;display:flex;flex-direction:column;gap:10px">
+      <button class="btn primary lg">See your stats</button>
+      <button class="btn lg" style="background:transparent;box-shadow:none;color:var(--tomato);height:36px">Set per-show speeds next</button>
+    </div>
+  </div>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>07</span>Import from Overcast</b>One screen, three steps, and no account linking. Step 1 opens Safari at the right page, step 2 is the Files picker, and the receipt fills in live as episodes are matched. Played state, progress and dates all come across, so Stats is full of real history from the first day.</figcaption>
+</figure>
+
+<!-- ===================== 8 STATS ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="nav"><span></span><button class="chip" style="margin-right:8px">2026<svg class="i" style="width:14px;height:14px;stroke-width:2.4"><use href="#i-down"/></svg></button></div>
+    <div class="lt">Stats</div>
+    <div class="ticket"><div class="tl"><small>Freshly printed</small><b>Your 2026 in review</b></div><div class="tr2"><svg class="i"><use href="#i-gift"/></svg>Open</div></div>
+    <div class="tiles">
+      <div class="tile"><div class="cap">Listened</div><div class="n">612<small>h</small></div><p>About 25 days of ears, this year</p></div>
+      <div class="tile"><div class="cap">Time saved</div><div class="n">148<small>h</small></div>
+        <div class="split"><i style="width:82%;background:var(--tomato)"></i><i style="width:18%;background:var(--mustard)"></i></div>
+        <div class="legend"><span style="--c:var(--tomato)">Speed 121h</span><span style="--c:var(--mustard)">Smart 27h</span></div></div>
+    </div>
+    <div class="streak"><span class="si"><svg class="i"><use href="#i-sun"/></svg></span><div><b>41-day streak</b><small>Your best ever. Previous was 29.</small></div><div class="days"><i></i><i></i><i class="lo"></i><i></i><i></i><i></i><i class="lo"></i><i></i><i></i><i></i></div></div>
+    <div class="hm">
+      <div class="hh"><b>When you listen</b><small>Peak: 7am weekdays</small></div>
+      <div class="hmg"><div class="hmd"><span>M</span><span>T</span><span>W</span><span>T</span><span>F</span><span>S</span><span>S</span></div><div class="cells" id="heat"></div></div>
+      <div class="hma"><span>12a</span><span>6a</span><span>12p</span><span>6p</span><span>11p</span></div>
+    </div>
+    <div class="tops">
+      <div class="hh"><b>Top shows</b><small>See all 84</small></div>
+      <div class="top"><span class="rk">1</span><div class="art a-syntax" style="--s:32px;border-radius:8px"><i>{ }</i><b>syn<br>tax</b></div><div><b>Syntax<span>96h</span></b><div class="bar"><i style="width:100%"></i></div></div></div>
+      <div class="top"><span class="rk">2</span><div class="art a-dwarkesh" style="--s:32px;border-radius:8px"><b>Dwarkesh</b><i>PODCAST</i></div><div><b>Dwarkesh Podcast<span>81h</span></b><div class="bar"><i style="width:84%"></i></div></div></div>
+      <div class="top"><span class="rk">3</span><div class="art a-atp" style="--s:32px;border-radius:8px"><b>ATP</b></div><div><b>Accidental Tech Podcast<span>74h</span></b><div class="bar"><i style="width:77%"></i></div></div></div>
+    </div>
+  </div>
+  <nav class="tabbar"><a><svg class="i"><use href="#i-stack"/></svg>Up Next</a><a><svg class="i"><use href="#i-lib"/></svg>Library</a><a><svg class="i"><use href="#i-compass"/></svg>Discover</a><a class="on"><svg class="i"><use href="#i-chart"/></svg>Stats</a></nav>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>08</span>Stats</b>The year at a glance: hours, time saved split into speed and Smart Speed, your streak and when you listen. Tap any heatmap cell to see the episodes behind it (Saturday mornings are mostly walks). The ticket at the top opens Year in review, and the year chip switches back as far as your Overcast history goes.</figcaption>
+</figure>
+
+<!-- ===================== 9 YEAR IN REVIEW ===================== -->
+<figure class="shot">
+ <div class="phone"><div class="screen dark yir">
+  <div class="status"><span class="t">9:41</span><span class="s"><svg viewBox="0 0 18 12" width="18"><use href="#sb-sig"/></svg><svg viewBox="0 0 16 12" width="16"><use href="#sb-wifi"/></svg><svg viewBox="0 0 27 13" width="27" style="height:13px"><use href="#sb-bat"/></svg></span></div>
+  <div class="island"></div>
+  <div class="content">
+    <div class="yir-top"><button class="nb round"><svg class="i"><use href="#i-x"/></svg></button><h4>Your 2026</h4><span style="width:52px"></span></div>
+    <div class="card916">
+      <div class="c-top"><small><span>Earful · 2026</span><span>No. 0001</span></small><h2>Mike listened for <em>612 hours.</em></h2></div>
+      <div class="rcpt">
+        <div class="c brand">EARFUL</div>
+        <div class="c mut">LISTENING RECEIPT · 2026</div>
+        <div class="dash"></div>
+        <div class="ln"><span>SYNTAX</span><span>96h</span></div>
+        <div class="ln"><span>DWARKESH PODCAST</span><span>81h</span></div>
+        <div class="ln"><span>ACCIDENTAL TECH</span><span>74h</span></div>
+        <div class="ln"><span>HARD FORK</span><span>58h</span></div>
+        <div class="ln"><span>MIKE POD (PRIVATE)</span><span>41h</span></div>
+        <div class="ln mut"><span>+ 79 OTHER SHOWS</span><span>262h</span></div>
+        <div class="dash"></div>
+        <div class="ln tot"><span>TOTAL LISTENED</span><span>612h</span></div>
+        <div class="ln sv"><span>SAVED BY SPEED</span><span>−121h</span></div>
+        <div class="ln sv"><span>SAVED BY SMART SPEED</span><span>−27h</span></div>
+        <div class="dash"></div>
+        <div class="ln"><span>USUAL SPEED</span><span>1.8×</span></div>
+        <div class="ln"><span>PEAK HOUR</span><span>7AM COMMUTE</span></div>
+        <div class="ln"><span>LONGEST STREAK</span><span>41 DAYS</span></div>
+        <div class="bc"></div>
+        <div class="c mut">THANKS FOR LISTENING · COME AGAIN</div>
+      </div>
+      <div class="c-foot"><span class="mk"><i></i>Earful</span><span>148 hours back. Not bad.</span></div>
+    </div>
+    <div class="styles"><span class="on">Receipt</span><span>Ticket</span><span>Cassette</span></div>
+    <div class="yir-btns"><button class="btn sec2"><svg class="i"><use href="#i-copy"/></svg>Copy image</button><button class="btn primary"><svg class="i"><use href="#i-share"/></svg>Share</button></div>
+  </div>
+  <div class="homebar"></div>
+ </div></div>
+ <figcaption><b><span>09</span>Year-in-review card</b>Your year printed as a till receipt, exported at 1080 × 1920 so it looks sharp in a story. Swipe the card sideways (or tap the chips) for Ticket and Cassette versions. Copy image puts the PNG straight on the clipboard and Share opens the share sheet.</figcaption>
+</figure>
+
+  </main>
+</div>
+
+<script>
+// Speed knob scale: 0.5x to 3.0x in 0.05 steps over a 270 degree sweep
+(function(){
+  const svg=document.getElementById('dialScale'),ns='http://www.w3.org/2000/svg',cx=118,cy=118,cur=1.4,def=1.8;
+  let out='';
+  for(let i=0;i<=50;i++){
+    const v=0.5+i*0.05,a=(-135+i*5.4)*Math.PI/180,major=i%10===0,mid=i%5===0;
+    const r1=114,r2=major?100:mid?104:108,on=v<=cur+1e-6;
+    const x1=cx+r1*Math.sin(a),y1=cy-r1*Math.cos(a),x2=cx+r2*Math.sin(a),y2=cy-r2*Math.cos(a);
+    out+=`<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="${on?'#DD5530':'#BFAF98'}" stroke-width="${major?2.2:mid?1.6:1.1}" stroke-linecap="round"/>`;
+    if(major){const lr=88,lx=cx+lr*Math.sin(a),ly=cy-lr*Math.cos(a)+3.5;
+      out+=`<text x="${lx.toFixed(1)}" y="${ly.toFixed(1)}" text-anchor="middle" font-family="ui-rounded,-apple-system,sans-serif" font-size="10" font-weight="700" fill="#A39587">${v%1===0?v.toFixed(0):v.toFixed(1)}</text>`;}
+  }
+  const da=(-135+(def-0.5)/0.05*5.4)*Math.PI/180;
+  out+=`<circle cx="${(cx+121*Math.sin(da)).toFixed(1)}" cy="${(cy-121*Math.cos(da)).toFixed(1)}" r="3.2" fill="#E7B24A"/>`;
+  svg.innerHTML=out;
+})();
+// Listening heatmap: 7 days x 24 hours, shaped like a commuter's week
+(function(){
+  const el=document.getElementById('heat'),cols=['#EFE6D8','#F4D5B8','#EEAA80','#E47C51','#D2502A'];
+  let html='';
+  for(let d=0;d<7;d++)for(let h=0;h<24;h++){
+    let v=0;const wk=d<5,n=((d*31+h*17)%7)/28;
+    if(wk){v=({7:.95,8:.75,12:.42,17:.7,18:.55,20:.32,21:.38,22:.18})[h]||(h>=9&&h<=16?.1:h>=6&&h<=23?.06:0);if(d===4&&h>=17)v*=.5;}
+    else{v=({8:.6,9:.85,10:.6,11:.3,14:.35,15:.42,16:.3,21:.3,22:.2})[h]||(h>=7&&h<=22?.08:0);}
+    v=v>0?v+n:0;
+    const l=v<=0?0:v<.2?1:v<.45?2:v<.75?3:4;
+    html+=`<i style="background:${cols[l]}"></i>`;
+  }
+  el.innerHTML=html;
+})();
+// Warm dark / paper toggle for Now Playing
+(function(){
+  const b=document.getElementById('npToggle'),np=document.getElementById('np'),lab=document.getElementById('npLabel');
+  b.addEventListener('click',()=>{const l=np.classList.toggle('light');np.classList.toggle('dark',!l);b.classList.toggle('light',l);lab.textContent=l?'Now Playing: paper':'Now Playing: warm dark';});
+})();
+</script>
+</body>
+</html>

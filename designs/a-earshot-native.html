@@ -1,0 +1,1034 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Earshot · Direction A · Native, refined</title>
+<style>
+:root{
+  --sys: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  --serif: "New York", ui-serif, "Iowan Old Style", Georgia, serif;
+  --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:#ECEAE5;font-family:var(--sys);color:#151716;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;border:0;background:none;padding:0;margin:0}
+
+/* ---------- page ---------- */
+.page{max-width:1440px;margin:0 auto;padding:72px 40px 140px}
+.hdr{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:56px;align-items:end;margin:0 auto 72px;max-width:1291px}
+.eyebrow{font:600 13px/1 var(--sys);letter-spacing:.12em;text-transform:uppercase;color:#1F7A68;margin-bottom:16px}
+.hdr h1{font:700 56px/1.02 var(--sys);letter-spacing:-.035em;margin:0 0 20px}
+.hdr h1 span{color:#8C8A84;font-weight:600}
+.hdr p{font:400 18px/1.55 var(--sys);color:#4A4B48;margin:0;max-width:620px;text-wrap:pretty}
+.side{display:flex;flex-direction:column;gap:20px}
+.swatches{display:flex;gap:10px;flex-wrap:wrap}
+.sw{display:flex;align-items:center;gap:10px;background:#fff;border-radius:14px;padding:8px 14px 8px 8px;box-shadow:0 1px 2px rgba(0,0,0,.05)}
+.sw i{width:28px;height:28px;border-radius:8px;display:block;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.12)}
+.sw b{display:block;font:600 13px/1.2 var(--sys)}
+.sw small{display:block;font:500 11px/1.3 var(--mono);color:#8C8A84}
+.notes{font:400 14px/1.5 var(--sys);color:#5D5E5A;margin:0;padding:0;list-style:none;display:grid;gap:6px}
+.notes b{color:#151716;font-weight:600}
+.toggle{display:inline-flex;background:#DEDBD4;border-radius:12px;padding:3px;align-self:flex-start}
+.toggle button{font:600 13px/1 var(--sys);padding:9px 14px;border-radius:9px;color:#5D5E5A;cursor:pointer}
+.toggle button.on{background:#fff;color:#151716;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,409px);justify-content:center;gap:80px 32px}
+figure{margin:0;width:409px}
+figcaption{padding:24px 12px 0;font:400 14.5px/1.55 var(--sys);color:#55564F;text-wrap:pretty}
+figcaption b{display:block;font:600 16px/1.3 var(--sys);color:#151716;margin-bottom:6px;letter-spacing:-.01em}
+figcaption b em{font-style:normal;color:#1F7A68;margin-right:8px;font-variant-numeric:tabular-nums}
+
+/* ---------- device ---------- */
+.phone{width:409px;height:868px;padding:8px;border-radius:63px;background:linear-gradient(145deg,#3A3A3C,#18181A 40%,#2C2C2E);box-shadow:0 0 0 1.5px #59595C,0 40px 80px -30px rgba(30,25,15,.45),0 12px 24px -12px rgba(30,25,15,.25)}
+.screen{position:relative;width:393px;height:852px;border-radius:55px;overflow:hidden;background:var(--bg);color:var(--label);isolation:isolate;font-family:var(--sys)}
+.light{
+  --bg:#FFFFFF;--bg2:#F3F2EF;--card:#FFFFFF;--label:#111312;--label2:rgba(50,52,58,.62);--label3:rgba(50,52,58,.32);
+  --sep:rgba(50,52,58,.14);--fill:rgba(120,118,112,.13);--fill2:rgba(120,118,112,.07);
+  --accent:#1F7A68;--accent-soft:rgba(31,122,104,.11);--on-accent:#fff;--red:#E5484D;--amber:#E39A1B;
+  --glass:rgba(250,250,248,.64);--glass-edge:rgba(255,255,255,.75);--glass-hi:rgba(255,255,255,.7);--glass-sh:0 10px 30px rgba(20,20,10,.12),0 1px 3px rgba(20,20,10,.06);
+  --tab-on:rgba(17,19,18,.065);--switch-off:rgba(120,118,112,.18);
+}
+.dark{
+  --bg:#000000;--bg2:#000000;--card:#1A1B1C;--label:#F4F4F2;--label2:rgba(235,235,240,.6);--label3:rgba(235,235,240,.3);
+  --sep:rgba(255,255,255,.1);--fill:rgba(140,140,145,.24);--fill2:rgba(140,140,145,.14);
+  --accent:#5FCCB1;--accent-soft:rgba(95,204,177,.16);--on-accent:#032019;--red:#FF6369;--amber:#F5B04A;
+  --glass:rgba(42,42,44,.58);--glass-edge:rgba(255,255,255,.12);--glass-hi:rgba(255,255,255,.1);--glass-sh:0 10px 30px rgba(0,0,0,.5);
+  --tab-on:rgba(255,255,255,.1);--switch-off:rgba(140,140,145,.32);
+}
+.sb{position:absolute;top:0;left:0;right:0;height:54px;display:flex;justify-content:space-between;align-items:center;z-index:80;pointer-events:none;color:var(--label)}
+.sb .t{width:136px;text-align:center;font:600 17px/1 var(--sys);letter-spacing:-.3px;padding:3px 0 0 6px}
+.sb .ic{width:136px;display:flex;gap:6px;justify-content:center;align-items:center;padding:3px 6px 0 0}
+.island{position:absolute;top:11px;left:50%;width:125px;height:37px;margin-left:-62.5px;border-radius:20px;background:#000;z-index:90}
+.homebar{position:absolute;bottom:8px;left:50%;width:139px;height:5px;margin-left:-69.5px;border-radius:3px;background:var(--label);z-index:90}
+
+/* ---------- primitives ---------- */
+.i{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;flex:none;display:block}
+.glass{background:var(--glass);-webkit-backdrop-filter:blur(20px) saturate(1.8);backdrop-filter:blur(20px) saturate(1.8);border:.5px solid var(--glass-edge);box-shadow:var(--glass-sh),inset 0 1px 0 var(--glass-hi)}
+.content{position:absolute;inset:0;padding-top:54px;overflow:hidden}
+.navbar{height:52px;display:flex;align-items:center;justify-content:space-between;padding:0 16px}
+.gbtn{width:44px;height:44px;border-radius:22px;display:grid;place-items:center;color:var(--label)}
+.gcap{height:44px;border-radius:22px;display:flex;align-items:center;padding:0 4px}
+.gcap .gbtn{background:none;border:0;box-shadow:none;width:40px}
+.lt{font:700 34px/41px var(--sys);letter-spacing:-.4px;margin:0;padding:0 20px}
+.lt-sub{font:500 15px/20px var(--sys);color:var(--label2);padding:2px 20px 0;font-variant-numeric:tabular-nums}
+.tn{font-variant-numeric:tabular-nums}
+.sep-b{position:relative}
+.sep-b::after{content:"";position:absolute;right:0;bottom:0;height:.5px;background:var(--sep)}
+
+/* switch */
+.sw-t{width:51px;height:31px;border-radius:16px;background:var(--switch-off);position:relative;flex:none}
+.sw-t::after{content:"";position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#fff;box-shadow:0 3px 8px rgba(0,0,0,.15),0 1px 1px rgba(0,0,0,.08)}
+.sw-t.on{background:var(--accent)}
+.sw-t.on::after{left:22px}
+
+/* segmented */
+.seg{display:flex;background:var(--fill);border-radius:10px;padding:2px;height:34px}
+.seg span{flex:1;display:grid;place-items:center;font:500 13px/1 var(--sys);color:var(--label);border-radius:8px;white-space:nowrap}
+.seg span.on{background:var(--card);font-weight:600;box-shadow:0 2px 6px rgba(0,0,0,.1),0 0 0 .5px rgba(0,0,0,.04)}
+.dark .seg span.on{background:#5A5A5E}
+
+/* ---------- tab bar + mini player ---------- */
+.tabbar{position:absolute;left:16px;right:16px;bottom:24px;height:62px;display:flex;gap:10px;z-index:40}
+.tabs{flex:1;border-radius:31px;display:flex;align-items:center;padding:4px}
+.tab{flex:1;height:54px;border-radius:27px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:var(--label);font:600 10px/1 var(--sys);letter-spacing:.1px}
+.tab .i{width:25px;height:25px}
+.tab.on{background:var(--tab-on);color:var(--accent)}
+.tcirc{width:62px;height:62px;border-radius:31px;display:grid;place-items:center;flex:none;color:var(--label)}
+.tcirc .i{width:24px;height:24px}
+.mini{position:absolute;left:16px;right:16px;bottom:94px;height:54px;border-radius:27px;display:flex;align-items:center;gap:10px;padding:0 8px 0 7px;z-index:40}
+.mini .art{width:40px;height:40px;border-radius:10px}
+.mini-t{flex:1;min-width:0}
+.mini-t b{display:block;font:600 14px/18px var(--sys);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.15px}
+.mini-t span{display:block;font:500 12px/16px var(--sys);color:var(--label2);white-space:nowrap}
+.mini .gbtn{width:40px;height:40px}
+.mini .gbtn .i{width:22px;height:22px}
+.mini-prog{position:absolute;left:58px;right:96px;bottom:6px;height:2px;border-radius:1px;background:var(--fill)}
+.mini-prog i{display:block;height:100%;width:53%;border-radius:1px;background:var(--label2)}
+
+/* ---------- artwork ---------- */
+.art{position:relative;overflow:hidden;container-type:inline-size;flex:none;border-radius:12px;box-shadow:inset 0 0 0 .5px rgba(0,0,0,.1)}
+.art>*{position:absolute}
+.a-syntax{background:linear-gradient(150deg,#FFE35E,#F4B400)}
+.a-syntax .b{right:4cqw;top:-8cqw;font:300 62cqw/1 var(--mono);color:rgba(20,20,20,.13);letter-spacing:-6cqw}
+.a-syntax .t{left:9cqw;bottom:9cqw;font:800 25cqw/1 var(--mono);color:#151515;letter-spacing:-1.5cqw}
+.a-changelog{background:#0C1F18 repeating-radial-gradient(circle at 105% -5%,transparent 0 4%,rgba(94,224,160,.34) 4% 4.8%)}
+.a-changelog .t{left:9cqw;bottom:9cqw;font:800 15cqw/.95 var(--sys);color:#E9FFF3;letter-spacing:-.6cqw}
+.a-changelog .t small{display:block;font:600 9cqw/1.2 var(--sys);color:#5EE0A0;letter-spacing:0}
+.a-atp{background:#1F2540}
+.a-atp .t{left:8cqw;top:8cqw;font:900 38cqw/.9 var(--sys);color:#F2F2F5;letter-spacing:-2cqw}
+.a-atp .l{left:8cqw;right:8cqw;top:47cqw;height:3cqw;background:linear-gradient(90deg,#F2A541 0 33%,#E85D5D 33% 66%,#6AA7F8 66%)}
+.a-atp .s{left:8cqw;bottom:8cqw;font:600 9.5cqw/1.15 var(--sys);color:rgba(242,242,245,.7)}
+.a-hardfork{background:linear-gradient(160deg,#FF6D3F,#D4251D)}
+.a-hardfork svg{inset:0;width:100%;height:100%}
+.a-hardfork .t{left:8cqw;top:8cqw;font:900 19cqw/.88 var(--sys);color:#fff;letter-spacing:-.6cqw}
+.a-latent{background:radial-gradient(circle at 70% 30%,rgba(124,245,232,.35),transparent 45%),linear-gradient(rgba(124,245,232,.2) 1px,transparent 1px) 0 0/12.5% 12.5%,linear-gradient(90deg,rgba(124,245,232,.2) 1px,transparent 1px) 0 0/12.5% 12.5%,#07080E}
+.a-latent .t{left:9cqw;bottom:9cqw;font:700 14.5cqw/1 var(--mono);color:#D2FFF9;letter-spacing:-.4cqw}
+.a-dwarkesh{background:linear-gradient(160deg,#E4824B,#A23A1A 65%,#7C2711)}
+.a-dwarkesh .arch{left:30cqw;right:30cqw;top:13cqw;height:44cqw;border:1.6cqw solid rgba(255,236,214,.88);border-bottom:0;border-radius:50cqw 50cqw 0 0}
+.a-dwarkesh .arch::after{content:"";position:absolute;left:50%;bottom:0;width:12cqw;height:12cqw;margin-left:-6cqw;border-radius:50%;background:rgba(255,236,214,.88)}
+.a-dwarkesh .t{left:0;right:0;bottom:15cqw;text-align:center;font:italic 500 18cqw/1 var(--serif);color:#FFEEDB;letter-spacing:-.4cqw}
+.a-dwarkesh .s{left:0;right:0;bottom:8cqw;text-align:center;font:700 5.6cqw/1 var(--sys);letter-spacing:1.4cqw;color:rgba(255,236,214,.75)}
+.a-lex{background:radial-gradient(circle at 50% 38%,#2A2A2C,#0A0A0B 60%)}
+.a-lex .c{left:28cqw;top:12cqw;width:44cqw;height:44cqw;border-radius:50%;border:.8cqw solid rgba(255,255,255,.85)}
+.a-lex .t{left:0;right:0;bottom:16cqw;text-align:center;font:500 8.6cqw/1 var(--sys);letter-spacing:2.6cqw;color:#fff;padding-left:2.6cqw}
+.a-lex .s{left:0;right:0;bottom:8cqw;text-align:center;font:italic 400 7cqw/1 var(--serif);color:rgba(255,255,255,.55)}
+.a-conan{background:linear-gradient(165deg,#FF9533,#EA571B)}
+.a-conan .sun{right:-12cqw;top:-12cqw;width:62cqw;height:62cqw;border-radius:50%;background:#FFE7C2}
+.a-conan .t{left:8cqw;bottom:22cqw;font:900 26cqw/.85 var(--sys);color:#FFF4E2;letter-spacing:-1.4cqw}
+.a-conan .s{left:8.5cqw;bottom:9cqw;font:italic 600 11cqw/1 var(--serif);color:#5A1E05}
+.a-mikepod{background:linear-gradient(155deg,#33A68B,#0F4A3F)}
+.a-mikepod .w{left:9cqw;top:14cqw;height:30cqw;display:flex;gap:3.2cqw;align-items:center}
+.a-mikepod .w i{display:block;width:4.2cqw;border-radius:3cqw;background:#F3EBD9}
+.a-mikepod .t{left:9cqw;bottom:9cqw;font:700 16cqw/1 var(--sys);color:#F3EBD9;letter-spacing:-.6cqw}
+.a-mikepod .lk{right:8cqw;top:8cqw;width:16cqw;height:16cqw;border-radius:50%;background:rgba(243,235,217,.2);display:grid;place-items:center}
+.a-mikepod .lk svg{width:9cqw;height:9cqw;fill:#F3EBD9}
+.a-nopriors{background:#EDE6D8}
+.a-nopriors .t{left:9cqw;top:9cqw;font:700 25cqw/.9 var(--serif);color:#1C1A17;letter-spacing:-1cqw}
+.a-nopriors .d{right:10cqw;bottom:10cqw;width:16cqw;height:16cqw;border-radius:50%;background:#1C1A17}
+.a-cognitive{background:linear-gradient(160deg,#1B4290,#0B1D45)}
+.a-cognitive .o{left:50%;top:10cqw;width:44cqw;height:44cqw;margin-left:-22cqw;border-radius:50%;background:radial-gradient(circle at 35% 35%,#FFB067,#F06A1D)}
+.a-cognitive .t{left:0;right:0;bottom:9cqw;text-align:center;font:800 8.4cqw/1.15 var(--sys);color:#fff;letter-spacing:.3cqw}
+.a-practical{background:#1B2220}
+.a-practical .t{left:9cqw;bottom:9cqw;font:700 18cqw/.95 var(--mono);color:#8DF0B2;letter-spacing:-1cqw}
+.a-practical .k{left:9cqw;top:9cqw;font:700 12cqw/1 var(--mono);color:rgba(141,240,178,.45)}
+.a-aidaily{background:#F7F4EE}
+.a-aidaily .bar{left:0;right:0;top:0;height:12cqw;background:#E3342F}
+.a-aidaily .t{left:9cqw;bottom:9cqw;font:900 15cqw/.92 var(--sys);color:#121212;letter-spacing:-.6cqw}
+
+/* ---------- 1 up next ---------- */
+.qlist{margin-top:14px}
+.qrow{position:relative;display:flex;align-items:center;gap:12px;padding:11px 12px 11px 16px;background:var(--bg);min-height:80px}
+.qrow::after{content:"";position:absolute;left:84px;right:0;bottom:0;height:.5px;background:var(--sep)}
+.qrow .art{width:56px;height:56px;border-radius:12px}
+.qb{flex:1;min-width:0}
+.qs{font:500 13px/16px var(--sys);color:var(--label2);display:flex;align-items:center;gap:4px;white-space:nowrap;overflow:hidden}
+.qs .i{width:11px;height:11px;stroke-width:0;fill:var(--label2)}
+.qt{font:600 15px/19px var(--sys);letter-spacing:-.2px;margin-top:1px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.qm{margin-top:5px;display:flex;align-items:center;gap:6px;font:500 12.5px/16px var(--sys);color:var(--label2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.qm .i{width:15px;height:15px}
+.qm .dl{color:var(--label3)}
+.prog{width:30px;height:4px;border-radius:2px;background:var(--fill);overflow:hidden;flex:none}
+.prog i{display:block;height:100%;background:var(--accent);border-radius:2px}
+.ovr{display:inline-flex;align-items:center;gap:3px;height:18px;padding:0 6px 0 5px;border-radius:6px;background:var(--accent-soft);color:var(--accent);font-weight:650}
+.ovr .i{width:12px;height:12px;stroke-width:2.2}
+.grip{color:var(--label3);width:22px;height:22px}
+.swipe{position:relative;overflow:hidden}
+.acts{position:absolute;top:0;bottom:0;right:10px;display:flex;align-items:center;gap:6px}
+.act{width:60px;height:62px;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#fff;font:600 11px/1 var(--sys)}
+.act .i{width:20px;height:20px;stroke-width:2}
+.act.ac{background:var(--accent);color:var(--on-accent)}
+.act.gr{background:#8E8E93}
+.act.rd{background:var(--red)}
+.swipe .qrow{transform:translateX(-206px);box-shadow:8px 0 16px -10px rgba(0,0,0,.18)}
+.hint{display:flex;align-items:center;justify-content:center;gap:6px;font:500 12px/1 var(--sys);color:var(--label3);padding:14px 0}
+
+/* ---------- 2 now playing ---------- */
+.npx{--label:var(--np-l);background:var(--np-bg);color:var(--np-l)}
+.dark .npx{--np-bg:radial-gradient(130% 60% at 50% 18%,#86391F 0%,#5A2414 42%,#2A110A 100%);--np-l:#FFF3EC;--np-l2:rgba(255,232,220,.6);--np-f:rgba(255,232,220,.13);--np-f2:rgba(255,232,220,.08);--np-tr:rgba(255,232,220,.2);--np-sheet:rgba(38,22,16,.86);--np-card:rgba(255,232,220,.07);--np-acc:#FFC9A8}
+.light .npx{--np-bg:radial-gradient(130% 60% at 50% 18%,#FBE8DC 0%,#F4D3C0 48%,#E9BEA6 100%);--np-l:#3A150A;--np-l2:rgba(58,21,10,.56);--np-f:rgba(58,21,10,.08);--np-f2:rgba(58,21,10,.05);--np-tr:rgba(58,21,10,.14);--np-sheet:rgba(255,248,244,.9);--np-card:rgba(255,255,255,.7);--np-acc:#A23A1A}
+.np{position:absolute;inset:0;padding:54px 32px 0;display:flex;flex-direction:column}
+.grab{width:36px;height:5px;border-radius:3px;background:var(--np-tr);margin:6px auto 0}
+.np .art.big{width:329px;height:329px;border-radius:22px;margin-top:22px;box-shadow:0 28px 50px -18px rgba(40,10,0,.6),0 0 0 .5px rgba(255,255,255,.08) inset}
+.nph{display:flex;align-items:flex-start;gap:12px;margin-top:28px}
+.nph>div{flex:1;min-width:0}
+.npt{font:700 21px/26px var(--sys);letter-spacing:-.4px}
+.nps{font:500 16px/21px var(--sys);color:var(--np-l2);margin-top:2px}
+.npb{width:32px;height:32px;border-radius:16px;background:var(--np-f);display:grid;place-items:center;flex:none;margin-top:2px}
+.npb .i{width:20px;height:20px}
+.chap{margin-top:14px;display:flex;align-items:center;gap:8px;height:30px;padding:0 10px 0 9px;border-radius:15px;background:var(--np-f2);align-self:flex-start;font:500 13px/1 var(--sys)}
+.chap .i{width:16px;height:16px;color:var(--np-l2)}
+.chap em{font-style:normal;color:var(--np-l2);font-variant-numeric:tabular-nums}
+.scrub{position:relative;margin-top:18px;height:7px;display:flex;gap:3px}
+.scrub i{display:block;height:100%;border-radius:4px;background:var(--np-tr)}
+.scrub i.p{background:var(--np-l)}
+.scrub i.c{background:linear-gradient(90deg,var(--np-l) 0 86%,var(--np-tr) 86%)}
+.knob{position:absolute;top:50%;left:52.7%;width:15px;height:15px;margin:-7.5px 0 0 -7.5px;border-radius:50%;background:var(--np-l);box-shadow:0 2px 6px rgba(0,0,0,.3)}
+.times{display:flex;justify-content:space-between;margin-top:9px;font:600 12px/1 var(--sys);color:var(--np-l2);font-variant-numeric:tabular-nums}
+.times b{font-weight:600;color:var(--np-l)}
+.ctrls{display:flex;justify-content:space-between;align-items:center;margin:18px 22px 0}
+.ctrls .sk{width:56px;height:56px;display:grid;place-items:center}
+.ctrls .sk .i{width:40px;height:40px;stroke-width:1.7}
+.ctrls .ppb .i{width:56px;height:56px}
+.tiles{display:flex;gap:8px;margin-top:20px}
+.tile{flex:1;height:70px;border-radius:18px;background:var(--np-f2);display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;padding:10px 12px;min-width:0}
+.tile .i{width:20px;height:20px;flex:none}
+.tile b{display:block;font:600 12.5px/16px var(--sys);white-space:nowrap}
+.tile small{display:block;font:500 11px/14px var(--sys);color:var(--np-l2);white-space:nowrap;font-variant-numeric:tabular-nums}
+.tile.sp b{font:700 20px/22px var(--sys);letter-spacing:-.4px;font-variant-numeric:tabular-nums}
+.tile.sp small{color:var(--np-acc);display:flex;align-items:center;gap:3px;font-weight:600}
+.tile.sp small .i{width:11px;height:11px;stroke-width:2.4}
+.tile.on{background:var(--np-f)}
+.tile.on .i{color:var(--np-acc)}
+.npbot{display:flex;justify-content:space-around;align-items:center;margin-top:12px;color:var(--np-l2)}
+.npbot>div{display:flex;align-items:center;gap:6px;height:44px;min-width:44px;justify-content:center;font:600 13px/1 var(--sys);font-variant-numeric:tabular-nums}
+.npbot .i{width:23px;height:23px}
+.npbot .on{color:var(--np-acc)}
+
+/* ---------- 3 speed sheet ---------- */
+.np-behind{position:absolute;inset:0;padding:54px 32px 0;transform:scale(.94);transform-origin:50% 0;filter:saturate(.9)}
+.np-behind .art{width:329px;height:329px;border-radius:22px;margin-top:22px;opacity:.9}
+.dim{position:absolute;inset:0;background:rgba(0,0,0,.32);z-index:2}
+.light .dim{background:rgba(40,20,10,.18)}
+.sheet{position:absolute;left:0;right:0;bottom:0;border-radius:38px 38px 0 0;z-index:5}
+.np-sheet{top:258px;background:var(--np-sheet);-webkit-backdrop-filter:blur(30px) saturate(1.6);backdrop-filter:blur(30px) saturate(1.6);border-top:.5px solid var(--np-f);padding:0 20px}
+.sh-grab{width:36px;height:5px;border-radius:3px;background:var(--np-tr);margin:6px auto 0}
+.sh-head{display:flex;align-items:center;justify-content:space-between;height:52px;margin-top:2px}
+.sh-head h3{margin:0;font:600 17px/1 var(--sys)}
+.cbtn{width:40px;height:40px;border-radius:20px;display:grid;place-items:center;background:var(--np-f)}
+.cbtn .i{width:18px;height:18px;stroke-width:2.2}
+.cbtn.ok{background:var(--np-l);color:var(--np-sheet-solid,#2A110A)}
+.light .cbtn.ok{color:#fff}
+.readout{display:flex;align-items:center;justify-content:space-between;margin-top:4px}
+.readout .st{width:44px;height:44px;border-radius:22px;background:var(--np-f);display:grid;place-items:center}
+.readout .st .i{width:20px;height:20px;stroke-width:2.2}
+.readout .v{text-align:center}
+.readout .v b{display:block;font:700 54px/1 var(--sys);letter-spacing:-1.8px;font-variant-numeric:tabular-nums}
+.readout .v b span{font-weight:500;color:var(--np-l2);margin-left:1px}
+.readout .v small{display:flex;align-items:center;justify-content:center;gap:4px;font:600 12px/1 var(--sys);color:var(--np-acc);margin-top:8px}
+.readout .v small .i{width:12px;height:12px;stroke-width:2.4}
+.ruler{position:relative;height:56px;margin:16px -20px 0;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent);mask-image:linear-gradient(90deg,transparent,#000 22%,#000 78%,transparent)}
+.ruler .tk{position:absolute;top:6px;width:2px;margin-left:-1px;border-radius:1px;background:var(--np-tr);height:14px}
+.ruler .tk.m{height:22px;background:var(--np-l2)}
+.ruler .tk.M{height:28px;background:var(--np-l)}
+.ruler .lb{position:absolute;top:40px;width:40px;margin-left:-20px;text-align:center;font:600 11px/1 var(--sys);color:var(--np-l2);font-variant-numeric:tabular-nums}
+.needle{position:absolute;left:50%;top:0;width:4px;height:36px;margin-left:-2px;border-radius:2px;background:var(--np-acc);box-shadow:0 0 0 3px var(--np-sheet)}
+.presets{display:flex;gap:6px;margin-top:8px}
+.presets span{flex:1;height:36px;border-radius:18px;background:var(--np-f2);display:grid;place-items:center;font:600 14px/1 var(--sys);font-variant-numeric:tabular-nums;position:relative}
+.presets span.on{background:var(--np-l);color:#2A110A}
+.light .presets span.on{color:#fff}
+.presets span.df::after{content:"";position:absolute;top:5px;right:9px;width:5px;height:5px;border-radius:50%;background:var(--np-l2)}
+.scope{margin-top:18px}
+.npx .seg{background:var(--np-f2)}
+.npx .seg span{color:var(--np-l)}
+.npx .seg span.on{background:var(--np-f);box-shadow:none;color:var(--np-l)}
+.light .npx .seg span.on{background:#fff}
+.scope p{margin:8px 4px 0;font:400 13px/18px var(--sys);color:var(--np-l2)}
+.scope p b{color:var(--np-l);font-weight:600}
+.sgroup{margin-top:16px;border-radius:20px;background:var(--np-card);overflow:hidden}
+.srow{display:flex;align-items:center;gap:12px;padding:10px 14px;min-height:58px;position:relative}
+.srow+.srow::before{content:"";position:absolute;top:0;left:50px;right:0;height:.5px;background:var(--np-tr)}
+.srow>.i{width:22px;height:22px;color:var(--np-acc)}
+.srow div{flex:1}
+.srow b{display:block;font:500 16px/20px var(--sys)}
+.srow small{display:block;font:400 12.5px/16px var(--sys);color:var(--np-l2);font-variant-numeric:tabular-nums}
+.npx .sw-t.on{background:var(--np-acc)}
+.light .npx .sw-t.on{background:#A23A1A}
+.pitch{display:flex;align-items:center;gap:8px;margin:14px 4px 0;font:400 12.5px/17px var(--sys);color:var(--np-l2)}
+.pitch .i{width:16px;height:16px;flex:none}
+
+/* ---------- 4 podcast page ---------- */
+.tint{position:absolute;left:0;right:0;top:0;height:380px;background:linear-gradient(180deg,rgba(244,124,40,.24),rgba(244,124,40,.06) 60%,rgba(244,124,40,0));z-index:0}
+.dark .tint{background:linear-gradient(180deg,rgba(244,124,40,.34),rgba(244,124,40,.08) 60%,rgba(244,124,40,0))}
+.over{z-index:1}
+.ph{display:flex;gap:16px;padding:8px 20px 0;align-items:flex-end}
+.ph .art{width:116px;height:116px;border-radius:18px;box-shadow:0 14px 30px -12px rgba(120,40,0,.5)}
+.ph h2{margin:0;font:700 22px/26px var(--sys);letter-spacing:-.4px}
+.ph .au{font:500 15px/20px var(--sys);color:var(--label2);margin-top:4px}
+.ph .mt{font:500 13px/18px var(--sys);color:var(--label3);margin-top:2px}
+.desc{padding:14px 20px 0;font:400 15px/20px var(--sys);color:var(--label2);text-wrap:pretty}
+.desc em{font-style:normal;font-weight:600;color:var(--accent)}
+.pbtns{display:flex;gap:8px;padding:14px 20px 0}
+.cap{height:40px;border-radius:20px;display:inline-flex;align-items:center;gap:6px;padding:0 14px;font:600 15px/1 var(--sys);white-space:nowrap}
+.cap .i{width:18px;height:18px;stroke-width:2}
+.cap.fill{background:var(--fill);color:var(--label)}
+.cap.soft{background:var(--accent-soft);color:var(--accent);flex:1;justify-content:space-between;padding-right:10px}
+.cap.soft span{display:flex;align-items:center;gap:6px}
+.cap.soft .chev{width:14px;height:14px;opacity:.7;stroke-width:2.4}
+.eph{display:flex;align-items:baseline;justify-content:space-between;padding:20px 20px 2px}
+.eph h3{margin:0;font:700 22px/1 var(--sys);letter-spacing:-.3px}
+.eph span{display:flex;align-items:center;gap:3px;font:500 15px/1 var(--sys);color:var(--accent)}
+.eph span .i{width:14px;height:14px;stroke-width:2.2}
+.ep{position:relative;padding:10px 16px 10px 20px;background:var(--bg)}
+.ep::after{content:"";position:absolute;left:20px;right:0;bottom:0;height:.5px;background:var(--sep)}
+.ep-d{font:600 12px/16px var(--sys);color:var(--label2);text-transform:uppercase;letter-spacing:.2px;display:flex;align-items:center;gap:6px}
+.ep-d .nw{display:inline-flex;align-items:center;gap:5px;color:var(--accent)}
+.ep-d .nw::before{content:"";width:7px;height:7px;border-radius:50%;background:var(--accent)}
+.ep-t{font:600 16px/21px var(--sys);letter-spacing:-.25px;margin-top:3px}
+.ep-s{font:400 14px/19px var(--sys);color:var(--label2);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ep-a{display:flex;align-items:center;gap:10px;margin-top:9px}
+.pp{height:30px;border-radius:15px;background:var(--fill);color:var(--accent);display:inline-flex;align-items:center;gap:6px;padding:0 12px 0 10px;font:600 13px/1 var(--sys);font-variant-numeric:tabular-nums}
+.pp .i{width:13px;height:13px}
+.pp .prog{width:28px;height:4px;background:rgba(31,122,104,.22)}
+.ep-a .sp{flex:1}
+.ep-a .ib{width:30px;height:30px;display:grid;place-items:center;color:var(--accent)}
+.ep-a .ib .i{width:26px;height:26px}
+.ep-a .ib.mu{color:var(--label2)}
+.ep-a .ib.mu .i{width:22px;height:22px}
+.ep.played .ep-t{color:var(--label2)}
+.ep-d .pl{display:inline-flex;align-items:center;gap:3px;color:var(--label2)}
+.ep-d .pl .i{width:13px;height:13px;stroke-width:2.6}
+.inq{display:inline-flex;align-items:center;gap:4px;font:600 12px/1 var(--sys);color:var(--accent)}
+.inq .i{width:15px;height:15px;stroke-width:2.4}
+.lswipe{position:relative;overflow:hidden}
+.lact{position:absolute;left:10px;top:10px;bottom:10px;width:112px;border-radius:18px;background:var(--accent);color:var(--on-accent);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;font:600 12px/1.2 var(--sys);text-align:center}
+.lact .i{width:24px;height:24px;stroke-width:2}
+.lswipe .ep{transform:translateX(132px);box-shadow:-8px 0 16px -10px rgba(0,0,0,.18)}
+
+/* ---------- 5 settings sheet ---------- */
+.behind{position:absolute;left:0;right:0;top:46px;bottom:0;border-radius:40px 40px 0 0;overflow:hidden;background:var(--bg);transform:scale(.92);transform-origin:50% 0;opacity:.9}
+.sbw .sb{color:#fff}
+.set-sheet{top:60px;background:var(--bg2);padding:0 0 0}
+.dark .set-sheet{background:#111213}
+.ss-head{display:flex;align-items:center;justify-content:space-between;height:60px;padding:8px 16px 0}
+.ss-head .gbtn{width:40px;height:40px;background:var(--fill)}
+.ss-head .gbtn .i{width:18px;height:18px;stroke-width:2.2}
+.ss-head .gbtn.ok{background:var(--accent);color:var(--on-accent)}
+.ss-title{display:flex;align-items:center;gap:8px}
+.ss-title .art{width:28px;height:28px;border-radius:7px}
+.ss-title b{display:block;font:600 16px/19px var(--sys)}
+.ss-title small{display:block;font:500 12px/15px var(--sys);color:var(--label2)}
+.gh{font:600 13px/16px var(--sys);color:var(--label2);padding:14px 36px 6px;letter-spacing:.1px;display:flex;justify-content:space-between}
+.gh em{font-style:normal;font-weight:500;color:var(--label3)}
+.grp{margin:0 16px;background:var(--card);border-radius:24px;overflow:hidden}
+.cell{position:relative;display:flex;align-items:center;justify-content:space-between;gap:10px;min-height:45px;padding:0 16px;font:400 16px/20px var(--sys)}
+.cell+.cell::before{content:"";position:absolute;top:0;left:16px;right:0;height:.5px;background:var(--sep)}
+.cell .val{display:flex;align-items:center;gap:4px;color:var(--label2);font-variant-numeric:tabular-nums;font-size:16px}
+.cell .val .i{width:14px;height:14px;stroke-width:2.2}
+.cell .seg{height:30px;width:184px}
+.cell .seg span{font-size:13px}
+.cell.col{flex-direction:column;align-items:stretch;padding:10px 16px 12px;gap:8px}
+.cell.col .seg{width:auto;height:32px}
+.stepper{display:flex;align-items:center;gap:12px}
+.stepper b{font:600 16px/1 var(--sys);font-variant-numeric:tabular-nums;color:var(--accent)}
+.stepper .sp2{display:flex;height:30px;border-radius:15px;background:var(--fill);overflow:hidden}
+.stepper .sp2 span{width:44px;display:grid;place-items:center;position:relative}
+.stepper .sp2 span+span::before{content:"";position:absolute;left:0;top:7px;bottom:7px;width:.5px;background:var(--label3)}
+.stepper .sp2 .i{width:15px;height:15px;stroke-width:2.4}
+.lbl{display:flex;align-items:center;gap:6px}
+.lbl small{font:500 12px/1 var(--sys);color:var(--label3)}
+
+/* ---------- 6 search ---------- */
+.urlcard{margin:12px 16px 0;border-radius:22px;background:var(--fill2);overflow:hidden}
+.urltop{display:flex;align-items:center;gap:12px;padding:12px 14px}
+.ico{width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.ico .i{width:21px;height:21px}
+.urltop div{flex:1}
+.urltop b{display:block;font:600 16px/20px var(--sys)}
+.urltop small{display:block;font:400 13px/17px var(--sys);color:var(--label2)}
+.urltop>.i{width:14px;height:14px;color:var(--label3);stroke-width:2.4}
+.clip{display:flex;align-items:center;gap:10px;margin:0 14px;padding:10px 0 12px;border-top:.5px solid var(--sep)}
+.clip div{flex:1;min-width:0}
+.clip small{display:block;font:500 11px/14px var(--sys);color:var(--label3);text-transform:uppercase;letter-spacing:.3px}
+.clip code{display:block;font:500 13px/18px var(--mono);color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.clip .lki{width:14px;height:14px;fill:var(--label2);stroke:none}
+.addb{height:30px;border-radius:15px;padding:0 14px;background:var(--accent);color:var(--on-accent);font:600 14px/30px var(--sys)}
+.rh{display:flex;justify-content:space-between;align-items:baseline;padding:22px 20px 4px}
+.rh h3{margin:0;font:700 20px/1 var(--sys);letter-spacing:-.3px}
+.rh span{font:500 13px/1 var(--sys);color:var(--label2)}
+.res{position:relative;display:flex;align-items:center;gap:12px;padding:10px 16px 10px 20px}
+.res::after{content:"";position:absolute;left:96px;right:0;bottom:0;height:.5px;background:var(--sep)}
+.res .art{width:64px;height:64px;border-radius:14px}
+.res>div:not(.art){flex:1;min-width:0}
+.res b{display:block;font:600 16px/20px var(--sys);letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res>div:not(.art) span{display:block;font:400 13px/17px var(--sys);color:var(--label2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.res small{display:block;font:500 12px/16px var(--sys);color:var(--label3);margin-top:1px}
+.subb{width:34px;height:34px;border-radius:17px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;flex:none}
+.subb .i{width:17px;height:17px;stroke-width:2.6}
+.subb.on{background:var(--accent);color:var(--on-accent)}
+.sbar{position:absolute;left:16px;right:16px;bottom:24px;height:56px;display:flex;gap:10px;z-index:40}
+.sbar .tcirc{width:56px;height:56px;border-radius:28px}
+.sfield{flex:1;border-radius:28px;display:flex;align-items:center;gap:8px;padding:0 10px 0 16px;font:400 17px/1 var(--sys)}
+.sfield .i{width:19px;height:19px;color:var(--label2)}
+.sfield span{flex:1;display:flex;align-items:center}
+.caret{display:inline-block;width:2px;height:22px;border-radius:1px;background:var(--accent);margin-left:1px}
+.xc{width:20px;height:20px;border-radius:50%;background:var(--label3);display:grid;place-items:center;color:var(--bg)}
+.xc .i{width:11px;height:11px;stroke-width:3}
+
+/* ---------- 7 import ---------- */
+.imp{background:var(--bg2)}
+.dark .imp{background:#000}
+.lt.sm{font-size:30px;line-height:36px;letter-spacing:-.3px}
+.steps{padding:18px 16px 0}
+.step{display:flex;gap:12px;position:relative;padding-bottom:16px}
+.step::before{content:"";position:absolute;left:13px;top:30px;bottom:2px;width:2px;border-radius:1px;background:var(--accent);opacity:.3}
+.step:last-child::before{display:none}
+.num{width:28px;height:28px;border-radius:14px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;flex:none}
+.num .i{width:15px;height:15px;stroke-width:2.8}
+.sbody{flex:1;min-width:0;padding-top:3px}
+.sbody h4{margin:0;font:600 17px/22px var(--sys);letter-spacing:-.2px}
+.sbody p{margin:3px 0 0;font:400 14.5px/20px var(--sys);color:var(--label2);text-wrap:pretty}
+.sbody p b{color:var(--label);font-weight:600}
+.mockex{display:flex;align-items:center;gap:6px;margin-top:10px;flex-wrap:wrap}
+.lnk{height:30px;border-radius:15px;background:var(--card);display:inline-flex;align-items:center;gap:6px;padding:0 12px;font:600 13px/1 var(--sys);color:var(--accent);box-shadow:0 0 0 .5px var(--sep)}
+.lnk .i{width:13px;height:13px;stroke-width:2.4}
+.opt{height:30px;border-radius:15px;display:inline-flex;align-items:center;padding:0 10px;font:500 12px/1 var(--sys);color:var(--label3);box-shadow:inset 0 0 0 1px var(--sep)}
+.opt.on{color:var(--accent);box-shadow:inset 0 0 0 1.5px var(--accent);font-weight:600;background:var(--accent-soft)}
+.file{display:flex;align-items:center;gap:10px;margin-top:10px;background:var(--card);border-radius:16px;padding:10px 12px;box-shadow:0 0 0 .5px var(--sep)}
+.file .doc{width:34px;height:40px;border-radius:7px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;font:800 7.5px/1 var(--mono);letter-spacing:.3px;padding-top:12px;position:relative}
+.file .doc::before{content:"";position:absolute;top:0;right:0;width:10px;height:10px;background:linear-gradient(225deg,var(--bg2) 50%,rgba(31,122,104,.25) 50%);border-radius:0 7px 0 3px}
+.file div{flex:1;min-width:0}
+.file b{display:block;font:600 14px/18px var(--sys)}
+.file small{display:block;font:400 12px/16px var(--sys);color:var(--label2)}
+.file span{font:500 14px/1 var(--sys);color:var(--accent)}
+.done{margin:4px 16px 0;background:var(--card);border-radius:26px;padding:20px 18px 18px;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+.done-h{display:flex;align-items:center;gap:12px}
+.done-h .ok{width:40px;height:40px;border-radius:20px;background:var(--accent);color:var(--on-accent);display:grid;place-items:center;flex:none}
+.done-h .ok .i{width:22px;height:22px;stroke-width:2.8}
+.done-h b{display:block;font:700 19px/24px var(--sys);letter-spacing:-.3px}
+.done-h small{display:block;font:500 13px/17px var(--sys);color:var(--label2)}
+.done p{margin:12px 0 0;font:400 15px/21px var(--sys);color:var(--label);text-wrap:pretty}
+.done p b{font-weight:650}
+.kpis{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:14px}
+.kpi{background:var(--fill2);border-radius:14px;padding:8px 12px}
+.kpi b{display:block;font:700 22px/26px var(--sys);letter-spacing:-.5px;font-variant-numeric:tabular-nums}
+.kpi small{display:block;font:500 12px/15px var(--sys);color:var(--label2)}
+.bigbtn{margin-top:14px;height:50px;border-radius:25px;background:var(--accent);color:var(--on-accent);display:flex;align-items:center;justify-content:center;gap:6px;font:600 17px/1 var(--sys);width:100%}
+.bigbtn .i{width:16px;height:16px;stroke-width:2.4}
+.fine{padding:10px 32px 0;font:400 12.5px/17px var(--sys);color:var(--label2);text-align:center;text-wrap:pretty}
+
+/* ---------- 8 stats ---------- */
+.stx{padding:0 16px}
+.stx .seg{margin-top:10px}
+.yir{margin-top:12px;height:58px;border-radius:22px;background:linear-gradient(115deg,#0F3D35,#1F7A68 70%,#3FA88E);display:flex;align-items:center;gap:12px;padding:0 14px 0 12px;color:#F3EBD9;position:relative;overflow:hidden}
+.yir::after{content:"";position:absolute;right:-30px;top:-40px;width:140px;height:140px;border-radius:50%;border:1px solid rgba(243,235,217,.18);box-shadow:0 0 0 18px rgba(243,235,217,.04)}
+.yir .thumb{width:26px;height:44px;border-radius:5px;background:#0E3530;box-shadow:0 0 0 .5px rgba(243,235,217,.35),0 4px 10px rgba(0,0,0,.3);display:grid;place-items:center;font:800 8px/1 var(--sys);color:#F3EBD9;transform:rotate(-6deg);flex:none}
+.yir div{flex:1}
+.yir b{display:block;font:600 16px/20px var(--sys)}
+.yir small{display:block;font:500 12.5px/16px var(--sys);color:rgba(243,235,217,.72)}
+.yir>.i{width:14px;height:14px;stroke-width:2.6;opacity:.8}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+.card{background:var(--card);border-radius:22px;padding:14px 14px 13px}
+.kl{font:600 12px/14px var(--sys);color:var(--label2);text-transform:uppercase;letter-spacing:.4px}
+.kv{font:700 34px/38px var(--sys);letter-spacing:-1px;margin-top:6px;font-variant-numeric:tabular-nums}
+.kv span{font-size:20px;font-weight:600;letter-spacing:0;color:var(--label2);margin-left:2px}
+.ks{font:500 12.5px/16px var(--sys);color:var(--label2);margin-top:2px}
+.ks.up{color:var(--accent);display:flex;align-items:center;gap:3px}
+.ks.up .i{width:12px;height:12px;stroke-width:2.6}
+.stack{display:flex;height:6px;border-radius:3px;overflow:hidden;margin-top:9px;gap:2px}
+.stack i{display:block;height:100%}
+.leg{display:flex;gap:10px;margin-top:7px;font:500 11.5px/14px var(--sys);color:var(--label2);font-variant-numeric:tabular-nums;white-space:nowrap}
+.leg span{display:flex;align-items:center;gap:4px}
+.leg span::before{content:"";width:6px;height:6px;border-radius:2px;background:var(--c)}
+.ch{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+.ch b{font:600 17px/22px var(--sys);letter-spacing:-.2px}
+.ch span{font:500 14px/1 var(--sys);color:var(--accent);display:flex;align-items:center;gap:4px}
+.ch span .i{width:15px;height:15px}
+.top{display:flex;align-items:center;gap:10px;height:40px}
+.top .rk{width:14px;font:600 14px/1 var(--sys);color:var(--label3);text-align:center;font-variant-numeric:tabular-nums}
+.top .art{width:32px;height:32px;border-radius:8px}
+.top>div:not(.art){flex:1;min-width:0}
+.top b{display:block;font:600 14.5px/18px var(--sys);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.top .bar{height:4px;border-radius:2px;background:var(--accent);margin-top:4px;opacity:.85}
+.top .h{font:600 14px/1 var(--sys);color:var(--label2);font-variant-numeric:tabular-nums;width:40px;text-align:right}
+.heat{display:grid;grid-template-columns:14px repeat(24,1fr);gap:2px;align-items:center}
+.heat .dl{font:600 9.5px/1 var(--sys);color:var(--label3);text-align:left}
+.heat i{display:block;aspect-ratio:1;border-radius:3px;background:var(--accent)}
+.hours{display:grid;grid-template-columns:14px repeat(4,1fr);margin-top:5px;font:600 9.5px/1 var(--sys);color:var(--label3)}
+.mintab{position:absolute;left:16px;right:16px;bottom:24px;height:56px;display:flex;gap:8px;z-index:40}
+.mintab .tcirc{width:56px;height:56px;border-radius:28px;color:var(--accent)}
+.mintab .mini{position:static;flex:1;height:56px;border-radius:28px}
+.mintab .mini .art{width:38px;height:38px;border-radius:10px}
+
+/* ---------- 9 share card ---------- */
+.shx{background:var(--bg2)}
+.dark .shx{background:#0B0C0C}
+.shhead{display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px}
+.shhead .gbtn{width:44px;height:44px}
+.shhead .gbtn .i{width:18px;height:18px;stroke-width:2.2}
+.shhead h3{margin:0;font:600 17px/1 var(--sys)}
+.story{width:312px;height:555px;margin:12px auto 0;border-radius:30px;overflow:hidden;position:relative;color:#F3EBD9;background:radial-gradient(120% 70% at 100% 0%,#2F8F78 0%,rgba(47,143,120,0) 60%),radial-gradient(90% 60% at 0% 100%,#0A2A25 0%,rgba(10,42,37,0) 70%),#11443B;box-shadow:0 30px 60px -24px rgba(10,40,35,.55),0 0 0 .5px rgba(0,0,0,.1);padding:22px 22px 0}
+.story .rings{position:absolute;right:-90px;top:40px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(243,235,217,.12)}
+.story .rings::before,.story .rings::after{content:"";position:absolute;inset:34px;border-radius:50%;border:1px solid rgba(243,235,217,.1)}
+.story .rings::after{inset:68px;border-color:rgba(243,235,217,.08)}
+.s-top{display:flex;justify-content:space-between;align-items:center;font:700 11px/1 var(--sys);letter-spacing:1.6px;position:relative}
+.s-top span{display:flex;align-items:center;gap:6px}
+.s-top svg{width:14px;height:14px}
+.s-lead{margin-top:30px;font:500 15px/1 var(--sys);color:rgba(243,235,217,.72);position:relative}
+.s-big{font:800 118px/.86 var(--sys);letter-spacing:-7px;margin:8px 0 0 -5px;position:relative;font-variant-numeric:tabular-nums}
+.s-unit{font:700 22px/1.1 var(--sys);letter-spacing:-.4px;margin-top:6px;position:relative}
+.s-line{margin-top:10px;font:400 13.5px/18px var(--sys);color:rgba(243,235,217,.78);position:relative;text-wrap:pretty}
+.s-line b{color:#9BEBD3;font-weight:600}
+.s-div{height:1px;background:rgba(243,235,217,.16);margin:16px 0 10px}
+.s-lab{font:700 10px/1 var(--sys);letter-spacing:1.4px;color:rgba(243,235,217,.55);margin-bottom:4px;display:flex;justify-content:space-between}
+.s-row{display:flex;align-items:center;gap:10px;height:31px}
+.s-row .n{width:12px;font:700 12px/1 var(--sys);color:rgba(243,235,217,.5);font-variant-numeric:tabular-nums}
+.s-row .art{width:24px;height:24px;border-radius:6px;box-shadow:none}
+.s-row b{flex:1;font:600 14px/1 var(--sys);white-space:nowrap}
+.s-row span{font:600 13px/1 var(--sys);color:rgba(243,235,217,.7);font-variant-numeric:tabular-nums}
+.s-wave{display:flex;align-items:flex-end;gap:2px;height:34px;margin-top:12px}
+.s-wave i{flex:1;border-radius:1.5px;background:#9BEBD3;opacity:.9}
+.s-foot{display:flex;justify-content:space-between;margin-top:7px;font:600 10px/1 var(--sys);color:rgba(243,235,217,.55);letter-spacing:.4px}
+.dots{display:flex;justify-content:center;gap:7px;margin-top:22px}
+.dots i{width:7px;height:7px;border-radius:50%;background:var(--label3)}
+.dots i.on{background:var(--label);width:20px;border-radius:4px}
+.shbtns{display:flex;gap:10px;padding:0 24px;margin-top:26px}
+.shbtns button{flex:1;height:52px;border-radius:26px;display:flex;align-items:center;justify-content:center;gap:8px;font:600 17px/1 var(--sys)}
+.shbtns .i{width:20px;height:20px}
+.shbtns .c{background:var(--fill);color:var(--label)}
+.shbtns .s{background:var(--accent);color:var(--on-accent)}
+
+@media (max-width:1100px){.hdr{grid-template-columns:1fr;gap:32px}}
+</style>
+</head>
+<body>
+
+<!-- icon sprite: drawn in the SF Symbols idiom, 24 grid, 1.8 stroke -->
+<svg width="0" height="0" style="position:absolute">
+  <symbol id="play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M7 4.9v14.2c0 .8.9 1.3 1.6.9l11.6-7.1c.6-.4.6-1.4 0-1.8L8.6 4c-.7-.4-1.6.1-1.6.9z"/></symbol>
+  <symbol id="pause" viewBox="0 0 24 24"><rect fill="currentColor" stroke="none" x="6" y="4.5" width="4.2" height="15" rx="1.3"/><rect fill="currentColor" stroke="none" x="13.8" y="4.5" width="4.2" height="15" rx="1.3"/></symbol>
+  <symbol id="back15" viewBox="0 0 24 24"><path d="M4.6 13.2A7.6 7.6 0 1 0 12 5.6H9.4"/><path d="M11.2 3.4 9 5.6l2.2 2.2"/><text x="12.2" y="16.2" text-anchor="middle" fill="currentColor" stroke="none" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.8" font-weight="700">15</text></symbol>
+  <symbol id="fwd30" viewBox="0 0 24 24"><path d="M19.4 13.2A7.6 7.6 0 1 1 12 5.6h2.6"/><path d="M12.8 3.4 15 5.6l-2.2 2.2"/><text x="11.8" y="16.2" text-anchor="middle" fill="currentColor" stroke="none" font-family="-apple-system,BlinkMacSystemFont,sans-serif" font-size="6.8" font-weight="700">30</text></symbol>
+  <symbol id="queue" viewBox="0 0 24 24"><path d="M4 6h16M4 11h16M4 16h7"/><path fill="currentColor" stroke="none" d="M14.5 14.2v5.6c0 .5.5.8.9.5l4.3-2.8c.4-.2.4-.8 0-1l-4.3-2.8c-.4-.3-.9 0-.9.5z"/></symbol>
+  <symbol id="chapters" viewBox="0 0 24 24"><path d="M9 6.5h11M9 12h11M9 17.5h11"/><circle cx="4.8" cy="6.5" r="1.1" fill="currentColor" stroke="none"/><circle cx="4.8" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="4.8" cy="17.5" r="1.1" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="moon" viewBox="0 0 24 24"><path d="M19.6 14.6A8 8 0 1 1 9.4 4.4a6.6 6.6 0 0 0 10.2 10.2z"/></symbol>
+  <symbol id="airplay" viewBox="0 0 24 24"><path d="M7 17H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/><path fill="currentColor" stroke="none" d="M12 13.6c.3 0 .5.1.7.3l4.4 5.4c.4.5 0 1.2-.6 1.2H7.5c-.6 0-1-.7-.6-1.2l4.4-5.4c.2-.2.4-.3.7-.3z"/></symbol>
+  <symbol id="smart" viewBox="0 0 24 24"><path d="M3 10v4M6 7.5v9M18 7.5v9M21 10v4"/><path d="M9.2 9.2 12 12l-2.8 2.8M14.8 9.2 12 12l2.8 2.8"/></symbol>
+  <symbol id="voice" viewBox="0 0 24 24"><path d="M3.5 9.5h3l4.5-4v13l-4.5-4h-3z"/><path d="M15 9a4.2 4.2 0 0 1 0 6M17.8 6.4a8 8 0 0 1 0 11.2"/></symbol>
+  <symbol id="gauge" viewBox="0 0 24 24"><path d="M4.2 17.5a8.6 8.6 0 1 1 15.6 0"/><path d="M12 14l3.6-4.4"/><circle cx="12" cy="14" r="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="grip" viewBox="0 0 24 24"><path d="M5 8.5h14M5 12h14M5 15.5h14"/></symbol>
+  <symbol id="dlfill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="currentColor" stroke="none"/><path d="M12 7.6v8M8.8 12.6 12 15.8l3.2-3.2" style="stroke:var(--bg)" stroke-width="2"/></symbol>
+  <symbol id="cloud" viewBox="0 0 24 24"><path d="M7.2 18.5a4.6 4.6 0 0 1-.6-9.2 6 6 0 0 1 11.6 1.8 3.8 3.8 0 0 1-.7 7.4"/><path d="M12 11.5v8M9.4 17 12 19.6l2.6-2.6"/></symbol>
+  <symbol id="check" viewBox="0 0 24 24"><path d="M5 12.6 9.6 17 19 7.4"/></symbol>
+  <symbol id="plus" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></symbol>
+  <symbol id="minus" viewBox="0 0 24 24"><path d="M5 12h14"/></symbol>
+  <symbol id="pluscirc" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 8v8M8 12h8"/></symbol>
+  <symbol id="checkfill" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.6" fill="currentColor" stroke="none"/><path d="M8 12.3l2.8 2.8L16.2 9.6" style="stroke:var(--bg)" stroke-width="2.2"/></symbol>
+  <symbol id="xmark" viewBox="0 0 24 24"><path d="M6.5 6.5l11 11M17.5 6.5l-11 11"/></symbol>
+  <symbol id="chevr" viewBox="0 0 24 24"><path d="M9 5l7 7-7 7"/></symbol>
+  <symbol id="chevl" viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></symbol>
+  <symbol id="chevd" viewBox="0 0 24 24"><path d="M5.5 9l6.5 6.5L18.5 9"/></symbol>
+  <symbol id="chevud" viewBox="0 0 24 24"><path d="M8 9.5l4-4 4 4M8 14.5l4 4 4-4"/></symbol>
+  <symbol id="sliders" viewBox="0 0 24 24"><path d="M4 7.5h9M17.5 7.5H20M4 16.5h2.5M11 16.5h9"/><circle cx="15.2" cy="7.5" r="2.3"/><circle cx="8.8" cy="16.5" r="2.3"/></symbol>
+  <symbol id="ellipsis" viewBox="0 0 24 24"><circle cx="5.5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="18.5" cy="12" r="1.7" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="M15.4 15.4 20 20"/></symbol>
+  <symbol id="mic" viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.8 11a6.2 6.2 0 0 0 12.4 0M12 17.2V21"/></symbol>
+  <symbol id="link" viewBox="0 0 24 24"><path d="M10.2 13.8a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1"/><path d="M13.8 10.2a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/></symbol>
+  <symbol id="lock" viewBox="0 0 24 24"><path d="M7.5 11V8a4.5 4.5 0 0 1 9 0v3" fill="none" stroke="currentColor" stroke-width="2.4"/><rect x="5" y="10.5" width="14" height="10.5" rx="2.6" stroke="none"/></symbol>
+  <symbol id="trash" viewBox="0 0 24 24"><path d="M4.5 7h15M9.5 7V4.8h5V7M6.5 7l.9 12.2c.1 1 .9 1.8 1.9 1.8h5.4c1 0 1.8-.8 1.9-1.8L17.5 7"/></symbol>
+  <symbol id="totop" viewBox="0 0 24 24"><path d="M5 4.5h14M12 20V9.5M7.5 14 12 9.5l4.5 4.5"/></symbol>
+  <symbol id="playnext" viewBox="0 0 24 24"><path d="M4 6h10M4 11h10M4 16h6"/><path d="M18 9v10M13 14h10"/></symbol>
+  <symbol id="share" viewBox="0 0 24 24"><path d="M12 3.5v11M8 7.5l4-4 4 4"/><path d="M8.5 10.5H7a2 2 0 0 0-2 2v6.5a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-6.5a2 2 0 0 0-2-2h-1.5"/></symbol>
+  <symbol id="copy" viewBox="0 0 24 24"><rect x="8.5" y="8.5" width="11.5" height="12" rx="2.4"/><path d="M15.5 5.6V5.4A2.4 2.4 0 0 0 13.1 3H6.4A2.4 2.4 0 0 0 4 5.4v7.2A2.4 2.4 0 0 0 6.4 15h.1"/></symbol>
+  <symbol id="flame" viewBox="0 0 24 24"><path d="M12 21c-3.7 0-6.4-2.6-6.4-6.3 0-3.3 2.4-5.2 3.4-8.2.9 1.7 2 2.6 3.1 3 .5-2.5 1.4-4.7 3.4-6.3-.2 3 3 5.9 3 10.6 0 4.5-2.9 7.2-6.5 7.2z"/><path d="M12 21c-1.6 0-2.8-1.2-2.8-2.9 0-1.7 1.4-2.6 2-4.1 1.8 1 3.6 2.5 3.6 4.4 0 1.5-1.2 2.6-2.8 2.6z"/></symbol>
+  <symbol id="tabq" viewBox="0 0 24 24"><path d="M3.5 5.5h17M3.5 10.5h17M3.5 15.5h7"/><path fill="currentColor" stroke="none" d="M14 13.6v6.2c0 .6.6.9 1 .6l4.8-3.1c.4-.3.4-.9 0-1.2L15 13c-.4-.3-1 0-1 .6z"/></symbol>
+  <symbol id="tablib" viewBox="0 0 24 24"><path d="M7 3.8h10M5 6.8h14"/><rect x="3" y="9.6" width="18" height="11" rx="2.6"/></symbol>
+  <symbol id="tabstats" viewBox="0 0 24 24"><path d="M5 20v-6M10 20V9M15 20v-8M20 20V4" stroke-width="2.6"/></symbol>
+  <symbol id="ext" viewBox="0 0 24 24"><path d="M8 16 16.5 7.5M9.5 7.5h7v7"/></symbol>
+  <symbol id="arrowup" viewBox="0 0 24 24"><path d="M12 19V5.5M6.5 11 12 5.5l5.5 5.5"/></symbol>
+  <symbol id="sort" viewBox="0 0 24 24"><path d="M4 7h16M7 12h10M10 17h4"/></symbol>
+  <symbol id="wave" viewBox="0 0 24 24"><path d="M3 12h1.5M6.5 9v6M10 5.5v13M13.5 8v8M17 10v4M20.5 12H21"/></symbol>
+  <symbol id="ear" viewBox="0 0 24 24"><path d="M7 9.5a5 5 0 0 1 10 0c0 2.6-1.6 3.6-2.6 4.6-.9.9-1 1.7-1.3 3-.4 1.7-1.6 2.9-3.3 2.9A2.8 2.8 0 0 1 7 17.2"/><path d="M10 9.8a2 2 0 0 1 4 0c0 1-.6 1.5-1.2 2"/></symbol>
+</svg>
+
+<div class="page">
+  <header class="hdr">
+    <div>
+      <div class="eyebrow">Direction A · Native, refined</div>
+      <h1>Earshot <span>for iPhone</span></h1>
+      <p>What Apple might ship if it built a podcast app for people who listen at 1.8×. It sits right inside iOS 26: floating Liquid Glass tab bar and controls, large titles, continuous corners, grouped sheets. All the craft goes into the details: speed-adjusted times, a chapter-aware scrubber, and a fine-grained speed dial. One calm accent, a deep tide green, on warm paper-white. The colour mostly comes from the artwork, and Now Playing takes its tint from it. Motion should feel like the system: spring physics, sheets that follow your finger, rows that lift when you reorder them.</p>
+    </div>
+    <div class="side">
+      <div class="swatches">
+        <div class="sw"><i style="background:#1F7A68"></i><div><b>Tide</b><small>#1F7A68</small></div></div>
+        <div class="sw"><i style="background:#5FCCB1"></i><div><b>Tide, dark</b><small>#5FCCB1</small></div></div>
+        <div class="sw"><i style="background:#F3F2EF"></i><div><b>Paper</b><small>#F3F2EF</small></div></div>
+        <div class="sw"><i style="background:#111312"></i><div><b>Ink</b><small>#111312</small></div></div>
+      </div>
+      <ul class="notes">
+        <li><b>Type.</b> SF Pro throughout. Large titles at 34, body at 15 to 17, tabular figures wherever time or speed is shown.</li>
+        <li><b>Glass.</b> Kept for chrome that floats over content (tab bar, mini player, nav buttons). Content itself stays flat and quiet.</li>
+        <li><b>Marker.</b> A small tide-green speed pill means the show has its own setting.</li>
+      </ul>
+      <div class="toggle" role="group" aria-label="Appearance">
+        <button class="on" data-m="design">As designed</button>
+        <button data-m="light">All light</button>
+        <button data-m="dark">All dark</button>
+      </div>
+    </div>
+  </header>
+
+  <main class="grid">
+
+<!-- ================= 1 UP NEXT ================= -->
+<figure>
+<div class="phone light" data-mode="light"><div class="screen">
+  <div class="content">
+    <div class="navbar"><span></span>
+      <div class="gcap glass"><span class="gbtn"><svg class="i"><use href="#sort"/></svg></span><span class="gbtn"><svg class="i"><use href="#ellipsis"/></svg></span></div>
+    </div>
+    <h1 class="lt">Up Next</h1>
+    <div class="lt-sub">8 episodes · 6h 58m at your speeds</div>
+    <div class="qlist">
+      <div class="qrow"><div class="art" data-show="syntax"></div><div class="qb">
+        <div class="qs">Syntax</div>
+        <div class="qt">902: Tailwind v5 Is Here. What Actually Changed?</div>
+        <div class="qm"><svg class="i dl"><use href="#dlfill"/></svg>27m at 1.8×</div></div>
+        <svg class="i grip"><use href="#grip"/></svg></div>
+      <div class="qrow"><div class="art" data-show="changelog"></div><div class="qb">
+        <div class="qs">The Changelog</div>
+        <div class="qt">Local-first finally has its moment</div>
+        <div class="qm"><svg class="i dl"><use href="#dlfill"/></svg><span class="prog"><i style="width:40%"></i></span>23m left at 1.8×</div></div>
+        <svg class="i grip"><use href="#grip"/></svg></div>
+      <div class="qrow"><div class="art" data-show="mikepod"></div><div class="qb">
+        <div class="qs">Mike Pod <svg class="i"><use href="#lock"/></svg></div>
+        <div class="qt">Tuesday brief: Convex components, Swift 6.2 and the M5 iPad</div>
+        <div class="qm"><svg class="i dl"><use href="#dlfill"/></svg>12m at 1.8×</div></div>
+        <svg class="i grip"><use href="#grip"/></svg></div>
+      <div class="swipe">
+        <div class="acts">
+          <div class="act ac"><svg class="i"><use href="#totop"/></svg>Top</div>
+          <div class="act gr"><svg class="i"><use href="#check"/></svg>Played</div>
+          <div class="act rd"><svg class="i"><use href="#trash"/></svg>Remove</div>
+        </div>
+        <div class="qrow"><div class="art" data-show="hardfork"></div><div class="qb">
+          <div class="qs">Hard Fork</div>
+          <div class="qt">The AI Browser Wars Get Weird</div>
+          <div class="qm"><svg class="i dl"><use href="#dlfill"/></svg>37m at 1.8×</div></div>
+          <svg class="i grip"><use href="#grip"/></svg></div>
+      </div>
+      <div class="qrow"><div class="art" data-show="conan"></div><div class="qb">
+        <div class="qs">Conan O’Brien Needs a Friend</div>
+        <div class="qt">Adam Scott Returns</div>
+        <div class="qm"><svg class="i dl"><use href="#dlfill"/></svg>1h 4m at <span class="ovr"><svg class="i"><use href="#gauge"/></svg>1.2×</span></div></div>
+        <svg class="i grip"><use href="#grip"/></svg></div>
+      <div class="qrow"><div class="art" data-show="atp"></div><div class="qb">
+        <div class="qs">Accidental Tech Podcast</div>
+        <div class="qt">662: Liquid Glass Half Full</div>
+        <div class="qm"><svg class="i dl"><use href="#cloud"/></svg>1h 9m at 1.8×</div></div>
+        <svg class="i grip"><use href="#grip"/></svg></div>
+      <div class="qrow"><div class="art" data-show="latent"></div><div class="qb">
+        <div class="qs">Latent Space</div>
+        <div class="qt">Agents All the Way Down, with the Claude Code Team</div>
+        <div class="qm"><svg class="i dl"><use href="#cloud"/></svg>46m at 1.8×</div></div>
+        <svg class="i grip"><use href="#grip"/></svg></div>
+    </div>
+  </div>
+  <div class="mini glass"><div class="art" data-show="dwarkesh"></div><div class="mini-t"><b>Sarah Paine: How Wars End</b><span>Dwarkesh Podcast · 43m left</span></div>
+    <span class="gbtn"><svg class="i"><use href="#pause"/></svg></span><span class="gbtn"><svg class="i"><use href="#fwd30"/></svg></span><div class="mini-prog"><i></i></div></div>
+  <div class="tabbar"><div class="tabs glass">
+    <div class="tab on"><svg class="i"><use href="#tabq"/></svg>Up Next</div>
+    <div class="tab"><svg class="i"><use href="#tablib"/></svg>Library</div>
+    <div class="tab"><svg class="i"><use href="#tabstats"/></svg>Stats</div>
+  </div><div class="tcirc glass"><svg class="i"><use href="#search"/></svg></div></div>
+</div></div>
+<figcaption><b><em>01</em>Up Next</b>Times are shown at the speed each episode will actually play: Conan’s 1.2× pill marks a per-show override. Swipe a row left for Top, Played and Remove (a full swipe removes), swipe right to mark played, and hold the grip to lift a row and drag it into place.</figcaption>
+</figure>
+
+<!-- ================= 2 NOW PLAYING ================= -->
+<figure>
+<div class="phone dark" data-mode="dark"><div class="screen npx">
+  <div class="np">
+    <div class="grab"></div>
+    <div class="art big" data-show="dwarkesh"></div>
+    <div class="nph"><div><div class="npt">Sarah Paine: How Wars End</div><div class="nps">Dwarkesh Podcast · 14 Oct</div></div><span class="npb"><svg class="i"><use href="#ellipsis"/></svg></span></div>
+    <div class="chap"><svg class="i"><use href="#chapters"/></svg><em>4/9</em>The Korean armistice<svg class="i" style="width:12px;height:12px;stroke-width:2.6"><use href="#chevr"/></svg></div>
+    <div class="scrub"><i class="p" style="flex:7"></i><i class="p" style="flex:13"></i><i class="p" style="flex:16"></i><i class="c" style="flex:19"></i><i style="flex:12"></i><i style="flex:10"></i><i style="flex:9"></i><i style="flex:8"></i><i style="flex:6"></i><span class="knob"></span></div>
+    <div class="times"><span>1:12:08</span><b>43m left at 1.5×</b><span>−1:04:40</span></div>
+    <div class="ctrls"><span class="sk"><svg class="i"><use href="#back15"/></svg></span><span class="ppb"><svg class="i"><use href="#pause"/></svg></span><span class="sk"><svg class="i"><use href="#fwd30"/></svg></span></div>
+    <div class="tiles">
+      <div class="tile sp"><b>1.5×</b><small><svg class="i"><use href="#gauge"/></svg>This show</small></div>
+      <div class="tile on"><svg class="i"><use href="#smart"/></svg><div><b>Smart Speed</b><small>4m 12s saved</small></div></div>
+      <div class="tile on"><svg class="i"><use href="#voice"/></svg><div><b>Voice Boost</b><small>On</small></div></div>
+    </div>
+    <div class="npbot">
+      <div class="on"><svg class="i"><use href="#moon"/></svg>29:41</div>
+      <div><svg class="i"><use href="#airplay"/></svg></div>
+      <div><svg class="i"><use href="#queue"/></svg></div>
+    </div>
+  </div>
+</div></div>
+<figcaption><b><em>02</em>Now Playing</b>The background is tinted from the artwork’s own colours. The scrubber is split at chapter boundaries, so you can see where you are in the episode, and tapping the chapter pill opens the full list. The speed tile says “This show” when a per-podcast speed is in charge. Swipe down anywhere to drop back to the mini player.</figcaption>
+</figure>
+
+<!-- ================= 3 SPEED SHEET ================= -->
+<figure>
+<div class="phone dark" data-mode="dark"><div class="screen npx">
+  <div class="np-behind">
+    <div class="grab"></div>
+    <div class="art" data-show="dwarkesh"></div>
+  </div>
+  <div class="dim"></div>
+  <div class="sheet np-sheet">
+    <div class="sh-grab"></div>
+    <div class="sh-head"><span class="cbtn"><svg class="i"><use href="#xmark"/></svg></span><h3>Playback Speed</h3><span class="cbtn ok"><svg class="i"><use href="#check"/></svg></span></div>
+    <div class="readout">
+      <span class="st"><svg class="i"><use href="#minus"/></svg></span>
+      <div class="v"><b>1.50<span>×</span></b><small><svg class="i"><use href="#gauge"/></svg>Dwarkesh Podcast only</small></div>
+      <span class="st"><svg class="i"><use href="#plus"/></svg></span>
+    </div>
+    <div class="ruler" id="ruler"><span class="needle"></span></div>
+    <div class="presets"><span>1×</span><span>1.2×</span><span class="on">1.5×</span><span class="df">1.8×</span><span>2×</span><span>2.5×</span></div>
+    <div class="scope">
+      <div class="seg"><span>All podcasts</span><span class="on">Just this show</span></div>
+      <p><b>Dwarkesh Podcast</b> will always play at 1.5×. Everything else stays at your 1.8× default.</p>
+    </div>
+    <div class="sgroup">
+      <div class="srow"><svg class="i"><use href="#smart"/></svg><div><b>Smart Speed</b><small>Trims silences · 14h 32m saved this year</small></div><span class="sw-t on"></span></div>
+      <div class="srow"><svg class="i"><use href="#voice"/></svg><div><b>Voice Boost</b><small>Evens out quiet guests and loud hosts</small></div><span class="sw-t on"></span></div>
+    </div>
+    <div class="pitch"><svg class="i"><use href="#wave"/></svg>Pitch is corrected at every speed, so voices stay natural, never chipmunky.</div>
+  </div>
+</div></div>
+<figcaption><b><em>03</em>Speed sheet</b>Opened from the speed tile, it rests at a medium height so the artwork still peeks out above. Drag the ruler for 0.05× steps between 0.5× and 3.0×, with a light haptic on each tick, or tap a preset or ±. The dot marks your default. The scope switch decides whether the change applies everywhere or becomes this show’s override.</figcaption>
+</figure>
+
+<!-- ================= 4 PODCAST PAGE ================= -->
+<figure>
+<div class="phone light" data-mode="light"><div class="screen">
+  <div class="tint"></div>
+  <div class="content over">
+    <div class="navbar"><span class="gbtn glass"><svg class="i"><use href="#chevl"/></svg></span>
+      <div class="gcap glass"><span class="gbtn"><svg class="i"><use href="#share"/></svg></span><span class="gbtn"><svg class="i"><use href="#ellipsis"/></svg></span></div></div>
+    <div class="ph"><div class="art" data-show="conan"></div><div>
+      <h2>Conan O’Brien Needs a Friend</h2><div class="au">Team Coco</div><div class="mt">Comedy · Weekly · 412 episodes</div></div></div>
+    <div class="desc">Conan chats with famous friends, then spends the hour being roasted by Sona and Gourley. <em>more</em></div>
+    <div class="pbtns">
+      <span class="cap fill"><svg class="i"><use href="#check"/></svg>Subscribed</span>
+      <span class="cap soft"><span><svg class="i"><use href="#sliders"/></svg>1.2× · Skips 45s intro</span><svg class="i chev"><use href="#chevr"/></svg></span>
+    </div>
+    <div class="eph"><h3>Episodes</h3><span>Newest first<svg class="i"><use href="#chevud"/></svg></span></div>
+    <div class="ep">
+      <div class="ep-d"><span class="nw">New</span>Today</div>
+      <div class="ep-t">Adam Scott Returns</div>
+            <div class="ep-a"><span class="pp"><svg class="i"><use href="#play"/></svg>1h 4m at 1.2×</span><span class="inq"><svg class="i"><use href="#check"/></svg>In Up Next</span><span class="sp"></span><span class="ib mu"><svg class="i"><use href="#ellipsis"/></svg></span></div>
+    </div>
+    <div class="lswipe">
+      <div class="lact"><svg class="i"><use href="#playnext"/></svg>Add to<br>Up Next</div>
+      <div class="ep">
+        <div class="ep-d"><span class="nw">New</span>16 Oct</div>
+        <div class="ep-t">Sona Gets a Promotion</div>
+                <div class="ep-a"><span class="pp"><svg class="i"><use href="#play"/></svg>52m at 1.2×</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#pluscirc"/></svg></span></div>
+      </div>
+    </div>
+    <div class="ep">
+      <div class="ep-d">9 Oct</div>
+      <div class="ep-t">Conan Answers Your Questions</div>
+      <div class="ep-a"><span class="pp"><svg class="i"><use href="#play"/></svg><span class="prog"><i style="width:62%"></i></span>21m left</span><span class="sp"></span><span class="ib"><svg class="i"><use href="#pluscirc"/></svg></span><span class="ib mu"><svg class="i"><use href="#ellipsis"/></svg></span></div>
+    </div>
+    <div class="ep played">
+      <div class="ep-d">2 Oct<span class="pl"><svg class="i"><use href="#check"/></svg>Played</span></div>
+      <div class="ep-t">Matt Gourley’s Revenge</div>
+    </div>
+  </div>
+  <div class="mini glass"><div class="art" data-show="dwarkesh"></div><div class="mini-t"><b>Sarah Paine: How Wars End</b><span>Dwarkesh Podcast · 43m left</span></div>
+    <span class="gbtn"><svg class="i"><use href="#pause"/></svg></span><span class="gbtn"><svg class="i"><use href="#fwd30"/></svg></span><div class="mini-prog"><i></i></div></div>
+  <div class="tabbar"><div class="tabs glass">
+    <div class="tab"><svg class="i"><use href="#tabq"/></svg>Up Next</div>
+    <div class="tab on"><svg class="i"><use href="#tablib"/></svg>Library</div>
+    <div class="tab"><svg class="i"><use href="#tabstats"/></svg>Stats</div>
+  </div><div class="tcirc glass"><svg class="i"><use href="#search"/></svg></div></div>
+</div></div>
+<figcaption><b><em>04</em>Podcast page</b>The header picks up the artwork’s tint. The green capsule summarises this show’s overrides and opens its settings. Swipe an episode right to add it to Up Next (a long swipe plays it next), or tap ⊕. Episodes show as new (dot), in progress (bar and time left) or played (dimmed).</figcaption>
+</figure>
+
+<!-- ================= 5 SETTINGS SHEET ================= -->
+<figure>
+<div class="phone light" data-mode="light"><div class="screen sbw" style="background:#000">
+  <div class="behind"><div class="tint"></div></div>
+  <div class="sheet set-sheet">
+    <div class="ss-head"><span class="gbtn"><svg class="i"><use href="#xmark"/></svg></span>
+      <div class="ss-title"><div class="art" data-show="conan"></div><div><b>Show Settings</b><small>Conan O’Brien Needs a Friend</small></div></div>
+      <span class="gbtn ok"><svg class="i"><use href="#check"/></svg></span></div>
+    <div class="gh">Playback</div>
+    <div class="grp">
+      <div class="cell">Speed<div class="seg"><span>Default · 1.8×</span><span class="on">Custom</span></div></div>
+      <div class="cell"><span class="lbl">Custom speed</span><div class="stepper"><b>1.20×</b><div class="sp2"><span><svg class="i"><use href="#minus"/></svg></span><span><svg class="i"><use href="#plus"/></svg></span></div></div></div>
+      <div class="cell">Smart Speed<span class="val">Default (On)<svg class="i"><use href="#chevud"/></svg></span></div>
+      <div class="cell">Voice Boost<span class="sw-t on"></span></div>
+    </div>
+    <div class="gh">Skip <em>Ads and theme music</em></div>
+    <div class="grp">
+      <div class="cell">Skip first<div class="stepper"><b>45 s</b><div class="sp2"><span><svg class="i"><use href="#minus"/></svg></span><span><svg class="i"><use href="#plus"/></svg></span></div></div></div>
+      <div class="cell">Skip last<div class="stepper"><b>30 s</b><div class="sp2"><span><svg class="i"><use href="#minus"/></svg></span><span><svg class="i"><use href="#plus"/></svg></span></div></div></div>
+    </div>
+    <div class="gh">New episodes</div>
+    <div class="grp">
+      <div class="cell col"><span>Add to Up Next</span><div class="seg"><span>Top of queue</span><span class="on">Bottom</span><span>Don’t add</span></div></div>
+      <div class="cell">Auto-download<span class="sw-t on"></span></div>
+      <div class="cell">Notifications<span class="sw-t"></span></div>
+    </div>
+    <div class="gh">Library</div>
+    <div class="grp">
+      <div class="cell">Episode order<span class="val">Newest first<svg class="i"><use href="#chevud"/></svg></span></div>
+      <div class="cell">Keep<span class="val">Latest 10 episodes<svg class="i"><use href="#chevud"/></svg></span></div>
+    </div>
+  </div>
+</div></div>
+<figcaption><b><em>05</em>Per-podcast settings</b>A full-height sheet over the podcast page. Anything left on Default follows your global settings, so changing the global default later still reaches every show you haven’t customised. Steppers move speed in 0.05× steps and skips in 5 s steps, and holding a stepper speeds it up.</figcaption>
+</figure>
+
+<!-- ================= 6 SEARCH ================= -->
+<figure>
+<div class="phone light" data-mode="light"><div class="screen">
+  <div class="content">
+    <div class="navbar" style="height:44px"></div>
+    <h1 class="lt">Discover</h1>
+    <div class="urlcard">
+      <div class="urltop"><span class="ico"><svg class="i"><use href="#link"/></svg></span><div><b>Add by URL</b><small>Private and members-only RSS feeds work too</small></div><svg class="i"><use href="#chevr"/></svg></div>
+      <div class="clip"><svg class="i lki"><use href="#lock"/></svg><div><small>On your clipboard</small><code>podcast.mikecann.app/feed.xml</code></div><span class="addb">Add</span></div>
+    </div>
+    <div class="rh"><h3>Apple Podcasts</h3><span>24 results for “ai”</span></div>
+    <div class="res"><div class="art" data-show="latent"></div><div><b>Latent Space</b><span>swyx &amp; Alessio · Technology</span><small>Weekly · 186 episodes</small></div><span class="subb on"><svg class="i"><use href="#check"/></svg></span></div>
+    <div class="res"><div class="art" data-show="nopriors"></div><div><b>No Priors</b><span>Conviction · Technology</span><small>Weekly · 140 episodes</small></div><span class="subb"><svg class="i"><use href="#plus"/></svg></span></div>
+    <div class="res"><div class="art" data-show="cognitive"></div><div><b>The Cognitive Revolution</b><span>Nathan Labenz · Technology</span><small>Twice weekly · 390 episodes</small></div><span class="subb"><svg class="i"><use href="#plus"/></svg></span></div>
+    <div class="res"><div class="art" data-show="practical"></div><div><b>Practical AI</b><span>Changelog Media · Technology</span><small>Weekly · 330 episodes</small></div><span class="subb"><svg class="i"><use href="#plus"/></svg></span></div>
+    <div class="res"><div class="art" data-show="aidaily"></div><div><b>The AI Daily Brief</b><span>Nathaniel Whittemore · News</span><small>Daily · 1,100 episodes</small></div><span class="subb"><svg class="i"><use href="#plus"/></svg></span></div>
+    <div class="res"><div class="art" data-show="hardfork"></div><div><b>Hard Fork</b><span>The New York Times · Technology</span><small>Weekly · 200 episodes</small></div><span class="subb on"><svg class="i"><use href="#check"/></svg></span></div>
+  </div>
+  <div class="sbar"><div class="tcirc glass"><svg class="i"><use href="#tabq"/></svg></div>
+    <div class="sfield glass"><svg class="i"><use href="#search"/></svg><span>ai<i class="caret"></i></span><span class="xc" style="flex:none"><svg class="i"><use href="#xmark"/></svg></span><svg class="i"><use href="#mic"/></svg></div></div>
+</div></div>
+<figcaption><b><em>06</em>Search and Discover</b>As in iOS 26, the search field moves down to the bottom, within thumb reach, and the tab bar shrinks to a single button. Results come from the Apple Podcasts directory: tap ＋ to subscribe. If there’s a feed URL on the clipboard (like the private Mike Pod feed), Earshot offers to add it in one tap.</figcaption>
+</figure>
+
+<!-- ================= 7 IMPORT ================= -->
+<figure>
+<div class="phone light" data-mode="light"><div class="screen imp">
+  <div class="content">
+    <div class="navbar"><span class="gbtn glass"><svg class="i"><use href="#chevl"/></svg></span><span></span></div>
+    <h1 class="lt sm">Import from Overcast</h1>
+    <div class="lt-sub">Your shows, plus every episode you’ve played and how far you got.</div>
+    <div class="steps">
+      <div class="step"><span class="num"><svg class="i"><use href="#check"/></svg></span><div class="sbody">
+        <h4>Export from Overcast</h4>
+        <p>On overcast.fm/account, choose <b>All data</b> under OPML export. It’s the one with played and progress status.</p>
+        <div class="mockex"><span class="lnk">overcast.fm/account<svg class="i"><use href="#ext"/></svg></span><span class="opt">Subscriptions</span><span class="opt on">All data</span></div>
+      </div></div>
+      <div class="step"><span class="num"><svg class="i"><use href="#check"/></svg></span><div class="sbody">
+        <h4>Choose the file</h4>
+        <div class="file"><span class="doc">OPML</span><div><b>overcast.opml</b><small>1.8 MB · Downloads · Today, 8:12 am</small></div><span>Change</span></div>
+      </div></div>
+    </div>
+    <div class="done">
+      <div class="done-h"><span class="ok"><svg class="i"><use href="#check"/></svg></span><div><b>You’re all moved in</b><small>Imported in 41 seconds</small></div></div>
+      <p><b>84 podcasts, 3,412 played episodes and 1,920 hours</b> imported into your stats, going back to March 2014.</p>
+      <div class="kpis">
+        <div class="kpi"><b>84</b><small>Podcasts subscribed</small></div>
+        <div class="kpi"><b>3,412</b><small>Played episodes</small></div>
+        <div class="kpi"><b>27</b><small>Still in progress</small></div>
+        <div class="kpi"><b>1,920 h</b><small>Listening history</small></div>
+      </div>
+      <button class="bigbtn">See Your Stats<svg class="i"><use href="#chevr"/></svg></button>
+    </div>
+  </div>
+</div></div>
+<figcaption><b><em>07</em>Import from Overcast</b>One screen with three steps that tick off as you go. The link opens Overcast’s account page in Safari, and the file picker only accepts .opml. After the import, the summary leads straight into Stats so the history is visible right away. Overcast’s per-show speeds aren’t in the export, so those start on your default.</figcaption>
+</figure>
+
+<!-- ================= 8 STATS ================= -->
+<figure>
+<div class="phone dark" data-mode="dark"><div class="screen">
+  <div class="content">
+    <div class="navbar"><span></span><span class="gbtn glass"><svg class="i"><use href="#share"/></svg></span></div>
+    <h1 class="lt">Stats</h1>
+    <div class="stx">
+      <div class="seg"><span>Week</span><span>Month</span><span class="on">Year</span><span>All Time</span></div>
+      <div class="yir"><span class="thumb">386</span><div><b>Your 2026 in Review</b><small>Ready to copy or share as a story</small></div><svg class="i"><use href="#chevr"/></svg></div>
+      <div class="two">
+        <div class="card"><div class="kl">Listened</div><div class="kv">386<span>h</span></div><div class="ks up"><svg class="i"><use href="#arrowup"/></svg>18% on 2025</div></div>
+        <div class="card"><div class="kl">Time saved</div><div class="kv">241<span>h</span></div>
+          <div class="stack"><i style="flex:209;background:var(--accent)"></i><i style="flex:32;background:var(--amber)"></i></div>
+          <div class="leg"><span style="--c:var(--accent)">Speed 209h</span><span style="--c:var(--amber)">Smart 32h</span></div></div>
+      </div>
+      <div class="card" style="margin-top:10px;padding-bottom:6px">
+        <div class="ch"><b>Top Shows</b><span>See All</span></div>
+        <div class="top"><span class="rk">1</span><div class="art" data-show="syntax"></div><div><b>Syntax</b><div class="bar" style="width:100%"></div></div><span class="h">64h</span></div>
+        <div class="top"><span class="rk">2</span><div class="art" data-show="dwarkesh"></div><div><b>Dwarkesh Podcast</b><div class="bar" style="width:80%"></div></div><span class="h">51h</span></div>
+        <div class="top"><span class="rk">3</span><div class="art" data-show="atp"></div><div><b>Accidental Tech Podcast</b><div class="bar" style="width:73%"></div></div><span class="h">47h</span></div>
+        <div class="top"><span class="rk">4</span><div class="art" data-show="latent"></div><div><b>Latent Space</b><div class="bar" style="width:61%"></div></div><span class="h">39h</span></div>
+      </div>
+      <div class="card" style="margin-top:10px">
+        <div class="ch"><b>When You Listen</b><span style="color:var(--amber)"><svg class="i"><use href="#flame"/></svg>23-day streak</span></div>
+        <div class="heat" id="heat"></div>
+        <div class="hours"><span></span><span>12a</span><span>6a</span><span>12p</span><span>6p</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="mintab"><div class="tcirc glass"><svg class="i"><use href="#tabstats"/></svg></div>
+    <div class="mini glass"><div class="art" data-show="dwarkesh"></div><div class="mini-t"><b>Sarah Paine: How Wars End</b><span>43m left at 1.5×</span></div><span class="gbtn"><svg class="i"><use href="#pause"/></svg></span></div>
+    <div class="tcirc glass" style="color:var(--label)"><svg class="i"><use href="#search"/></svg></div></div>
+</div></div>
+<figcaption><b><em>08</em>Stats, in dark mode</b>Hours are real listening time. Time saved is split between speed and Smart Speed, and the Overcast import fills in the years before Earshot. The heatmap plots hour of day against day of week (weekday commutes and late-night coding show up clearly). Scrolling shrinks the tab bar and tucks the mini player in between, as iOS 26 does.</figcaption>
+</figure>
+
+<!-- ================= 9 YEAR IN REVIEW ================= -->
+<figure>
+<div class="phone light" data-mode="light"><div class="screen shx">
+  <div class="content">
+    <div class="shhead"><span class="gbtn glass"><svg class="i"><use href="#xmark"/></svg></span><h3>2026 in Review</h3><span class="gbtn glass"><svg class="i"><use href="#sliders"/></svg></span></div>
+    <div class="story">
+      <div class="rings"></div>
+      <div class="s-top"><span><svg class="i" style="stroke-width:2"><use href="#ear"/></svg>EARSHOT</span><span>2026</span></div>
+      <div class="s-lead">This year I listened to</div>
+      <div class="s-big">386</div>
+      <div class="s-unit">hours of podcasts</div>
+      <div class="s-line">That’s <b>627 hours</b> of audio at an average of 1.74×, plus <b>32 hours of silence</b> I never had to sit through.</div>
+      <div class="s-div"></div>
+      <div class="s-lab"><span>MOST PLAYED</span><span>HOURS</span></div>
+      <div class="s-row"><span class="n">1</span><div class="art" data-show="syntax"></div><b>Syntax</b><span>64</span></div>
+      <div class="s-row"><span class="n">2</span><div class="art" data-show="dwarkesh"></div><b>Dwarkesh Podcast</b><span>51</span></div>
+      <div class="s-row"><span class="n">3</span><div class="art" data-show="atp"></div><b>Accidental Tech Podcast</b><span>47</span></div>
+      <div class="s-row"><span class="n">4</span><div class="art" data-show="latent"></div><b>Latent Space</b><span>39</span></div>
+      <div class="s-row"><span class="n">5</span><div class="art" data-show="hardfork"></div><b>Hard Fork</b><span>31</span></div>
+      <div class="s-wave" id="wave"></div>
+      <div class="s-foot"><span>JAN</span><span>61-DAY STREAK · MOSTLY 7 AM</span><span>OCT</span></div>
+    </div>
+    <div class="dots"><i class="on"></i><i></i><i></i><i></i></div>
+    <div class="shbtns"><button class="c"><svg class="i"><use href="#copy"/></svg>Copy Image</button><button class="s"><svg class="i"><use href="#share"/></svg>Share</button></div>
+  </div>
+</div></div>
+<figcaption><b><em>09</em>Year in review card</b>A 9:16 story image, rendered at 1080 × 1920. Swipe sideways for other cards (top show, listening clock, speed). Along the bottom, each week of the year is a bar, so the card ends with a waveform of your listening. Copy Image puts the PNG on the clipboard, and Share opens the share sheet with Instagram Stories first.</figcaption>
+</figure>
+
+  </main>
+</div>
+
+<script>
+// Artwork, drawn with CSS
+const lockSvg = '<svg viewBox="0 0 24 24"><path d="M7.5 11V8a4.5 4.5 0 0 1 9 0v3" fill="none" stroke="#F3EBD9" stroke-width="2.6"/><rect x="5" y="10.5" width="14" height="10.5" rx="2.6"/></svg>';
+const ART = {
+  syntax: '<div class="b">{}</div><div class="t">syntax</div>',
+  changelog: '<div class="t"><small>the</small>changelog</div>',
+  atp: '<div class="t">ATP</div><div class="l"></div><div class="s">accidental<br>tech podcast</div>',
+  hardfork: '<svg viewBox="0 0 100 100" fill="none" stroke="rgba(255,255,255,.9)" stroke-width="5" stroke-linecap="round"><path d="M62 104V72L40 50M62 72l22-22"/><circle cx="40" cy="50" r="5" fill="#fff" stroke="none"/><circle cx="84" cy="50" r="5" fill="#fff" stroke="none"/></svg><div class="t">HARD<br>FORK</div>',
+  latent: '<div class="t">LATENT<br>SPACE</div>',
+  dwarkesh: '<div class="arch"></div><div class="t">Dwarkesh</div><div class="s">PODCAST</div>',
+  lex: '<div class="c"></div><div class="t">LEX FRIDMAN</div><div class="s">podcast</div>',
+  conan: '<div class="sun"></div><div class="t">CONAN</div><div class="s">needs a friend</div>',
+  mikepod: '<div class="w">' + [10,22,30,16,26,12].map(h => `<i style="height:${h}cqw"></i>`).join('') + '</div><div class="lk">' + lockSvg + '</div><div class="t">Mike Pod</div>',
+  nopriors: '<div class="t">No<br>Priors</div><div class="d"></div>',
+  cognitive: '<div class="o"></div><div class="t">THE COGNITIVE<br>REVOLUTION</div>',
+  practical: '<div class="k">&gt;_</div><div class="t">practical<br>ai</div>',
+  aidaily: '<div class="bar"></div><div class="t">THE AI<br>DAILY<br>BRIEF</div>'
+};
+document.querySelectorAll('.art[data-show]').forEach(el => {
+  const s = el.dataset.show;
+  el.classList.add('a-' + s);
+  el.innerHTML = ART[s] || '';
+});
+
+// Device chrome
+const SB = `<div class="sb"><div class="t">9:41</div><div class="ic">
+<svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/><rect x="5" y="5.5" width="3" height="6.5" rx="1"/><rect x="10" y="3" width="3" height="9" rx="1"/><rect x="15" y="0" width="3" height="12" rx="1"/></svg>
+<svg width="16" height="12" viewBox="0 0 16 12"><path d="M8 11.4 5.7 9.1a3.3 3.3 0 0 1 4.6 0z" fill="currentColor"/><path d="M3.4 6.8a6.5 6.5 0 0 1 9.2 0M1 4.4a9.9 9.9 0 0 1 14 0" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>
+<svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.8" fill="none" stroke="currentColor" stroke-opacity=".4"/><rect x="2.5" y="2.5" width="16" height="8" rx="2" fill="currentColor"/><rect x="25" y="4.5" width="1.6" height="4" rx=".8" fill="currentColor" fill-opacity=".45"/></svg>
+</div></div><div class="island"></div><div class="homebar"></div>`;
+document.querySelectorAll('.screen').forEach(s => s.insertAdjacentHTML('beforeend', SB));
+
+// Speed ruler: 0.5x to 3.0x in 0.05 steps, centred on 1.50x
+const ruler = document.getElementById('ruler');
+const W = 393, step = 11, cur = 1.5;
+for (let k = 0; k <= 50; k++) {
+  const v = Math.round((0.5 + k * 0.05) * 100) / 100;
+  const x = W / 2 + (v - cur) / 0.05 * step;
+  if (x < -20 || x > W + 20) continue;
+  const major = Math.abs(v * 2 - Math.round(v * 2)) < 1e-6;
+  const mid = !major && Math.abs(v * 4 - Math.round(v * 4)) < 1e-6;
+  ruler.insertAdjacentHTML('afterbegin', `<span class="tk ${major ? 'M' : mid ? 'm' : ''}" style="left:${x}px"></span>` +
+    (major || mid ? `<span class="lb" style="left:${x}px">${v.toFixed(v * 4 % 2 ? 2 : 1)}</span>` : ''));
+}
+
+// Deterministic pseudo-random
+let seed = 7;
+const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+
+// Listening heatmap: hour of day by day of week
+const heat = document.getElementById('heat');
+const days = ['M','T','W','T','F','S','S'];
+days.forEach((d, di) => {
+  heat.insertAdjacentHTML('beforeend', `<span class="dl">${d}</span>`);
+  const wk = di < 5;
+  for (let h = 0; h < 24; h++) {
+    let v = 0.04;
+    if (wk) {
+      if (h >= 6 && h <= 8) v = h === 7 ? 1 : 0.75;
+      else if (h === 12 || h === 13) v = 0.45;
+      else if (h >= 17 && h <= 18) v = 0.7;
+      else if (h >= 21 && h <= 23) v = 0.5;
+      else if (h >= 9 && h <= 16) v = 0.14;
+      else if (h === 0) v = 0.2;
+    } else {
+      if (h >= 8 && h <= 11) v = 0.62;
+      else if (h >= 14 && h <= 17) v = 0.32;
+      else if (h >= 20 && h <= 22) v = 0.28;
+      else if (h > 11 && h < 14) v = 0.2;
+    }
+    v = Math.min(1, Math.max(0.03, v + (rnd() - 0.5) * 0.18));
+    heat.insertAdjacentHTML('beforeend', `<i style="opacity:${(0.08 + v * 0.92).toFixed(2)}"></i>`);
+  }
+});
+
+// Weekly listening waveform for the share card (Jan to Oct, 42 weeks)
+const wave = document.getElementById('wave');
+for (let w = 0; w < 42; w++) {
+  let v = 0.55 + 0.25 * Math.sin(w / 4.2) + (rnd() - 0.5) * 0.35;
+  if (w < 2) v *= 0.45;           // summer holidays
+  if (w === 15 || w === 16) v *= 0.5; // Easter away
+  if (w > 30 && w < 36) v += 0.2;  // a long streak
+  v = Math.max(0.12, Math.min(1, v));
+  wave.insertAdjacentHTML('beforeend', `<i style="height:${Math.round(v * 100)}%"></i>`);
+}
+
+// Appearance toggle
+document.querySelectorAll('.toggle button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.toggle button').forEach(x => x.classList.toggle('on', x === b));
+  document.querySelectorAll('.phone').forEach(p => {
+    const m = b.dataset.m === 'design' ? p.dataset.mode : b.dataset.m;
+    p.classList.toggle('dark', m === 'dark');
+    p.classList.toggle('light', m !== 'dark');
+  });
+}));
+</script>
+</body>
+</html>
