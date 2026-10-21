@@ -121,7 +121,7 @@ export function resolveShowSettings(
   global: Partial<GlobalSettings> | null | undefined,
   overrides: ShowOverrides | null | undefined,
 ): ShowSettings & { inherited: ShowSettingKey[] } {
-  const g = { ...DEFAULT_GLOBAL_SETTINGS, ...stripUndefined(global ?? {}) };
+  const g = resolveGlobalSettings(global);
   const out: Record<string, unknown> = {};
   const inherited: ShowSettingKey[] = [];
   for (const key of showSettingKeys) {
@@ -136,10 +136,15 @@ export function resolveShowSettings(
   return { ...(out as ShowSettings), inherited };
 }
 
+/**
+ * Defaults with the stored values on top. Only known setting keys are copied, so a
+ * stored document's `_id`, `fieldTimes` etc. never leak into a return value.
+ */
 export function resolveGlobalSettings(global: Partial<GlobalSettings> | null | undefined): GlobalSettings {
-  return { ...DEFAULT_GLOBAL_SETTINGS, ...stripUndefined(global ?? {}) };
-}
-
-function stripUndefined<T extends object>(obj: T): Partial<T> {
-  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+  const out: Record<string, unknown> = { ...DEFAULT_GLOBAL_SETTINGS };
+  for (const key of Object.keys(DEFAULT_GLOBAL_SETTINGS) as (keyof GlobalSettings)[]) {
+    const value = global?.[key];
+    if (value !== undefined) out[key] = value;
+  }
+  return out as GlobalSettings;
 }

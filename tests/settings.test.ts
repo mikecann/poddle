@@ -61,3 +61,18 @@ describe("settings functions", () => {
     expect((await t.query(api.settings.getGlobal, { token: TOKEN })).timeZone).toBe("Australia/Sydney");
   });
 });
+
+describe("settings queries with a stored global row", () => {
+  test("getGlobal and forPodcast return only setting fields once the row exists", async () => {
+    const t = setup();
+    await t.mutation(api.settings.updateGlobal, { token: TOKEN, at: BASE, patch: { playbackSpeed: 2 } });
+    const global = await t.query(api.settings.getGlobal, { token: TOKEN });
+    expect(global.playbackSpeed).toBe(2);
+    expect(global).not.toHaveProperty("_id");
+    expect(global).not.toHaveProperty("fieldTimes");
+    const { podcastId } = await seedShow(t, 1);
+    const show = await t.query(api.settings.forPodcast, { token: TOKEN, podcastId });
+    expect(show.resolved.playbackSpeed).toBe(2);
+  });
+});
+
