@@ -30,6 +30,19 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
   - Streaming playback over mobile data is always allowed. This setting only covers downloads.
   - It's a device-local setting, not synced, so the iPad and Mac don't care.
 
+## Accounts, website and Chef (Mike, 22 Oct)
+
+- **Accounts:** just Mike for now, but built so other people can sign up later, each with their own library, queue, stats and settings. Every per-person table gets an owner. Shared feed data (shows, episodes) stays shared. Sign-up is limited to an allowlist of emails (only Mike's) until he opens it up.
+- **Sign-in:** Convex Auth v2 with Apple and Google, on the website and in the iPhone app, the same way Walkies does it (`~/dev/me/walkies`: `convex/convex.config.ts`, `convex/auth.ts`, `convex/users.ts`, the README's "Setting up Apple and Google sign-in"). Apple and Google with the same email are one account. The app's hidden API token goes away once the app signs in. Scripts and tests may keep an admin path.
+- **Website:** `poddle.mikecann.app` (DNS on Cloudflare), on Convex static hosting (`@convex-dev/static-hosting`) on the prod deployment, through its HTTP-actions custom domain.
+  - Public share pages for an episode or a show, with no sign-in. They play the episode in the browser and open the app when it's installed (universal links).
+  - Signed-in pages for your shows and what you're listening to.
+  - The app's share sheet hands out these links.
+- **Chef 2.0:** the feedback board, plus cloud builds, as in Walkies (`npx chef init --cloud`, ChefKit opened from Settings rather than a floating button). Chef's cloud builds run on Convex's own marketplace (Daytona, Code Storage, Resend, the AI gateway), billed to the Convex team, so they need no keys of Mike's.
+- **Data:**
+  - Prod `coordinated-dodo-120` is in Sydney, with daily backups at 06:01 (Perth time) since 22 Oct.
+  - Dev moved to Sydney as `striped-turtle-260` on 22 Oct, seeded from a prod snapshot. The old US dev `qualified-hedgehog-912` is unused.
+
 ## Tech
 
 - **Backend: Convex,** on Mike's Personal team (`mikec`) in Sydney. It's the source of truth for the library, episodes, user state, queue, settings and listening sessions. It does all feed fetching and parsing, polling, the Overcast import, stats and year-in-review maths, and APNs push.
