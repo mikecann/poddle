@@ -1,7 +1,7 @@
 import SwiftUI
 import PoddleKit
 
-/// Warm dark Now Playing, three pages like Overcast (decisions.md): show notes and chapters on the
+/// Blush Now Playing (warm plum in dark mode), three pages like Overcast (decisions.md): show notes and chapters on the
 /// left, the player in the middle, playback settings on the right. Swipe sideways to change page,
 /// swipe down on the player or the header to drop back to the mini player.
 struct NowPlayingView: View {
@@ -19,7 +19,7 @@ struct NowPlayingView: View {
             } else {
                 VStack(spacing: 12) {
                     Text("Nothing playing").font(.rounded(22, .bold))
-                    Button("Close") { dismiss() }.foregroundStyle(Palette.mustard)
+                    Button("Close") { dismiss() }.foregroundStyle(Palette.tomatoText)
                 }
                 .foregroundStyle(NP.fg)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -31,8 +31,7 @@ struct NowPlayingView: View {
         }
         .background { NowPlayingBackground() }
         .offset(y: dragY)
-        .environment(\.colorScheme, .dark)
-        .sheet(item: $app.nowPlayingSheet) { SheetHost(route: $0).environment(\.colorScheme, PoddleApp.forcedScheme ?? .light) }
+        .sheet(item: $app.nowPlayingSheet) { SheetHost(route: $0) }
         .presentationBackground(.clear)
         .onDisappear { app.nowPlayingPage = .player }
     }
@@ -85,17 +84,22 @@ struct NowPlayingView: View {
     private func header(_ item: EpisodeItem) -> some View {
         let upNext = store.upNext(excluding: item.id)
         return VStack(spacing: 0) {
-            Capsule().fill(NP.fg3).frame(width: 36, height: 5).padding(.top, 6)
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "chevron.down").font(.system(size: 20, weight: .semibold)).frame(width: 44, height: 44)
+                    Image(systemName: "chevron.down").font(.system(size: 18, weight: .heavy))
+                        .foregroundStyle(NP.fg)
+                        .frame(width: 42, height: 42)
+                        .raised(Circle(), fill: NP.util)
+                        .frame(width: 48, height: 48)
                 }
+                .buttonStyle(.pressable)
                 .accessibilityLabel("Close")
+                .accessibilityIdentifier("nowPlaying.close")
                 Spacer()
                 VStack(spacing: 1) {
-                    Text(title).font(.rounded(10.5, .bold)).tracking(1.26).textCase(.uppercase).foregroundStyle(NP.fg2)
+                    Text(title).font(.rounded(19, .heavy)).foregroundStyle(NP.fg)
                     Text(upNext.isEmpty ? "Last one" : "\(upNext.count) more · \(Format.duration(store.wallTime(upNext)))")
-                        .font(.text(13, .semibold))
+                        .font(.text(13.5, .semibold)).foregroundStyle(NP.fg2)
                 }
                 .contentTransition(.opacity)
                 .animation(.easeOut(duration: 0.15), value: app.nowPlayingPage)
@@ -103,15 +107,16 @@ struct NowPlayingView: View {
                 moreMenu(item)
             }
             .foregroundStyle(NP.fg)
-            .padding(.horizontal, 8)
-            .frame(height: 44)
+            .padding(.horizontal, 12)
+            .frame(height: 56)
+            .padding(.top, 4)
         }
     }
 
     private var title: String {
         switch app.nowPlayingPage {
         case .notes: "Show notes"
-        case .player: "Playing from Up Next"
+        case .player: "Now Playing"
         case .settings: "Playback settings"
         }
     }
@@ -135,11 +140,16 @@ struct NowPlayingView: View {
             Divider()
             Button { markPlayedAndSkip(item) } label: { Label("Mark played and skip", systemImage: "checkmark.circle") }
         } label: {
-            Image(systemName: "ellipsis").font(.system(size: 20, weight: .bold)).frame(width: 44, height: 44)
+            Image(systemName: "ellipsis").font(.system(size: 18, weight: .heavy))
+                .foregroundStyle(NP.fg)
+                .frame(width: 42, height: 42)
+                .raised(Circle(), fill: NP.util)
+                .frame(width: 48, height: 48)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .accessibilityLabel("More")
+        .accessibilityIdentifier("nowPlaying.more")
     }
 
     /// Undo brings it back: unplayed, at its old position, playing again.
@@ -155,21 +165,21 @@ struct NowPlayingView: View {
     }
 }
 
-/// Now Playing's fixed warm-dark colours.
+/// Now Playing's colours, on blush (light) or warm plum (dark). Ink on the deepest blush is 10:1,
+/// fg2 5.2:1; accents use `Palette.tomatoText` for text.
 enum NP {
-    static let fg = Color(hex: 0xF4EADB)
-    static let fg2 = Color(hex: 0xF4EADB, alpha: 0.62)
-    static let fg3 = Color(hex: 0xF4EADB, alpha: 0.34)
-    static let track = Color(hex: 0xF4EADB, alpha: 0.16)
-    static let util = Color(hex: 0xF4EADB, alpha: 0.07)
-    static let wellBg = Color.black.opacity(0.32)
+    static let fg = Palette.ink
+    static let fg2 = Color(light: 0x6A4036, dark: 0xFBEDE2, darkAlpha: 0.74)
+    static let fg3 = Color(light: 0x6A4036, lightAlpha: 0.4, dark: 0xFBEDE2, darkAlpha: 0.36)
+    /// The curl scrubber's unfilled curls, and puffy buttons on blush.
+    static let track = Color(light: 0xFFF6EF, dark: 0x4D302A)
+    static let util = Color(light: 0xFFF8F2, dark: 0x3F2622)
+    static let wellBg = Color(light: 0xF3C7B7, dark: 0x1A0F0E)
 }
 
 struct NowPlayingBackground: View {
     var body: some View {
-        Fills.nowPlaying
-            .overlay(GrainOverlay(dark: true))
-            .ignoresSafeArea()
+        Fills.nowPlaying.ignoresSafeArea()
     }
 }
 
@@ -182,14 +192,15 @@ private struct PageDots: View {
             ForEach(NowPlayingPage.allCases, id: \.self) { page in
                 let on = page == selection
                 Capsule()
-                    .fill(on ? NP.fg : NP.fg3)
-                    .frame(width: on ? 18 : 7, height: 7)
+                    .fill(on ? Palette.chipOn : NP.fg3)
+                    .frame(width: on ? 22 : 8, height: 8)
                     .frame(height: 22)
                     .contentShape(Rectangle())
                     .onTapGesture { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { selection = page } }
                     .accessibilityElement()
                     .accessibilityLabel(page.label)
                     .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+                    .accessibilityIdentifier("nowPlaying.page.\(page)")
             }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selection)
@@ -221,21 +232,22 @@ private struct PlayerPage: View {
 
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.episode.title).font(.rounded(22, .bold)).tracking(-0.22).lineLimit(2)
+                    Text(item.episode.title).font(.rounded(24, .heavy)).tracking(-0.3).lineLimit(2)
                         .foregroundStyle(NP.fg)
                     Button { app.goToShow(item.podcast.id) } label: {
-                        Text(item.podcast.title).font(.text(16, .medium)).foregroundStyle(Palette.mustard)
+                        Text(item.podcast.title).font(.text(17, .bold)).foregroundStyle(Palette.tomatoText)
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("nowPlaying.show")
                 }
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 24)
             .padding(.top, 12)
 
-            Scrubber().padding(.horizontal, 24).padding(.top, 16)
-            Transport().padding(.top, 10)
-            UtilityRow(item: item).padding(.horizontal, 10).padding(.top, 18)
+            Scrubber().padding(.horizontal, 22).padding(.top, 8)
+            Transport().padding(.top, 6)
+            UtilityRow(item: item).padding(.horizontal, 10).padding(.top, 16)
             Spacer(minLength: 8)
         }
     }
@@ -244,17 +256,18 @@ private struct PlayerPage: View {
         if let chapter = player.currentChapter, let i = player.currentChapterIndex {
             Button { withAnimation { app.nowPlayingPage = .notes } } label: {
                 HStack(spacing: 6) {
-                    Image(systemName: "list.bullet").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.mustard)
-                    Text("Ch \(i + 1) of \(player.chapters.count)").foregroundStyle(NP.fg)
+                    Image(systemName: "list.bullet").font(.system(size: 13, weight: .bold)).foregroundStyle(Palette.tomato)
+                    Text("Ch \(i + 1) of \(player.chapters.count)").foregroundStyle(NP.fg).fontWeight(.bold)
                     Text("· \(chapter.title)").foregroundStyle(NP.fg2).fontWeight(.medium).lineLimit(1)
                 }
-                .font(.text(12.5, .semibold))
-                .padding(.leading, 8).padding(.trailing, 12)
-                .frame(height: 28)
-                .background(NP.util, in: Capsule())
+                .font(.text(13.5, .semibold))
+                .padding(.leading, 12).padding(.trailing, 14)
+                .frame(height: 34)
+                .raised(Capsule(), fill: NP.util)
                 .contentTransition(.opacity)
             }
             .buttonStyle(.pressable)
+            .accessibilityIdentifier("nowPlaying.chapter")
             .padding(.horizontal, 24)
         } else {
             Color.clear.frame(height: 28)
@@ -273,9 +286,11 @@ private struct ArtworkTaps: View {
 
     var body: some View {
         let size: CGFloat = 268
-        ArtworkView(podcast: item.podcast, size: size, cornerRadius: 26, shadow: false)
-            .shadow(color: .black.opacity(0.6), radius: 25, y: 30)
-            .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
+        let cloud = CloudShape(cornerRadius: 40, scallop: 46, depth: 4)
+        ArtworkView(podcast: item.podcast, size: size, cornerRadius: 0, shadow: false)
+            .clipShape(cloud)
+            .background { cloud.fill(Palette.cardEdge).offset(y: 5) }
+            .floatShadow(18, y: 14, opacity: 0.22)
             .scaleEffect(player.isPlaying ? 1 : 0.9)
             .animation(.spring(response: 0.45, dampingFraction: 0.7), value: player.isPlaying)
             .overlay {
@@ -289,6 +304,8 @@ private struct ArtworkTaps: View {
             .accessibilityLabel("\(item.podcast.title) artwork")
             .accessibilityHint("Tap to play or pause.")
             .accessibilityAction { player.togglePlayPause() }
+            .accessibilityIdentifier("nowPlaying.artwork")
+            .overlay(alignment: .bottomTrailing) { ListeningCompanion().offset(x: 30, y: 18) }
     }
     private func tapZone(_ edge: Edge) -> some View {
         Color.clear
@@ -316,7 +333,26 @@ private struct ArtworkTaps: View {
     }
 }
 
-/// Chapters are gaps in the scrubber. Drag to seek; drag your finger further down to scrub finer.
+/// Poddle by the artwork: bopping while it plays, asleep once it's been paused a while.
+private struct ListeningCompanion: View {
+    @Environment(AppModel.self) private var app
+    @AppStorage(CompanionSettings.showKey) private var show = true
+
+    var body: some View {
+        if show {
+            let mood = app.companion.mood
+            Companion(pose: mood == .dozing ? .sleeping : .listening,
+                      motion: mood == .dozing ? .breathe : mood == .bopping ? .bop(bpm: 96) : .still,
+                      size: 104)
+                .frame(width: 110, height: 96, alignment: .bottom)
+                .animation(.easeInOut(duration: 0.3), value: mood)
+        }
+    }
+}
+
+/// The curl scrubber: a line of curls that fills in tomato as you listen, with a cream puff for
+/// the playhead. The touch target is the full 44 pt band, not just the curls. Drag to seek; drag
+/// your finger further down to scrub finer. Small notches under the curls mark chapters.
 private struct Scrubber: View {
     @Environment(\.player) private var player
     @State private var dragPosition: Double?
@@ -325,31 +361,28 @@ private struct Scrubber: View {
     var body: some View {
         let duration = max(1, player.duration)
         let position = dragPosition ?? player.position
-        VStack(spacing: 8) {
+        VStack(spacing: 2) {
             GeometryReader { geo in
                 let w = geo.size.width
-                let segments = segmentFractions(duration)
-                let gap: CGFloat = 3
-                let usable = w - gap * CGFloat(segments.count - 1)
-                let fraction = position / duration
+                let fraction = min(1, max(0, position / duration))
+                let knob: CGFloat = dragPosition == nil ? 26 : 32
                 ZStack(alignment: .leading) {
-                    HStack(spacing: gap) {
-                        ForEach(Array(segments.enumerated()), id: \.offset) { _, seg in
-                            let segW = max(2, usable * (seg.1 - seg.0))
-                            let fill = min(1, max(0, (fraction - seg.0) / max(0.0001, seg.1 - seg.0)))
-                            Capsule().fill(NP.track)
-                                .overlay(alignment: .leading) { Capsule().fill(NP.fg).frame(width: segW * fill) }
-                                .clipShape(Capsule())
-                                .frame(width: segW, height: 6)
-                        }
+                    CurlLine().fill(NP.track)
+                        .overlay(CurlLine().stroke(NP.fg3.opacity(0.5), lineWidth: 0.75))
+                    CurlLine(fraction: fraction).fill(Palette.tomato)
+                    ForEach(chapterMarks(duration), id: \.self) { mark in
+                        Circle().fill(NP.fg3).frame(width: 4, height: 4)
+                            .offset(x: w * mark - 2, y: 13)
                     }
-                    Circle().fill(NP.fg)
-                        .frame(width: dragPosition == nil ? 16 : 22, height: dragPosition == nil ? 16 : 22)
-                        .shadow(color: .black.opacity(0.35), radius: 3, y: 2)
-                        .offset(x: w * fraction - (dragPosition == nil ? 8 : 11))
+                    Circle().fill(Palette.creamWhite)
+                        .overlay(Circle().stroke(Palette.cardEdge, lineWidth: 1.5))
+                        .frame(width: knob, height: knob)
+                        .floatShadow(3, y: 2, opacity: 0.3)
+                        .offset(x: w * fraction - knob / 2)
                         .animation(.spring(response: 0.2), value: dragPosition == nil)
                 }
-                .frame(height: 22)
+                .frame(height: 16)
+                .frame(maxHeight: .infinity)
                 .contentShape(Rectangle())
                 .gesture(
                     DragGesture(minimumDistance: 0)
@@ -366,13 +399,13 @@ private struct Scrubber: View {
                         }
                 )
             }
-            .frame(height: 22)
+            .frame(height: 44)
             HStack {
-                Text(Format.clock(position)).font(.rounded(12, .semibold))
+                Text(Format.clock(position)).font(.rounded(13, .bold))
                 Spacer()
-                Text(Format.timeLeft(max(0, duration - position), rate: player.rate)).font(.text(12, .semibold)).foregroundStyle(NP.fg)
+                Text(Format.timeLeft(max(0, duration - position), rate: player.rate)).font(.text(13.5, .bold)).foregroundStyle(NP.fg)
                 Spacer()
-                Text(Format.remainingClock(max(0, duration - position))).font(.rounded(12, .semibold))
+                Text(Format.remainingClock(max(0, duration - position))).font(.rounded(13, .bold))
             }
             .monospacedDigit()
             .foregroundStyle(NP.fg2)
@@ -383,15 +416,14 @@ private struct Scrubber: View {
         .accessibilityAdjustableAction { dir in
             dir == .increment ? player.skipForwardTapped() : player.skipBackTapped()
         }
+        .accessibilityIdentifier("nowPlaying.scrubber")
     }
 
-    private func segmentFractions(_ duration: Double) -> [(Double, Double)] {
+    /// Where each chapter after the first starts, as a fraction of the episode.
+    private func chapterMarks(_ duration: Double) -> [Double] {
         let chapters = player.chapters
-        guard chapters.count > 1 else {
-            // No chapters: still break the bar into even dashes, like the design.
-            return [(0, 1)]
-        }
-        return chapters.map { c in (c.start / duration, (c.end ?? duration) / duration) }
+        guard chapters.count > 1 else { return [] }
+        return chapters.dropFirst().map { $0.start / duration }.filter { $0 > 0 && $0 < 1 }
     }
 }
 
@@ -400,24 +432,25 @@ private struct Transport: View {
     @State private var pressed = 0
 
     var body: some View {
-        HStack(spacing: 36) {
+        HStack(spacing: 30) {
             skip(back: true)
             Button { player.togglePlayPause(); pressed += 1 } label: {
                 Image(systemName: player.isPlaying ? "pause.fill" : "play.fill")
-                    .font(.system(size: 34))
-                    .foregroundStyle(Palette.creamWhite)
+                    .font(.system(size: 36, weight: .bold))
+                    .foregroundStyle(Palette.onTomato)
                     .contentTransition(.symbolEffect(.replace))
-                    .frame(width: 80, height: 80)
+                    .frame(width: 88, height: 88)
                     .background {
                         Circle().fill(Fills.bigPlay)
-                            .overlay(Circle().inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.28), .clear], startPoint: .top, endPoint: .center), lineWidth: 2))
-                            .shadow(color: .black.opacity(0.35), radius: 11, y: 10)
-                            .background(Circle().fill(Palette.tomato.opacity(0.14)).padding(-6))
+                            .overlay(Circle().inset(by: 1.5).stroke(LinearGradient(colors: [.white.opacity(0.4), .clear], startPoint: .top, endPoint: .center), lineWidth: 2.5))
+                            .background(Circle().fill(Color(hex: 0x9E2412)).offset(y: 4))
+                            .floatShadow(12, y: 10, opacity: 0.3)
                     }
             }
-            .buttonStyle(PressableStyle(scale: 0.94))
+            .buttonStyle(PressableStyle(scale: 0.93))
             .sensoryFeedback(.impact(weight: .medium), trigger: pressed)
             .accessibilityLabel(player.isPlaying ? "Pause" : "Play")
+            .accessibilityIdentifier("nowPlaying.playPause")
             skip(back: false)
         }
     }
@@ -426,9 +459,10 @@ private struct Transport: View {
         let seconds = Int(back ? player.skipBack : player.skipForward)
         return Button { back ? player.skipBackTapped() : player.skipForwardTapped() } label: {
             Image(systemName: back ? "gobackward.\(seconds)" : "goforward.\(seconds)")
-                .font(.system(size: 34, weight: .regular))
+                .font(.system(size: 30, weight: .semibold))
                 .foregroundStyle(NP.fg)
-                .frame(width: 64, height: 64)
+                .frame(width: 66, height: 66)
+                .raised(Circle(), fill: NP.util)
         }
         .buttonStyle(.pressable)
         .contextMenu {
@@ -441,11 +475,12 @@ private struct Transport: View {
             }
         }
         .accessibilityLabel(back ? "Skip back \(seconds) seconds" : "Skip forward \(seconds) seconds")
+        .accessibilityIdentifier(back ? "nowPlaying.skipBack" : "nowPlaying.skipForward")
     }
 }
 
-/// Speed, sleep timer, AirPlay and the queue. Smart Speed, Voice Boost and the rest live on the
-/// settings page; tapping the speed goes there.
+/// Speed, sleep timer, AirPlay and the queue, on puffy cream tiles. Smart Speed, Voice Boost and
+/// the rest live on the settings page; tapping the speed goes there.
 private struct UtilityRow: View {
     var item: EpisodeItem
     @Environment(PoddleStore.self) private var store
@@ -459,29 +494,31 @@ private struct UtilityRow: View {
             Button { withAnimation { app.nowPlayingPage = .settings } } label: {
                 VStack(spacing: 5) {
                     Text(Format.speed(resolved.speed.value))
-                        .font(.rounded(15, .heavy)).monospacedDigit().tracking(-0.3)
-                        .foregroundStyle(custom ? Palette.mustard : NP.fg)
+                        .font(.rounded(18, .heavy)).monospacedDigit().tracking(-0.3)
+                        .foregroundStyle(Palette.tomato)
                         .contentTransition(.numericText(value: resolved.speed.value))
-                        .frame(width: 52, height: 44)
-                        .background(custom ? Palette.mustard.opacity(0.2) : NP.util, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .frame(width: 60, height: 50)
+                        .raised(RoundedRectangle(cornerRadius: 18, style: .continuous), fill: custom ? Palette.goldBg : NP.util)
                     VStack(spacing: 0) {
-                        Text("Speed").fontWeight(.bold)
+                        Text("Speed").fontWeight(.bold).foregroundStyle(NP.fg)
                         Text(resolved.smartSpeed.value ? "\(Format.saved(player.smartSaved)) saved" : custom ? "This show" : "Default")
                             .lineLimit(1)
                     }
-                    .font(.text(10.5, .semibold))
+                    .font(.text(11.5, .semibold))
                     .foregroundStyle(NP.fg2)
                 }
                 .frame(maxWidth: .infinity)
             }
             .buttonStyle(.pressable)
             .accessibilityLabel("Speed \(Format.speed(resolved.speed.value)). Playback settings")
+            .accessibilityIdentifier("nowPlaying.speed")
             SleepMenu()
             AirPlayUtil()
             Button { app.nowPlayingSheet = .queue } label: {
-                UtilityLabel(title: "Up Next", detail: "\(store.upNext(excluding: item.id).count) more", icon: "list.bullet.indent", on: false)
+                UtilityLabel(title: "Up Next", detail: "\(store.upNext(excluding: item.id).count) more", icon: "list.bullet", on: false)
             }
             .buttonStyle(.pressable)
+            .accessibilityIdentifier("nowPlaying.queue")
         }
     }
 }
@@ -494,16 +531,16 @@ struct UtilityLabel: View {
     var body: some View {
         VStack(spacing: 5) {
             Image(systemName: icon)
-                .font(.system(size: 19, weight: .medium))
-                .foregroundStyle(on ? Palette.mustard : NP.fg)
-                .frame(width: 44, height: 44)
-                .background(on ? Palette.mustard.opacity(0.2) : NP.util, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                .font(.system(size: 21, weight: .bold))
+                .foregroundStyle(on ? Palette.tomato : NP.fg)
+                .frame(width: 50, height: 50)
+                .raised(RoundedRectangle(cornerRadius: 18, style: .continuous), fill: on ? Palette.blush : NP.util)
             VStack(spacing: 0) {
-                Text(title).fontWeight(.bold)
+                Text(title).fontWeight(.bold).foregroundStyle(NP.fg)
                 Text(detail).lineLimit(1)
             }
-            .font(.text(10.5, .semibold))
-            .foregroundStyle(on ? NP.fg : NP.fg2)
+            .font(.text(11.5, .semibold))
+            .foregroundStyle(NP.fg2)
             .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
@@ -528,19 +565,30 @@ private struct SleepMenu: View {
                 Button(role: .destructive) { player.setSleepTimer(.off) } label: { Label("Turn off", systemImage: "xmark") }
             }
         } label: {
-            TimelineView(.periodic(from: .now, by: 1)) { _ in
-                VStack(spacing: 1) {
-                    Mascot(pose: .sleeping, size: 38)
-                    Text("Sleep").font(.text(11, .semibold)).foregroundStyle(NP.fg)
-                    Text(detail).font(.text(10.5, .semibold)).foregroundStyle(NP.fg2)
+            VStack(spacing: 5) {
+                // Asleep and breathing while a timer's running.
+                Companion(pose: .sleeping, motion: player.sleepTimer == .off ? .still : .breathe, size: 46, tappable: false)
+                    .frame(width: 50, height: 50)
+                    .background {
+                        if player.sleepTimer != .off {
+                            Color.clear.raised(RoundedRectangle(cornerRadius: 18, style: .continuous), fill: Palette.blush)
+                        }
+                    }
+                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                    VStack(spacing: 0) {
+                        Text("Sleep").fontWeight(.bold).foregroundStyle(NP.fg)
+                        Text(detail).foregroundStyle(NP.fg2)
+                    }
+                    .font(.text(11.5, .semibold))
                 }
-                .frame(maxWidth: .infinity)
-                .accessibilityElement(children: .combine)
             }
+            .frame(maxWidth: .infinity)
+            .accessibilityElement(children: .combine)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .frame(maxWidth: .infinity)
+        .accessibilityIdentifier("nowPlaying.sleep")
     }
 
     private var detail: String {
@@ -561,7 +609,8 @@ private struct AirPlayUtil: View {
     @Environment(\.player) private var player
     var body: some View {
         UtilityLabel(title: "AirPlay", detail: player.routeName, icon: "airplay.audio", on: false)
-            .overlay(alignment: .top) { RoutePicker().frame(width: 44, height: 44) }
+            .overlay(alignment: .top) { RoutePicker().frame(width: 50, height: 50) }
+            .accessibilityIdentifier("nowPlaying.airplay")
     }
 }
 

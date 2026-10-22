@@ -6,8 +6,9 @@ import UIKit
 import AppKit
 #endif
 
-// Tokens from designs/c-earful-warm.html. Warm paper and deep ink, a tomato needle for "now",
-// a gold pin wherever a show has its own settings, and fern for "on".
+// Tokens for "Cloud Fluff" (designs/explore-poodle/fluff.jpg, decisions.md "Look, v2"): warm cream,
+// apricot and blush, deep cocoa ink, and tomato as the one strong accent. Body text on every
+// surface clears WCAG AA (4.5:1) in both modes; the pairs are noted beside the colours.
 
 extension Color {
     nonisolated init(hex: UInt32, alpha: Double = 1) {
@@ -53,55 +54,73 @@ extension NSColor {
 
 /// Poddle's palette. Use `Palette.paper` etc.
 enum Palette {
-    static let paper = Color(light: 0xF5EEE3, dark: 0x1E1713)
-    static let paper2 = Color(light: 0xEDE3D4, dark: 0x261D18)
-    static let card = Color(light: 0xFBF7F0, dark: 0x2C231E)
-    static let well = Color(light: 0xE6DAC8, dark: 0x15100D)
-    static let ink = Color(light: 0x2B2320, dark: 0xF4EADB)
-    static let ink2 = Color(light: 0x6E6259, dark: 0xF4EADB, darkAlpha: 0.62)
-    static let ink3 = Color(light: 0xA39587, dark: 0xF4EADB, darkAlpha: 0.38)
-    static let line = Color(light: 0x462D19, lightAlpha: 0.12, dark: 0xF4EADB, darkAlpha: 0.10)
-    static let body = Color(light: 0x4A3F38, dark: 0xF4EADB, darkAlpha: 0.78)
+    /// Screen background: cream, or warm cocoa in dark mode.
+    static let paper = Color(light: 0xFDF4E8, dark: 0x1F1613)
+    /// Sidebars and sheets' wells: apricot cream.
+    static let paper2 = Color(light: 0xFAE6D2, dark: 0x271B17)
+    /// Cloud cards, the mini player and puffy buttons.
+    static let card = Color(light: 0xFFFAF3, dark: 0x2E211C)
+    /// The cheap "shadow": a solid copy of a card's shape drawn a couple of points lower.
+    static let cardEdge = Color(light: 0xEED3BF, dark: 0x120B09)
+    static let well = Color(light: 0xF7E4D3, dark: 0x170F0D)
+    /// Ink on cream 13.8:1, ink2 7.1:1, ink3 4.9:1 (and 5.6:1 on cocoa).
+    static let ink = Color(light: 0x3B1F18, dark: 0xFBEDE2)
+    static let ink2 = Color(light: 0x6E4A3F, dark: 0xFBEDE2, darkAlpha: 0.74)
+    static let ink3 = Color(light: 0x85625A, dark: 0xFBEDE2, darkAlpha: 0.56)
+    static let line = Color(light: 0x6E3A22, lightAlpha: 0.11, dark: 0xFBEDE2, darkAlpha: 0.10)
+    static let body = Color(light: 0x4E3229, dark: 0xFBEDE2, darkAlpha: 0.82)
 
-    static let tomato = Color(light: 0xDD5530, dark: 0xE5623B)
-    static let tomatoDark = Color(light: 0xB9411F, dark: 0xF07A52)
-    static let mustard = Color(hex: 0xE7B24A)
-    static let goldBg = Color(light: 0xF5E1B3, dark: 0xE7B24A, darkAlpha: 0.18)
-    static let goldInk = Color(light: 0x7E5410, dark: 0xF2C979)
-    static let fern = Color(light: 0x3F7F6B, dark: 0x5A9C86)
+    /// The one strong accent. 4.7:1 on cream, 5.1:1 under white text; brighter on cocoa (6.3:1).
+    static let tomato = Color(light: 0xCF331C, dark: 0xFF6B4E)
+    /// Tomato for small text on blush (Now Playing): 5.2:1.
+    static let tomatoText = Color(light: 0xA92815, dark: 0xFF8A70)
+    static let tomatoDark = Color(light: 0xA92815, dark: 0xFF8A70)
+    /// Soft tints: chips' counts, selected rows, the curl bar's track.
+    static let apricot = Color(light: 0xFBDDBF, dark: 0x4A2E22)
+    static let blush = Color(light: 0xFBE2D8, dark: 0x3A2320)
+    static let blushDeep = Color(light: 0xF6CDBE, dark: 0x4A2A25)
+    static let mustard = Color(light: 0xD08221, dark: 0xF0B862)
+    static let goldBg = Color(light: 0xFBE5C2, dark: 0xF0B862, darkAlpha: 0.18)
+    static let goldInk = Color(light: 0x7A4E0E, dark: 0xF5CC85)
+    /// "Downloaded" and "following": status, never decoration.
+    static let fern = Color(light: 0x2F7A5F, dark: 0x6CC09F)
     static let teal = Color(hex: 0x2E6E68)
-    static let walnut = Color(hex: 0x211915)
-    static let switchOff = Color(light: 0xDED2C0, dark: 0x4A3E36)
-    static let chipOn = Color(light: 0x2B2320, dark: 0xF4EADB)
-    static let chipOnText = Color(light: 0xF4EADB, dark: 0x2B2320)
-    /// Dark cream text used on walnut surfaces in both modes.
-    static let cream = Color(hex: 0xF4EADB)
-    static let creamWhite = Color(hex: 0xFFF6EC)
-    static let shadow = Color(hex: 0x462814)
-    static let wash = Color(light: 0x2B2320, lightAlpha: 0.07, dark: 0xF4EADB, darkAlpha: 0.08)
+    static let walnut = Color(hex: 0x3B1F18)
+    static let switchOff = Color(light: 0xEBD3C2, dark: 0x4A3630)
+    static let chipOn = Color(hex: 0xCF331C)
+    static let chipOnText = Color.white
+    /// Text and glyphs on a tomato fill (5.1:1).
+    static let onTomato = Color.white
+    /// Toasts are the one inverted surface, so they stand apart from the cream mini player.
+    static let inverse = Color(light: 0x3B1F18, dark: 0xFBEDE2)
+    static let inverseInk = Color(light: 0xFBEDE2, dark: 0x3B1F18)
+    static let inverseAccent = Color(light: 0xFFB59E, dark: 0xCF331C)
+    static let cream = Color(hex: 0xFBEDE2)
+    static let creamWhite = Color(hex: 0xFFFAF3)
+    static let shadow = Color(light: 0x8A4A2C, dark: 0x000000)
+    static let wash = Color(light: 0x8A4A2C, lightAlpha: 0.08, dark: 0xFBEDE2, darkAlpha: 0.08)
 }
 
 /// Gradients for actions and the big play button.
 enum Fills {
-    static let tomato = LinearGradient(colors: [Color(hex: 0xE5623B), Color(hex: 0xCF4A25)], startPoint: .top, endPoint: .bottom)
-    static let actionTomato = LinearGradient(colors: [Color(hex: 0xE3613B), Color(hex: 0xC9461F)], startPoint: .top, endPoint: .bottom)
-    static let actionFern = LinearGradient(colors: [Color(hex: 0x4A8C78), Color(hex: 0x3A7563)], startPoint: .top, endPoint: .bottom)
-    static let actionGold = LinearGradient(colors: [Color(hex: 0xEDBE5A), Color(hex: 0xDDA43A)], startPoint: .top, endPoint: .bottom)
-    static let actionInk = LinearGradient(colors: [Color(hex: 0x4A3F38), Color(hex: 0x2B2320)], startPoint: .top, endPoint: .bottom)
-    static let mini = LinearGradient(colors: [Color(hex: 0x352B26), Color(hex: 0x271F1B)], startPoint: .top, endPoint: .bottom)
+    static let tomato = LinearGradient(colors: [Color(hex: 0xDA3F25), Color(hex: 0xC62F19)], startPoint: .top, endPoint: .bottom)
+    static let actionTomato = LinearGradient(colors: [Color(hex: 0xDA3F25), Color(hex: 0xC62F19)], startPoint: .top, endPoint: .bottom)
+    static let actionFern = LinearGradient(colors: [Color(hex: 0x3D8A6D), Color(hex: 0x2F7259)], startPoint: .top, endPoint: .bottom)
+    static let actionGold = LinearGradient(colors: [Color(hex: 0xF7C98A), Color(hex: 0xF0B26A)], startPoint: .top, endPoint: .bottom)
+    static let actionInk = LinearGradient(colors: [Color(hex: 0x5A3A30), Color(hex: 0x3B1F18)], startPoint: .top, endPoint: .bottom)
+    static let mini = LinearGradient(colors: [Palette.inverse, Palette.inverse], startPoint: .top, endPoint: .bottom)
     static let bigPlay = RadialGradient(
-        colors: [Color(hex: 0xEE7149), Color(hex: 0xD24C26), Color(hex: 0xB53D1C)],
+        colors: [Color(hex: 0xEC5A3C), Color(hex: 0xD63A21), Color(hex: 0xBF2D18)],
         center: UnitPoint(x: 0.4, y: 0.3), startRadius: 0, endRadius: 52
     )
-    /// Now Playing's warm dark backdrop.
-    static let nowPlaying = RadialGradient(
+    /// Now Playing's blush backdrop: pale blush at the top, deeper towards the controls.
+    static let nowPlaying = LinearGradient(
         stops: [
-            .init(color: Color(hex: 0x6A2C22), location: 0),
-            .init(color: Color(hex: 0x3A231C), location: 0.45),
-            .init(color: Color(hex: 0x211915), location: 0.75),
-            .init(color: Color(hex: 0x1C1512), location: 1),
+            .init(color: Color(light: 0xFCE6DC, dark: 0x3F2420), location: 0),
+            .init(color: Color(light: 0xFADDD0, dark: 0x301C1A), location: 0.55),
+            .init(color: Color(light: 0xF9D8CA, dark: 0x24171A), location: 1),
         ],
-        center: UnitPoint(x: 0.5, y: 0.24), startRadius: 0, endRadius: 620
+        startPoint: .top, endPoint: .bottom
     )
 }
 
@@ -111,9 +130,10 @@ extension Font {
         .system(size: size, weight: weight, design: .rounded)
     }
 
-    /// SF Pro Text, for everything else.
+    /// Everything else, also rounded so the whole app matches the chunky wordmark. Scales with
+    /// Dynamic Type from the given size.
     static func text(_ size: CGFloat, _ weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight)
+        .system(size: size, weight: weight, design: .rounded)
     }
 
     /// SF Mono, for receipts.

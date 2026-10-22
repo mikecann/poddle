@@ -19,6 +19,8 @@ struct SettingsView: View {
     @State private var confirmingDeleteAgain = false
     @State private var deleting = false
     @State private var deleteError: String?
+    /// The companion, on this device only (decisions.md: "can be turned off in Profile").
+    @AppStorage(CompanionSettings.showKey) private var showPoddle = true
 
     private var g: GlobalSettings { store.global }
 
@@ -63,13 +65,16 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                if !isTab {
+                if isTab {
+                    TopBar { BrandLockup() } trailing: { EmptyView() }
+                        .frame(height: 52)
+                } else {
                     TopBar { BackButton(title: "Library") } trailing: { EmptyView() }
                 }
                 LargeTitle(title: isTab ? "Profile" : "Settings",
                            subtitle: isTab ? "Your account, and the defaults for every show. Shows can override any of these."
                                            : "Defaults for every show. Shows can override any of these.")
-                    .padding(.top, isTab ? 16 : 6)
+                    .padding(.top, isTab ? 2 : 6)
 
                 connection.padding(.top, 8)
 
@@ -82,6 +87,18 @@ struct SettingsView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .accessibilityIdentifier("settings.import")
+                }
+
+                GroupLabel(text: "Poddle")
+                GroupCard {
+                    Toggle(isOn: $showPoddle.animation(.spring(response: 0.4, dampingFraction: 0.8))) {
+                        Cell(title: "Show Poddle", subtitle: "The little poodle who bops along on the mini player", icon: "pawprint.fill", iconTint: Palette.tomato) { EmptyView() }
+                            .padding(.horizontal, -16)
+                    }
+                    .toggleStyle(.poddle)
+                    .padding(.horizontal, 16)
+                    .accessibilityIdentifier("settings.showPoddle")
                 }
 
                 GroupLabel(text: "Playback")
@@ -92,7 +109,9 @@ struct SettingsView: View {
                                     onIncrement: { store.setSpeed(g.speed + 0.05, scope: .allPodcasts) })
                     }
                     toggle("Smart Speed", \.smartSpeed, subtitle: "Trims silences", icon: "waveform.path", tint: Palette.mustard)
+                        .accessibilityIdentifier("settings.smartSpeed")
                     toggle("Voice Boost", \.voiceBoost, subtitle: "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
+                        .accessibilityIdentifier("settings.voiceBoost")
                     picker("Speed-up method", \.timePitch, TimePitchAlgorithm.allCases, \.label)
                 }
 
@@ -181,7 +200,7 @@ struct SettingsView: View {
                     Text("Poddle").font(.rounded(17, .heavy)).foregroundStyle(Palette.ink)
                     Text("Version \(Self.version) · \(app.isMock ? "sample data" : "synced with Convex")").font(.text(12.5)).foregroundStyle(Palette.ink2)
                 }
-                .padding(.top, 30).padding(.bottom, 30)
+                .padding(.top, 30).padding(.bottom, 12)
                 ListeningBrandFooter()
             }
         }
@@ -253,6 +272,7 @@ struct SettingsView: View {
                 Cell(title: profile.name ?? profile.email ?? "Signed in", subtitle: profile.name == nil ? nil : profile.email,
                      icon: "person.crop.circle", iconTint: Palette.tomato) {
                     TextButton(title: "Sign Out", bold: true) { confirmingSignOut = true }
+                        .accessibilityIdentifier("settings.signOut")
                 }
             }
         }

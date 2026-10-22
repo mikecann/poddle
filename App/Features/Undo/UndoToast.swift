@@ -51,7 +51,8 @@ final class UndoCenter {
     }
 }
 
-/// "Archived *Episode*  Undo", in the mini player's walnut, sitting above it.
+/// "Archived *Episode*  Undo": the one inverted cloud (cocoa on cream, cream on cocoa), so it stands
+/// apart from the mini player it sits above.
 struct UndoToastView: View {
     @Environment(AppModel.self) private var app
 
@@ -59,34 +60,35 @@ struct UndoToastView: View {
         if let toast = app.undo.toast {
             HStack(spacing: 10) {
                 Image(systemName: "arrow.uturn.backward.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundStyle(Palette.mustard)
+                    .font(.system(size: 19, weight: .semibold))
+                    .foregroundStyle(Palette.inverseAccent)
                 HStack(spacing: 5) {
-                    Text(toast.verb).fontWeight(.bold).foregroundStyle(Palette.cream).fixedSize()
-                    Text(toast.subject).foregroundStyle(Palette.cream.opacity(0.7)).lineLimit(1)
+                    Text(toast.verb).fontWeight(.heavy).foregroundStyle(Palette.inverseInk).fixedSize()
+                    Text(toast.subject).foregroundStyle(Palette.inverseInk.opacity(0.78)).lineLimit(1)
                 }
-                .font(.text(14, .medium))
+                .font(.text(14.5, .semibold))
                 .frame(maxWidth: .infinity, alignment: .leading)
                 Button { app.undo.undo() } label: {
-                    Text("Undo").font(.rounded(15, .heavy)).foregroundStyle(Palette.mustard)
-                        .padding(.horizontal, 12).frame(height: 36)
+                    Text("Undo").font(.rounded(16, .heavy)).foregroundStyle(Palette.inverseAccent)
+                        .padding(.horizontal, 14).frame(height: 40)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.pressable)
+                .accessibilityIdentifier("undoToast.undo")
             }
-            .padding(.leading, 14).padding(.trailing, 4)
-            .frame(minHeight: 48)
+            .padding(.leading, 16).padding(.trailing, 6)
+            .frame(minHeight: 52)
             .background {
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .fill(Fills.mini)
-                    .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).inset(by: 0.5).stroke(.white.opacity(0.08), lineWidth: 1))
-                    .shadow(color: Color(hex: 0x321E0F, alpha: 0.3), radius: 10, y: 6)
+                CloudShape(cornerRadius: 22, scallop: 28, depth: 2)
+                    .fill(Palette.inverse)
+                    .floatShadow(10, y: 6, opacity: 0.25)
             }
             .id(toast.id)
             .transition(.move(edge: .bottom).combined(with: .opacity))
             .accessibilityElement(children: .combine)
             .accessibilityLabel("\(toast.verb) \(toast.subject)")
             .accessibilityAction(named: "Undo") { app.undo.undo() }
+            .accessibilityIdentifier("undoToast")
             .onAppear { AccessibilityNotification.Announcement("\(toast.verb) \(toast.subject). Undo available.").post() }
         }
     }

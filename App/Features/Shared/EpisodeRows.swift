@@ -10,14 +10,14 @@ struct EpisodeRow: View {
 
     var body: some View {
         HStack(spacing: 12) {
-            ArtworkView(podcast: item.podcast, size: 60, cornerRadius: 12)
+            ArtworkView(podcast: item.podcast, size: 62, cornerRadius: 15)
                 .onTapGesture { onArtworkTap?() }
                 .accessibilityAddTraits(onArtworkTap == nil ? [] : .isButton)
                 .accessibilityLabel(onArtworkTap == nil ? "\(item.podcast.title) artwork" : "Play \(item.episode.title)")
             VStack(alignment: .leading, spacing: 2) {
                 showLine
                 Text(item.episode.title)
-                    .font(.text(15.5, .semibold)).tracking(-0.155)
+                    .font(.text(16, .bold)).tracking(-0.1)
                     .foregroundStyle(Palette.ink)
                     .lineLimit(2)
                     .fixedSize(horizontal: false, vertical: true)
@@ -32,10 +32,10 @@ struct EpisodeRow: View {
                     .accessibilityHidden(true)
             }
         }
-        .padding(.leading, 20)
-        .padding(.trailing, showGrip ? 4 : 16)
-        .padding(.vertical, 12)
-        .frame(minHeight: 88)
+        .padding(.leading, 12)
+        .padding(.trailing, showGrip ? 2 : 12)
+        .padding(.vertical, 11)
+        .frame(minHeight: 86)
         .contentShape(Rectangle())
     }
 
@@ -47,7 +47,7 @@ struct EpisodeRow: View {
         HStack(spacing: 6) {
             if isFresh { NewDot() }
             Text(item.podcast.title)
-                .font(.rounded(11, .bold)).tracking(0.66).textCase(.uppercase)
+                .font(.rounded(11.5, .heavy)).tracking(0.8).textCase(.uppercase)
                 .foregroundStyle(Palette.ink2)
                 .lineLimit(1)
             if item.podcast.isPrivate { PrivateBadge() }
@@ -74,7 +74,7 @@ struct EpisodeRow: View {
                 Text("Not downloaded").foregroundStyle(Palette.ink3)
             }
         }
-        .font(.text(12.5, .medium))
+        .font(.text(13, .semibold))
         .monospacedDigit()
         .lineLimit(1)
     }
@@ -253,7 +253,7 @@ struct ShowNotesPreview: View {
         }
         .padding(18)
         .frame(width: 340, alignment: .leading)
-        .background(Palette.paper)
+        .background(Palette.card)
     }
 }
 

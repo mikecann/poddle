@@ -26,10 +26,10 @@ struct DiscoverView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                Color.clear.frame(height: 44)
-                Text("Discover").font(.rounded(34, .heavy)).tracking(-0.34).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 20).padding(.top, 6)
-                searchBar.padding(.top, 10)
+                TopBar { BrandLockup() } trailing: { EmptyView() }
+                    .frame(height: 52)
+                LargeTitle(title: "Discover").padding(.top, 2)
+                searchBar.padding(.top, 12)
                 urlCard.padding(.top, 14)
                 results
             }
@@ -52,29 +52,32 @@ struct DiscoverView: View {
     private var searchBar: some View {
         HStack(spacing: 10) {
             HStack(spacing: 6) {
-                Image(systemName: "magnifyingglass").font(.system(size: 16, weight: .semibold)).foregroundStyle(Palette.ink2)
+                Image(systemName: "magnifyingglass").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.ink2)
                 TextField("Shows, people, topics", text: $query)
-                    .font(.text(17))
+                    .font(.text(17, .medium))
                     .foregroundStyle(Palette.ink)
                     .tint(Palette.tomato)
                     .focused($focused)
                     .submitLabel(.search)
                     .autocorrectionDisabled()
+                    .accessibilityIdentifier("discover.search")
                 if !query.isEmpty {
                     Button { query = "" } label: {
                         Image(systemName: "xmark.circle.fill").font(.system(size: 17)).foregroundStyle(Palette.ink3)
                     }
                     .buttonStyle(.plain)
                     .accessibilityLabel("Clear")
+                    .accessibilityIdentifier("discover.clear")
                 }
             }
-            .padding(.horizontal, 10)
-            .frame(height: 40)
-            .well(cornerRadius: 12)
+            .padding(.horizontal, 14)
+            .frame(height: 46)
+            .well(Capsule())
             if focused || !query.isEmpty {
                 Button("Cancel") { query = ""; focused = false }
-                    .font(.text(17)).foregroundStyle(Palette.tomato)
+                    .font(.text(17, .bold)).foregroundStyle(Palette.tomato)
                     .transition(.move(edge: .trailing).combined(with: .opacity))
+                    .accessibilityIdentifier("discover.cancel")
             }
         }
         .padding(.horizontal, 16)
@@ -101,32 +104,37 @@ struct DiscoverView: View {
     @ViewBuilder private var results: some View {
         if searching {
             BrandPlaceholder(pose: .searching, title: "Searching…", message: "Looking through Apple Podcasts.")
-            ProgressView().frame(maxWidth: .infinity).padding(.bottom, 20)
         } else if let searchError {
             BrandPlaceholder(title: "Couldn't search", message: searchError)
             PoddleButton(title: "Try again", kind: .quiet) { Task { await runSearch() } }
                 .frame(maxWidth: .infinity)
+                .accessibilityIdentifier("discover.retry")
         } else if let response, !query.isEmpty {
             HStack(alignment: .firstTextBaseline) {
-                Text("Apple Podcasts").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
+                Text("Apple Podcasts").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
                 Spacer()
-                Text(searching ? "Searching…" : "\(response.totalCount) results").font(.text(13, .medium)).foregroundStyle(Palette.ink2)
+                Text(searching ? "Searching…" : "\(response.totalCount) results").font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
             }
-            .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 6)
+            .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
             if response.results.isEmpty {
                 BrandPlaceholder(pose: .searching, title: "No shows found",
                                  message: "Nothing for \"\(query)\". Try a show's name, or paste its feed URL above.")
             }
-            ForEach(Array(response.results.enumerated()), id: \.element.id) { i, r in
-                resultRow(r)
-                    .overlay(alignment: .top) { if i > 0 { RowDivider(leading: 88) } }
+            LazyVStack(spacing: 8) {
+                ForEach(response.results) { r in
+                    resultRow(r)
+                        .cloudCard()
+                        .padding(.horizontal, 12)
+                        .accessibilityIdentifier("discover.result.\(r.id)")
+                }
             }
             Color.clear.frame(height: 20)
         } else {
-            Mascot(pose: .searching, size: 150)
+            Companion(pose: .searching, motion: .sway, size: 140)
+                .frame(height: 140)
                 .frame(maxWidth: .infinity).padding(.top, 20)
             VStack(alignment: .leading, spacing: 12) {
-                Text("Try").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
+                Text("Try").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
                 FlowChips(items: ["ai", "web dev", "history", "apple", "design", "comedy", "security", "business"]) { query = $0 }
             }
             .padding(.horizontal, 20).padding(.top, 24)
@@ -138,7 +146,7 @@ struct DiscoverView: View {
         return HStack(spacing: 12) {
             ArtworkView(title: r.title, artworkURL: r.artworkURL, size: 56, cornerRadius: 12)
             VStack(alignment: .leading, spacing: 1) {
-                Text(r.title).font(.text(15.5, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(r.title).font(.text(16, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
                 Text("\(r.author) \(Text("· \(r.genre)").foregroundStyle(Palette.ink3))")
                     .font(.text(13)).foregroundStyle(Palette.ink2).lineLimit(1)
             }
@@ -155,15 +163,16 @@ struct DiscoverView: View {
                     Image(systemName: following ? "checkmark" : "plus").font(.system(size: 13, weight: .heavy))
                     Text(following ? "Following" : "Follow")
                 }
-                .font(.rounded(13.5, .bold))
-                .foregroundStyle(following ? Palette.fern : Palette.tomato)
-                .padding(.horizontal, 12).frame(height: 32)
-                .background { if following { Capsule().fill(Palette.fern.opacity(0.12)) } else { Color.clear.raised(Capsule()) } }
+                .font(.rounded(14, .heavy))
+                .foregroundStyle(following ? Palette.fern : Palette.onTomato)
+                .padding(.horizontal, 14).frame(height: 36)
+                .background { if following { Capsule().fill(Palette.fern.opacity(0.12)) } else { Color.clear.raised(Capsule(), fill: Palette.chipOn) } }
                 .contentTransition(.symbolEffect(.replace))
             }
             .buttonStyle(.pressable)
+            .accessibilityIdentifier("discover.follow.\(r.id)")
         }
-        .padding(.leading, 20).padding(.trailing, 16).padding(.vertical, 8)
+        .padding(.leading, 12).padding(.trailing, 12).padding(.vertical, 10)
         .contentShape(Rectangle())
         .onTapGesture { if let id = store.podcastId(feedURL: r.feedURL) { app.push(.podcast(id)) } }
     }
@@ -173,11 +182,11 @@ struct DiscoverView: View {
     private var urlCard: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 12) {
-                Image(systemName: "link").font(.system(size: 19, weight: .semibold)).foregroundStyle(Palette.mustard)
-                    .frame(width: 42, height: 42)
-                    .background(Palette.chipOn, in: RoundedRectangle(cornerRadius: 13, style: .continuous))
+                Image(systemName: "link").font(.system(size: 18, weight: .bold)).foregroundStyle(Palette.onTomato)
+                    .frame(width: 44, height: 44)
+                    .background(Palette.chipOn, in: Circle())
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("Add by URL").font(.text(15.5, .semibold)).foregroundStyle(Palette.ink)
+                    Text("Add by URL").font(.text(16, .bold)).foregroundStyle(Palette.ink)
                     switch clipboard {
                     case let .link(url):
                         Text("Found on your clipboard:").font(.text(12.5)).foregroundStyle(Palette.ink2)
@@ -194,9 +203,11 @@ struct DiscoverView: View {
                 if clipboard != .none {
                     PoddleButton(title: "Paste", kind: .primary) { Task { await pasteFromClipboard() } }
                         .fixedSize()
+                        .accessibilityIdentifier("discover.paste")
                 } else {
                     PoddleButton(title: showManual ? "Close" : "Type", kind: .quiet) { withAnimation(.snappy) { showManual.toggle() } }
                         .fixedSize()
+                        .accessibilityIdentifier("discover.type")
                 }
             }
             if showManual {
@@ -208,15 +219,17 @@ struct DiscoverView: View {
                         .textInputAutocapitalization(.never)
                         #endif
                         .autocorrectionDisabled()
-                        .padding(.horizontal, 10).frame(height: 36)
-                        .well(cornerRadius: 10)
+                        .padding(.horizontal, 12).frame(height: 40)
+                        .well(Capsule())
                         .onSubmit { Task { await add(manualURL) } }
+                        .accessibilityIdentifier("discover.urlField")
                     PoddleButton(title: "Add", kind: .primary) { Task { await add(manualURL) } }.fixedSize()
+                        .accessibilityIdentifier("discover.add")
                 }
             }
         }
-        .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 12)
-        .raised(cornerRadius: 18)
+        .padding(.leading, 14).padding(.trailing, 12).padding(.vertical, 14)
+        .cloudCard()
         .padding(.horizontal, 16)
     }
 
@@ -278,10 +291,11 @@ struct DiscoverView: View {
 
     @ViewBuilder private var toastView: some View {
         if let toast {
-            Text(toast).font(.text(14, .semibold)).foregroundStyle(Palette.cream)
-                .padding(.horizontal, 16).padding(.vertical, 10)
-                .background(Fills.mini, in: Capsule())
-                .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+            Text(toast).font(.text(14.5, .bold)).foregroundStyle(Palette.inverseInk)
+                .padding(.horizontal, 18).padding(.vertical, 11)
+                .background(Palette.inverse, in: Capsule())
+                .floatShadow(8, y: 4, opacity: 0.25)
+                .accessibilityIdentifier("discover.toast")
                 .padding(.top, 8)
                 .transition(.move(edge: .top).combined(with: .opacity))
         }
@@ -296,6 +310,7 @@ private struct FlowChips: View {
         FlowLayout(spacing: 8) {
             ForEach(items, id: \.self) { item in
                 Chip(title: item, count: nil, isOn: false) { onTap(item) }
+                    .accessibilityIdentifier("discover.suggestion.\(item)")
             }
         }
     }

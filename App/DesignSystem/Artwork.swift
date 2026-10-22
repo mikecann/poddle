@@ -39,7 +39,8 @@ struct ArtworkView: View {
             .frame(width: size, height: size)
             .clipShape(shape)
             .overlay(shape.stroke(.black.opacity(0.14), lineWidth: 0.5))
-            .shadow(color: shadow ? Color(hex: 0x3C2314, alpha: 0.18) : .clear, radius: 1, y: 1)
+            // A solid lift rather than a blurred shadow: every list row has one of these.
+            .background { if shadow { shape.fill(Palette.cardEdge).offset(y: 1.5) } }
             .accessibilityLabel(Text("\(title) artwork"))
     }
 }

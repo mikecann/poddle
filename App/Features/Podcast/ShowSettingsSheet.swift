@@ -28,6 +28,7 @@ struct ShowSettingsSheet: View {
                             pinned: true
                         )
                         .padding(.horizontal, 16).padding(.top, 12)
+                        .accessibilityIdentifier("showSettings.speedMode")
                         SpeedSliderRow(value: r.speed.value, isCustom: s.speed != nil, defaultSpeed: g.speed) { v in
                             update { $0.speed = v }
                         }
@@ -55,9 +56,8 @@ struct ShowSettingsSheet: View {
                     selection: Binding(get: { r.autoAdd.value.shown }, set: { v in update { $0.autoAdd = v == g.autoAdd.shown ? nil : v } }),
                     height: 40, fontSize: 13
                 )
-                .padding(6)
-                .card(cornerRadius: 16)
                 .padding(.horizontal, 16)
+                .accessibilityIdentifier("showSettings.newEpisodes")
                 Text(r.autoAdd.value.shown.explanation)
                     .font(.text(12.5)).foregroundStyle(Palette.ink2)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -89,10 +89,13 @@ struct ShowSettingsSheet: View {
                             store.updateSettings(podcastId) { $0 = previous }
                         }
                     } label: {
-                        Text("Reset everything to my defaults").font(.text(15, .semibold)).foregroundStyle(Palette.tomato)
-                            .frame(maxWidth: .infinity).frame(height: 48)
+                        Text("Reset everything to my defaults").font(.text(15, .bold)).foregroundStyle(Palette.tomato)
+                            .padding(.horizontal, 20).frame(height: 44)
+                            .background(Palette.blush, in: Capsule())
                     }
+                    .buttonStyle(.pressable)
                     .padding(.top, 18)
+                    .accessibilityIdentifier("showSettings.reset")
                 }
                 Spacer(minLength: 30)
             }
@@ -104,13 +107,14 @@ struct ShowSettingsSheet: View {
 
     private var head: some View {
         HStack(spacing: 12) {
-            if let p = store.podcast(podcastId) { ArtworkView(podcast: p, size: 52, cornerRadius: 12) }
+            if let p = store.podcast(podcastId) { ArtworkView(podcast: p, size: 54, cornerRadius: 14) }
             VStack(alignment: .leading, spacing: 1) {
-                Text(store.podcast(podcastId)?.title ?? "").font(.rounded(17, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text("Settings for this show only").font(.text(13, .medium)).foregroundStyle(Palette.ink2)
+                Text(store.podcast(podcastId)?.title ?? "").font(.rounded(19, .heavy)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text("Settings for this show only").font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
             }
             Spacer(minLength: 4)
-            TextButton(title: "Done", bold: true) { dismiss() }
+            TextButton(title: "Done", bold: true, pill: true) { dismiss() }
+                .accessibilityIdentifier("showSettings.done")
         }
         .padding(.leading, 16).padding(.trailing, 8).padding(.top, 26).padding(.bottom, 4)
     }
@@ -196,7 +200,7 @@ private struct SpeedSliderRow: View {
                     RepeatButton(systemImage: "plus", label: "Faster") { onChange(Speed.snap(value + 0.05)) }
                 }
                 .frame(height: 40)
-                .well(cornerRadius: 12)
+                .well(Capsule())
             }
             .padding(.top, 12)
 
@@ -206,16 +210,18 @@ private struct SpeedSliderRow: View {
                 ZStack(alignment: .topLeading) {
                     Text("DEFAULT").font(.rounded(9, .bold)).tracking(0.36).foregroundStyle(Palette.ink3)
                         .fixedSize().position(x: x(defaultSpeed), y: 0)
-                    Capsule().fill(Palette.well.shadow(.inner(color: Color(hex: 0x5A3719, alpha: 0.15), radius: 1, y: 1)))
-                        .frame(height: 5).offset(y: 17)
-                    Capsule().fill(Palette.mustard).frame(width: max(5, x(shown)), height: 5).offset(y: 17)
+                    CurlLine().fill(Palette.apricot)
+                        .frame(height: 10).offset(y: 14.5)
+                    CurlLine(fraction: x(shown) / max(1, w)).fill(Palette.tomato)
+                        .frame(height: 10).offset(y: 14.5)
                     ForEach(0..<11) { i in
                         Rectangle().fill(Palette.ink3.opacity(0.6)).frame(width: 1, height: 5)
-                            .offset(x: w * CGFloat(i) / 10, y: 26)
+                            .offset(x: w * CGFloat(i) / 10, y: 28)
                     }
                     Circle()
-                        .fill(RadialGradient(colors: [.white, Color(hex: 0xEFE5D6)], center: UnitPoint(x: 0.4, y: 0.3), startRadius: 0, endRadius: 16))
-                        .shadow(color: Color(hex: 0x462814, alpha: 0.3), radius: 3, y: 2)
+                        .fill(Palette.creamWhite)
+                        .overlay(Circle().stroke(Palette.cardEdge, lineWidth: 1.5))
+                        .floatShadow(3, y: 2, opacity: 0.3)
                         .overlay(Capsule().fill(Palette.tomato).frame(width: 2, height: 12))
                         .frame(width: 26, height: 26)
                         .position(x: x(shown), y: 19.5)

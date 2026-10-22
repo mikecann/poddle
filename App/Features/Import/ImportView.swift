@@ -30,11 +30,8 @@ struct ImportView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 TopBar { BackButton(title: "Settings") } trailing: { EmptyView() }
-                Text("Moving from Overcast").font(.rounded(34, .heavy)).tracking(-0.34).foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 20).padding(.top, 6)
-                Text("Bring your shows and every episode you've played. It takes about a minute.")
-                    .font(.text(14.5)).foregroundStyle(Palette.ink2)
-                    .padding(.horizontal, 20).padding(.top, 2)
+                LargeTitle(title: "Moving from Overcast", subtitle: "Bring your shows and every episode you've played. It takes about a minute.")
+                    .padding(.top, 6)
 
                 VStack(alignment: .leading, spacing: 0) {
                     step(1, title: "Export from Overcast", state: openedOvercast || file != nil ? .done : .current) {
@@ -48,15 +45,16 @@ struct ImportView: View {
                                 openedOvercast = true
                                 openURL(URL(string: "https://overcast.fm/account")!)
                             } label: {
-                                HStack(spacing: 4) { Text("Open"); Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .bold)) }
-                                    .font(.text(13, .semibold)).foregroundStyle(Palette.tomato)
-                                    .padding(.horizontal, 10).frame(height: 28)
-                                    .background(Palette.tomato.opacity(0.1), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                HStack(spacing: 4) { Text("Open"); Image(systemName: "arrow.up.right").font(.system(size: 11, weight: .heavy)) }
+                                    .font(.text(14, .bold)).foregroundStyle(Palette.tomato)
+                                    .padding(.horizontal, 12).frame(height: 32)
+                                    .background(Palette.blush, in: Capsule())
                             }
                             .buttonStyle(.pressable)
+                            .accessibilityIdentifier("import.openOvercast")
                         }
-                        .padding(.leading, 12).padding(.trailing, 6).frame(height: 38)
-                        .raised(cornerRadius: 12)
+                        .padding(.leading, 14).padding(.trailing, 6).frame(height: 46)
+                        .cloudCard()
                         .padding(.top, 10)
                     }
 
@@ -71,15 +69,17 @@ struct ImportView: View {
                                 }
                                 Spacer()
                                 if !started {
-                                    Button("Change") { pickingFile = true }.font(.text(14, .medium)).foregroundStyle(Palette.tomato)
+                                    Button("Change") { pickingFile = true }.font(.text(14, .bold)).foregroundStyle(Palette.tomato)
+                                        .accessibilityIdentifier("import.changeFile")
                                 }
                             }
-                            .padding(.horizontal, 10).padding(.vertical, 8)
-                            .raised(cornerRadius: 12)
+                            .padding(.horizontal, 12).padding(.vertical, 10)
+                            .cloudCard()
                             .padding(.top, 10)
                         } else {
                             PoddleButton(title: "Choose the OPML file", systemImage: "folder", kind: .card) { pickingFile = true }
                                 .padding(.top, 10)
+                                .accessibilityIdentifier("import.chooseFile")
                         }
                         if let error {
                             Text(error).font(.text(13, .medium)).foregroundStyle(Palette.tomato).padding(.top, 6)
@@ -101,14 +101,17 @@ struct ImportView: View {
                         PoddleButton(title: "See your stats", kind: .primary, large: true) {
                             app.tab = .stats
                         }
+                        .accessibilityIdentifier("import.seeStats")
                         Button("Set per-show speeds next") { app.paths[.library] = []; app.tab = .library }
-                            .font(.text(17, .semibold)).foregroundStyle(Palette.tomato).frame(height: 50)
+                            .font(.text(17, .bold)).foregroundStyle(Palette.tomato).frame(height: 50)
+                            .accessibilityIdentifier("import.perShowSpeeds")
                     }
                     .padding(.horizontal, 16).padding(.top, 8)
                     .transition(.opacity.combined(with: .move(edge: .bottom)))
                 } else if file != nil && !started {
                     PoddleButton(title: "Import", kind: .primary, large: true) { start() }
                         .padding(.horizontal, 16).padding(.top, 8)
+                        .accessibilityIdentifier("import.start")
                 }
                 Spacer(minLength: 30)
             }
@@ -139,13 +142,14 @@ struct ImportView: View {
                 ForEach([1.0, 1.25, 1.5, 1.8, 2.0], id: \.self) { p in
                     let on = abs(p - speed) < 0.001
                     Button { speed = p } label: {
-                        Text(Format.speed(p)).font(.rounded(14, .bold))
+                        Text(Format.speed(p)).font(.rounded(14, .heavy))
                             .foregroundStyle(on ? Palette.chipOnText : Palette.ink)
-                            .frame(maxWidth: .infinity, minHeight: 34)
-                            .background { if on { RoundedRectangle(cornerRadius: 12).fill(Palette.chipOn) } }
-                            .raised(RoundedRectangle(cornerRadius: 12, style: .continuous), fill: on ? .clear : Palette.card)
+                            .frame(maxWidth: .infinity, minHeight: 36)
+                            .raised(Capsule(), fill: on ? Palette.chipOn : Palette.card)
                     }
                     .buttonStyle(.pressable)
+                    .accessibilityAddTraits(on ? .isSelected : [])
+                    .accessibilityIdentifier("import.speed.\(Format.speedNumber(p))")
                 }
             }
             HStack {
@@ -199,11 +203,11 @@ struct ImportView: View {
         .padding(.bottom, 2)
         .background {
             ReceiptShape().fill(Color(hex: 0xFFFDF8))
-                .shadow(color: Palette.shadow.opacity(0.14), radius: 8, y: 6)
-                .shadow(color: Palette.shadow.opacity(0.12), radius: 1, y: 1)
+                .floatShadow(8, y: 6, opacity: 0.16)
         }
         .padding(.top, 10)
         .environment(\.colorScheme, .light)
+        .accessibilityIdentifier("import.receipt")
     }
 
     private func big(_ value: String, _ label: String) -> some View {
@@ -232,8 +236,8 @@ struct ImportView: View {
     private func step<Content: View>(_ n: Int, title: String, state: StepState, last: Bool = false, @ViewBuilder content: () -> Content) -> some View {
         HStack(alignment: .top, spacing: 14) {
             ZStack {
-                Circle().fill(state == .done ? Palette.fern : state == .current ? Palette.tomato : Palette.ink3.opacity(0.5))
-                    .shadow(color: .black.opacity(0.2), radius: 1, y: 1)
+                Circle().fill(state == .done ? Palette.fern : state == .current ? Palette.chipOn : Palette.ink3.opacity(0.5))
+                    .background(Circle().fill(Palette.cardEdge).offset(y: 2))
                 if state == .done {
                     Image(systemName: "checkmark").font(.system(size: 14, weight: .black))
                 } else {
@@ -245,12 +249,12 @@ struct ImportView: View {
             .frame(maxHeight: .infinity, alignment: .top)
             .background(alignment: .top) {
                 if !last {
-                    Line().stroke(Color(hex: 0xCDBDA6), style: StrokeStyle(lineWidth: 2, lineCap: .round, dash: [0.1, 4]))
+                    Line().stroke(Palette.ink3.opacity(0.6), style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [0.1, 6]))
                         .frame(width: 2).padding(.top, 36).padding(.bottom, 2)
                 }
             }
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.rounded(16, .bold)).foregroundStyle(state == .todo ? Palette.ink3 : Palette.ink)
+                Text(title).font(.rounded(17, .heavy)).foregroundStyle(state == .todo ? Palette.ink3 : Palette.ink)
                     .contentTransition(.opacity)
                 if state != .todo || n == 3 { content() }
             }

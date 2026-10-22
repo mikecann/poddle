@@ -12,27 +12,31 @@ struct StatsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
                 TopBar {
+                    BrandLockup()
+                } trailing: {
                     Menu {
                         Picker("Year", selection: $year) {
                             ForEach(store.years.isEmpty ? [year] : store.years, id: \.self) { Text(String($0)).tag($0) }
                         }
                     } label: {
                         HStack(spacing: 6) {
-                            Text(String(year)).font(.rounded(16, .semibold)).monospacedDigit()
-                            Image(systemName: "chevron.down").font(.system(size: 12, weight: .bold))
+                            Text(String(year)).font(.rounded(16, .heavy)).monospacedDigit()
+                            Image(systemName: "chevron.down").font(.system(size: 12, weight: .heavy))
                         }
-                        .foregroundStyle(Palette.ink)
-                        .padding(.horizontal, 14).frame(height: 36)
+                        .foregroundStyle(Palette.tomato)
+                        .padding(.horizontal, 16).frame(height: 40)
                         .raised(Capsule())
                     }
                     .menuStyle(.button).buttonStyle(.plain).padding(.horizontal, 6)
+                    .accessibilityIdentifier("stats.year")
                 }
-                LargeTitle(title: "Stats").padding(.top, 6)
+                .frame(height: 52)
+                LargeTitle(title: "Stats").padding(.top, 2)
 
                 if let stats = store.stats {
                     content(stats)
                 } else {
-                    ProgressView().frame(maxWidth: .infinity).padding(60)
+                    TrotStrip(message: "Counting up your listening…").padding(.vertical, 50)
                 }
             }
             .padding(.bottom, 24)
@@ -46,6 +50,7 @@ struct StatsView: View {
     @ViewBuilder private func content(_ s: StatsSummary) -> some View {
         Button { app.showYearInReview = true } label: { ticket }
             .buttonStyle(.pressable)
+            .accessibilityIdentifier("stats.yearInReview")
             .padding(.horizontal, 16).padding(.top, 12)
 
         HStack(alignment: .top, spacing: 10) {
@@ -65,6 +70,7 @@ struct StatsView: View {
                         Palette.tomato.frame(width: max(0, (geo.size.width - 2) * speedShare))
                         Palette.mustard
                     }
+                    .accessibilityHidden(true)
                     .clipShape(Capsule())
                 }
                 .frame(height: 8)
@@ -83,18 +89,22 @@ struct StatsView: View {
 
         if let before = s.estimatedBefore {
             Text("Includes estimated history from Overcast before \(Format.monthYear(before)).")
-                .font(.text(12)).foregroundStyle(Palette.ink3)
+                .font(.text(12.5, .medium)).foregroundStyle(Palette.ink3)
                 .padding(.horizontal, 32).padding(.top, 12)
         }
     }
 
     private var ticket: some View {
         HStack(spacing: 0) {
+            Image("Mascot/celebrate").resizable().scaledToFit()
+                .frame(width: 58, height: 58)
+                .padding(.leading, 12)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Freshly printed").font(.rounded(10.5, .heavy)).tracking(1.47).textCase(.uppercase).opacity(0.7)
+                Text("Freshly printed").font(.rounded(11, .heavy)).tracking(1.3).textCase(.uppercase).opacity(0.85)
                 Text("Your \(String(year)) in review").font(.rounded(19, .heavy)).tracking(-0.19)
             }
-            .padding(.horizontal, 16)
+            .padding(.horizontal, 10)
             .frame(maxWidth: .infinity, alignment: .leading)
             VStack(spacing: 2) {
                 Image(systemName: "gift").font(.system(size: 19, weight: .semibold))
@@ -103,16 +113,16 @@ struct StatsView: View {
             .frame(width: 84)
             .frame(maxHeight: .infinity)
             .overlay(alignment: .leading) {
-                Line().stroke(Color(hex: 0x3B2A0B, alpha: 0.3), style: StrokeStyle(lineWidth: 2, dash: [4, 3])).frame(width: 2).padding(.vertical, 10)
+                Line().stroke(Palette.onTomato.opacity(0.5), style: StrokeStyle(lineWidth: 2, dash: [4, 3])).frame(width: 2).padding(.vertical, 10)
             }
         }
-        .foregroundStyle(Color(hex: 0x3B2A0B))
-        .frame(height: 76)
+        .foregroundStyle(Palette.onTomato)
+        .frame(height: 80)
         .background {
             TicketShape(notchFromTrailing: 84)
-                .fill(LinearGradient(colors: [Color(hex: 0xEDBE5A), Color(hex: 0xE2A93E)], startPoint: .top, endPoint: .bottom))
-                .shadow(color: Color(hex: 0x78500A, alpha: 0.2), radius: 2, y: 2)
-                .shadow(color: Color(hex: 0x78500A, alpha: 0.16), radius: 9, y: 8)
+                .fill(Fills.tomato)
+                .background(TicketShape(notchFromTrailing: 84).fill(Color(hex: 0x9E2412)).offset(y: 3))
+                .floatShadow(9, y: 7, opacity: 0.2)
         }
     }
 
@@ -120,7 +130,7 @@ struct StatsView: View {
         VStack(alignment: .leading, spacing: 0) { content() }
             .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 14)
             .frame(maxWidth: .infinity, minHeight: 138, alignment: .topLeading)
-            .card(cornerRadius: 18)
+            .card()
     }
 
     private func bigNumber(_ n: Int, unit: String) -> some View {
@@ -143,27 +153,27 @@ struct StatsView: View {
 
     private func streak(_ s: StatsSummary) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: "sun.max").font(.system(size: 17, weight: .semibold)).foregroundStyle(Palette.tomato)
-                .frame(width: 32, height: 32)
-                .background(Palette.tomato.opacity(0.12), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            Image(systemName: "sun.max.fill").font(.system(size: 16, weight: .bold)).foregroundStyle(Palette.tomato)
+                .frame(width: 36, height: 36)
+                .background(Palette.blush, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
                 Text(s.currentStreakDays > 0 ? "\(s.currentStreakDays)-day streak" : "Best streak: \(s.bestStreakDays) days")
-                    .font(.rounded(15, .bold)).foregroundStyle(Palette.ink)
+                    .font(.rounded(16, .heavy)).foregroundStyle(Palette.ink)
                 Text(s.isBestStreak && s.currentStreakDays > 0 ? "Your best ever. Previous was \(s.previousBestStreakDays)." : "At least 10 minutes a day keeps it going.")
                     .font(.text(12, .medium)).foregroundStyle(Palette.ink2)
             }
             Spacer(minLength: 4)
             HStack(spacing: 3) {
                 ForEach(Array(s.recentDays.enumerated()), id: \.offset) { _, minutes in
-                    RoundedRectangle(cornerRadius: 2).fill(Palette.tomato)
-                        .frame(width: 6, height: 18)
+                    Capsule().fill(Palette.tomato)
+                        .frame(width: 7, height: 18)
                         .opacity(minutes < 45 ? 0.45 : 1)
                 }
             }
             .accessibilityLabel("Last ten days")
         }
-        .padding(.horizontal, 14).padding(.vertical, 10)
-        .card(cornerRadius: 16)
+        .padding(.horizontal, 14).padding(.vertical, 12)
+        .card()
     }
 
     private struct HeatCell: Identifiable {
@@ -187,7 +197,7 @@ struct StatsView: View {
         }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("When you listen").font(.rounded(15, .bold)).foregroundStyle(Palette.ink)
+                Text("When you listen").font(.rounded(16, .heavy)).foregroundStyle(Palette.ink)
                 Spacer()
                 Text("Peak: \(s.peakLabel)").font(.text(12, .medium)).foregroundStyle(Palette.ink2)
             }
@@ -223,17 +233,18 @@ struct StatsView: View {
             .padding(.leading, 20).padding(.top, -4)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
-        .card(cornerRadius: 18)
+        .card()
     }
 
     private func topShows(_ s: StatsSummary) -> some View {
         let maxSeconds = s.topShows.first?.seconds ?? 1
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
-                Text("Top shows").font(.rounded(15, .bold)).foregroundStyle(Palette.ink)
+                Text("Top shows").font(.rounded(16, .heavy)).foregroundStyle(Palette.ink)
                 Spacer()
                 Button("See all \(s.showCount)") { showAllShows = true }
-                    .font(.text(13, .medium)).foregroundStyle(Palette.tomato)
+                    .font(.text(13.5, .bold)).foregroundStyle(Palette.tomato)
+                    .accessibilityIdentifier("stats.seeAll")
             }
             .padding(.bottom, 6)
             ForEach(Array(s.topShows.prefix(5).enumerated()), id: \.element.id) { i, show in
@@ -243,7 +254,7 @@ struct StatsView: View {
             }
         }
         .padding(.horizontal, 14).padding(.top, 12).padding(.bottom, 4)
-        .card(cornerRadius: 18)
+        .card()
     }
 }
 
@@ -261,7 +272,7 @@ struct TopShowRow: View {
                     Spacer()
                     Text(Format.hours(show.seconds)).font(.rounded(13, .bold)).monospacedDigit().foregroundStyle(Palette.ink2)
                 }
-                ProgressBar(value: fraction, width: nil, height: 4, tint: Palette.tomato, track: Palette.ink.opacity(0.08))
+                ProgressBar(value: fraction, width: nil, height: 5)
             }
         }
         .frame(height: 44)
@@ -274,9 +285,9 @@ private struct AllShowsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("Top shows").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
+                Text("Top shows").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
                 Spacer()
-                TextButton(title: "Done", bold: true) { dismiss() }
+                TextButton(title: "Done", bold: true, pill: true) { dismiss() }
             }
             .padding(.leading, 20).padding(.trailing, 8).padding(.top, 18)
             ScrollView {

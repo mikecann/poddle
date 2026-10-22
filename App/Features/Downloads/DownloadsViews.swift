@@ -18,9 +18,9 @@ struct MobileAllowanceChip: View {
                             .accessibilityLabel("Stop mobile downloads")
                     }
                     .foregroundStyle(Palette.ink)
-                    .padding(.horizontal, 12).padding(.vertical, 7)
-                    .background(Palette.paper2, in: Capsule())
-                    .overlay(Capsule().stroke(Palette.line, lineWidth: 1))
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .raised(Capsule())
+                    .accessibilityIdentifier("mobileAllowanceChip")
                     .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }

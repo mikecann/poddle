@@ -24,6 +24,16 @@ enum Tab: String, CaseIterable, Identifiable, Hashable {
         case .profile: "person.crop.circle"
         }
     }
+
+    var selectedImage: String {
+        switch self {
+        case .upNext: "square.stack.fill"
+        case .library: "square.grid.2x2.fill"
+        case .discover: "safari.fill"
+        case .stats: "chart.bar.fill"
+        case .profile: "person.crop.circle.fill"
+        }
+    }
 }
 
 enum Route: Hashable {
@@ -65,6 +75,8 @@ final class AppModel {
     var nowPlayingPage: NowPlayingPage = .player
     /// The Undo toast for destructive actions.
     let undo = UndoCenter()
+    /// What Poddle, the companion, is up to.
+    let companion = CompanionModel()
     var showYearInReview = false
     /// Pre-filled search for screenshots.
     var discoverQuery = ""
@@ -126,7 +138,7 @@ final class AppModel {
         let episode = store.episode("ep_syntax_912") != nil ? "ep_syntax_912" : store.queue.first?.id ?? ""
         switch name {
         case "upNext": tab = .upNext
-        case "library": tab = .library
+        case "library": tab = .library; UserDefaults.standard.set("grid", forKey: "libraryLayout")
         case "libraryList": tab = .library; UserDefaults.standard.set("list", forKey: "libraryLayout")
         case "podcast": tab = .library; paths[.library] = [.podcast(show("pod_syntax"))]
         case "showSettings":
@@ -143,6 +155,24 @@ final class AppModel {
             tab = .discover
             discoverQuery = UserDefaults.standard.string(forKey: "PoddleQuery") ?? "ai pod"
             if isMock { fakeClipboard = "https://podcast.mikecann.app/feed/9f2c6b1e7d0a4c55?token=sk_live_7f3a91" }
+        case "upNextEmpty": tab = .upNext; store.clearQueue(keeping: player.currentEpisodeId)
+        case "notFound": tab = .library; paths[.library] = [.podcast("missing")]
+        case "discoverEmpty": tab = .discover
+        case "sleepTimer": showNowPlaying = true; player.setSleepMinutes(30)
+        // The companion's finished-episode moment, a beat after launch.
+        case "celebrate":
+            tab = .upNext
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                companion.celebrate()
+            }
+        // The companion recording: bopping while it plays, then paused, and dozing a few seconds later.
+        case "companionDemo":
+            tab = .upNext
+            Task {
+                try? await Task.sleep(for: .seconds(6))
+                player.pause()
+            }
         case "stats": tab = .stats
         case "yearInReview": tab = .stats; showYearInReview = true
         case "nowPlaying": showNowPlaying = true

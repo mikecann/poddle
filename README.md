@@ -27,7 +27,7 @@ With none, the app runs on live data (`LiveStore` over Convex: the dev deploymen
 |---|---|
 | `-PoddleMock YES` | Sample data (`MockStore`) instead of Convex |
 | `-PoddleLive YES` | Keep live data on a `-PoddleScreen` run, which otherwise uses sample data |
-| `-PoddleScreen <name>` | Open a screen straight away for screenshots: `upNext`, `library`, `libraryList`, `podcast`, `showSettings`, `episode`, `settings`, `import`, `importDone`, `discover`, `stats`, `yearInReview`, `nowPlaying`, `npNotes` (or `chapters`), `npSettings` (or `speed`), `queue`, and the Undo checks `undoArchive`, `undoArchiveUndone`, `undoRemove`, `undoRemoveUndone`. Implies sample data and `MockPlayer`, unless overridden by the two rows either side |
+| `-PoddleScreen <name>` | Open a screen straight away for screenshots: `upNext`, `library`, `libraryList`, `podcast`, `showSettings`, `episode`, `settings`, `import`, `importDone`, `discover`, `stats`, `yearInReview`, `nowPlaying`, `npNotes` (or `chapters`), `npSettings` (or `speed`), `queue`, the Undo checks `undoArchive`, `undoArchiveUndone`, `undoRemove`, `undoRemoveUndone`, the companion and empty states `upNextEmpty`, `discoverEmpty`, `notFound`, `sleepTimer`, `signIn`, `celebrate`, and `companionDemo` (plays, then pauses after 6 s so Poddle dozes off). Implies sample data and `MockPlayer`, unless overridden by the two rows either side |
 | `-PoddleMockPlayer YES\|NO` | `YES` fakes playback and downloads (`MockPlayer`) on any launch; `NO` keeps the real engine on a `-PoddleScreen` run |
 | `-PoddleAppearance dark\|light` | Force the colour scheme |
 | `-PoddleRealAudio YES` | Sample data with the top of Up Next pointed at real, short public episodes (implies `-PoddleMock`) |

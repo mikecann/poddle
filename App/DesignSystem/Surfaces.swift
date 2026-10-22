@@ -1,6 +1,7 @@
 import SwiftUI
 
-// Depth comes from soft shadows, pressed-in wells and a fine paper grain instead of glass.
+// Cloud Fluff: depth comes from puffy surfaces sitting on a solid, slightly lower copy of their own
+// shape (cheap, no blur), pressed-in wells, and a real soft shadow only on the few things that float.
 
 /// A tileable fractal-ish noise tile, tinted warm brown like the design's feTurbulence grain.
 enum Grain {
@@ -62,36 +63,29 @@ struct GrainOverlay: View {
     }
 }
 
-/// Paper plus grain, for screen backgrounds.
+/// Flat cream, for screen backgrounds. (The v1 paper grain is gone: Cloud Fluff is clean, and a
+/// full-screen blend over a scrolling list costs a compositing pass every frame.)
 struct PaperBackground: View {
     var color: Color = Palette.paper
     var body: some View {
-        color.overlay(GrainOverlay()).ignoresSafeArea()
+        color.ignoresSafeArea()
     }
 }
 
 extension View {
-    /// A raised card surface: highlight on top, soft two-layer shadow below (the design's --raise).
+    /// A puffy raised surface for buttons, chips and pills: fill, a soft top highlight, and a solid
+    /// copy of the shape just below it in place of a blurred shadow.
     func raised<S: InsettableShape>(_ shape: S, fill: Color = Palette.card) -> some View {
         background {
-            shape.fill(fill)
-                .overlay {
-                    shape.inset(by: 0.5).stroke(
-                        LinearGradient(
-                            stops: [
-                                .init(color: .white.opacity(0.85), location: 0),
-                                .init(color: .white.opacity(0), location: 0.25),
-                                .init(color: .clear, location: 0.8),
-                                .init(color: Color(hex: 0x5A3C1E, alpha: 0.06), location: 1),
-                            ],
-                            startPoint: .top, endPoint: .bottom
-                        ),
-                        lineWidth: 1
-                    )
-                    .modifier(DarkDim())
-                }
-                .shadow(color: Palette.shadow.opacity(0.16), radius: 1, y: 1)
-                .shadow(color: Palette.shadow.opacity(0.07), radius: 5, y: 4)
+            ZStack {
+                shape.fill(Palette.cardEdge).offset(y: 2)
+                shape.fill(fill)
+                shape.inset(by: 0.5).stroke(
+                    LinearGradient(colors: [.white.opacity(0.9), .white.opacity(0)], startPoint: .top, endPoint: .center),
+                    lineWidth: 1
+                )
+                .modifier(DarkDim())
+            }
         }
     }
 
@@ -99,23 +93,15 @@ extension View {
         raised(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous), fill: fill)
     }
 
-    /// A flat card with a hairline, for grouped settings and stats tiles.
-    func card(cornerRadius: CGFloat = 16) -> some View {
-        background {
-            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                .fill(Palette.card)
-                .shadow(color: Palette.shadow.opacity(0.08), radius: 1, y: 1)
-                .overlay {
-                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                        .stroke(Palette.shadow.opacity(0.06), lineWidth: 0.5)
-                }
-        }
+    /// A cloud card, for grouped settings and stats tiles.
+    func card(cornerRadius: CGFloat = 22) -> some View {
+        cloudCard(cornerRadius: cornerRadius, scallop: 34, depth: 1.8)
     }
 
     /// A pressed-in well, for steppers, search fields and segmented tracks.
     func well<S: Shape>(_ shape: S, fill: Color = Palette.well) -> some View {
         background {
-            shape.fill(fill.shadow(.inner(color: Color(hex: 0x5A3719, alpha: 0.16), radius: 1.5, y: 1)))
+            shape.fill(fill.shadow(.inner(color: Palette.shadow.opacity(0.16), radius: 1.5, y: 1)))
         }
     }
 
@@ -130,13 +116,13 @@ private struct DarkDim: ViewModifier {
     func body(content: Content) -> some View { content.opacity(scheme == .dark ? 0.1 : 1) }
 }
 
-/// Buttons sink a point when you press them.
+/// Puffy buttons squash a little when you press them.
 struct PressableStyle: ButtonStyle {
-    var scale: CGFloat = 0.97
+    var scale: CGFloat = 0.95
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .scaleEffect(configuration.isPressed ? scale : 1)
-            .offset(y: configuration.isPressed ? 1 : 0)
+            .offset(y: configuration.isPressed ? 1.5 : 0)
             .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
     }
 }

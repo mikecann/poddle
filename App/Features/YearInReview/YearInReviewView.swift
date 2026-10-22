@@ -21,28 +21,30 @@ struct YearInReviewView: View {
         VStack(spacing: 0) {
             HStack {
                 Button { dismiss() } label: {
-                    Image(systemName: "xmark").font(.system(size: 17, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                        .background(Palette.cream.opacity(0.1), in: Circle())
+                    Image(systemName: "xmark").font(.system(size: 16, weight: .heavy))
+                        .frame(width: 42, height: 42)
+                        .raised(Circle(), fill: NP.util)
                 }
                 .buttonStyle(.pressable)
                 .accessibilityLabel("Close")
+                .accessibilityIdentifier("yearInReview.close")
                 Spacer()
-                Text("Your \(String(year))").font(.text(17, .semibold))
+                Text("Your \(String(year))").font(.rounded(19, .heavy))
                 Spacer()
                 Menu {
                     Toggle("Include private shows", isOn: $includePrivate)
                 } label: {
-                    Image(systemName: includePrivate ? "lock.open" : "lock").font(.system(size: 15, weight: .semibold))
-                        .frame(width: 36, height: 36)
-                        .background(Palette.cream.opacity(0.1), in: Circle())
+                    Image(systemName: includePrivate ? "lock.open" : "lock").font(.system(size: 15, weight: .heavy))
+                        .frame(width: 42, height: 42)
+                        .raised(Circle(), fill: NP.util)
                 }
                 .menuStyle(.button).buttonStyle(.plain)
                 .accessibilityLabel("Private shows")
+                .accessibilityIdentifier("yearInReview.private")
             }
-            .foregroundStyle(Palette.cream)
-            .padding(.horizontal, 12)
-            .frame(height: 44)
+            .foregroundStyle(NP.fg)
+            .padding(.horizontal, 14)
+            .frame(height: 56)
 
             if let review = store.yearInReview {
                 TabView(selection: $style) {
@@ -53,7 +55,7 @@ struct YearInReviewView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: 24 / scale * 0.85, style: .continuous))
                                 .scaleEffect(scale)
                                 .frame(width: geo.size.width, height: geo.size.height)
-                                .shadow(color: .black.opacity(0.7), radius: 25, y: 30)
+                                .floatShadow(20, y: 18, opacity: 0.3)
                         }
                         .padding(.horizontal, 40)
                         .padding(.vertical, 6)
@@ -65,53 +67,47 @@ struct YearInReviewView: View {
                 #endif
                 .frame(maxHeight: 560)
 
-                HStack(spacing: 6) {
-                    ForEach(CardStyle.allCases) { s in
-                        Button { withAnimation { style = s } } label: {
-                            Text(s.rawValue).font(.text(13, .semibold))
-                                .foregroundStyle(style == s ? Palette.cream : Palette.cream.opacity(0.55))
-                                .padding(.horizontal, 12).frame(height: 28)
-                                .background(style == s ? Palette.cream.opacity(0.12) : .clear, in: Capsule())
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-                .padding(.top, 16)
+                PoddleSegmented(options: CardStyle.allCases.map { ($0, $0.rawValue) }, selection: $style, height: 38, fontSize: 14)
+                    .frame(maxWidth: 320)
+                    .padding(.top, 16)
+                    .accessibilityIdentifier("yearInReview.style")
                 .sensoryFeedback(.selection, trigger: style)
 
                 HStack(spacing: 10) {
                     Button { copy() } label: {
                         Label(copied > 0 ? "Copied" : "Copy image", systemImage: copied > 0 ? "checkmark" : "doc.on.doc")
-                            .font(.text(17, .semibold)).foregroundStyle(Palette.cream)
-                            .frame(maxWidth: .infinity).frame(height: 50)
-                            .background(Palette.cream.opacity(0.1), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                            .font(.text(17, .bold)).foregroundStyle(NP.fg)
+                            .frame(maxWidth: .infinity).frame(height: 52)
+                            .raised(Capsule(), fill: NP.util)
                             .contentTransition(.symbolEffect(.replace))
                     }
                     .buttonStyle(.pressable)
                     .sensoryFeedback(.success, trigger: copied)
+                    .accessibilityIdentifier("yearInReview.copy")
 
                     if let rendered {
                         let image = Image(decorative: rendered, scale: 1)
                         ShareLink(item: image, subject: Text("My \(String(year)) in podcasts"), message: Text(shareText(review)),
                                   preview: SharePreview("My \(String(year)) in podcasts", image: image)) {
                             Label("Share", systemImage: "square.and.arrow.up")
-                                .font(.text(17, .semibold)).foregroundStyle(Palette.creamWhite)
-                                .frame(maxWidth: .infinity).frame(height: 50)
-                                .background(Fills.tomato, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                                .shadow(color: Color(hex: 0xA03C14, alpha: 0.3), radius: 7, y: 6)
+                                .font(.text(17, .bold)).foregroundStyle(Palette.onTomato)
+                                .frame(maxWidth: .infinity).frame(height: 52)
+                                .background(Fills.tomato, in: Capsule())
+                                .floatShadow(7, y: 5, opacity: 0.25)
                         }
                         .buttonStyle(.pressable)
+                        .accessibilityIdentifier("yearInReview.share")
                     }
                 }
                 .padding(.horizontal, 20).padding(.top, 14)
                 Spacer(minLength: 10)
             } else {
                 Spacer()
-                ProgressView().tint(Palette.cream)
+                TrotStrip(message: "Printing your year…")
                 Spacer()
             }
         }
-        .background(Color(hex: 0x241C17).overlay(GrainOverlay(dark: true)).ignoresSafeArea())
+        .background { NowPlayingBackground() }
         .task { await store.loadYearInReview(year: year) }
         .task(id: "\(style.rawValue)-\(includePrivate)-\(store.yearInReview?.year ?? 0)") { render() }
     }

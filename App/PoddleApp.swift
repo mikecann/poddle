@@ -66,6 +66,11 @@ struct PoddleApp: App {
             player.load(head.id)
         }
         if let screen { app.applyLaunchScreen(screen, player: player, store: store) }
+        // `-PoddleScreen signIn`: the signed-out screen, with a throwaway session store so nothing
+        // real is touched.
+        if screen == "signIn" {
+            account = Account(config: LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!), store: MemorySessionStore())
+        }
         if autoplay {
             player.resume()
         }

@@ -47,6 +47,7 @@ struct LibraryView: View {
                                 Button { app.push(.podcast(p.id)) } label: { gridCell(p) }
                                     .buttonStyle(.pressable)
                                     .contextMenu { menu(p) }
+                                    .accessibilityIdentifier("library.show.\(p.id)")
                             }
                         }
                         .padding(.horizontal, 20)
@@ -54,20 +55,25 @@ struct LibraryView: View {
                         empty
                     }
                 }
+                .accessibilityIdentifier("library.grid")
             } else {
                 List {
                     header.plainListRow()
-                    ForEach(Array(shows.enumerated()), id: \.element.id) { i, p in
+                    ForEach(shows) { p in
                         listRow(p)
-                            .overlay(alignment: .top) { if i > 0 { RowDivider(leading: 88) } }
+                            .cloudCard()
+                            .padding(.vertical, 4)
                             .swipeRow(trailing: SwipeEdge(short: SwipeAction(title: "Unsubscribe", systemImage: "minus.circle", fill: Fills.actionTomato) { unsubscribing = p }))
                             .onTapGesture { app.push(.podcast(p.id)) }
                             .contextMenu { menu(p) }
+                            .padding(.horizontal, 12)
+                            .accessibilityIdentifier("library.show.\(p.id)")
                             .plainListRow()
                     }
                     empty.plainListRow()
                 }
                 .listStyle(.plain)
+                .accessibilityIdentifier("library.list")
                 .scrollContentBackground(.hidden)
             }
         }
@@ -82,30 +88,35 @@ struct LibraryView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             TopBar {
-                EmptyView()
+                BrandLockup()
             } trailing: {
                 Menu {
                     Picker("Sort", selection: $sort) {
                         ForEach(Sort.allCases, id: \.self) { Text($0.label).tag($0) }
                     }
                 } label: {
-                    Image(systemName: "arrow.up.arrow.down").font(.system(size: 16, weight: .medium))
-                        .foregroundStyle(Palette.tomato).frame(width: 36, height: 36).raised(Circle())
+                    Image(systemName: "arrow.up.arrow.down").font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Palette.tomato).frame(width: 40, height: 40).raised(Circle())
                 }
                 .menuStyle(.button).buttonStyle(.plain).padding(.horizontal, 4)
                 .accessibilityLabel("Sort")
-                PoddleSegmented(options: [("grid", "Grid"), ("list", "List")], selection: $layout, height: 34, fontSize: 13)
-                    .frame(width: 120)
+                .accessibilityIdentifier("library.sort")
+                PoddleSegmented(options: [("grid", "Grid"), ("list", "List")], selection: $layout, height: 40, fontSize: 14.5)
+                    .frame(width: 132)
                     .padding(.horizontal, 4)
+                    .accessibilityIdentifier("library.layout")
             }
+            .frame(height: 52)
             LargeTitle(title: "Library", subtitle: showPast ? "\(shows.count) past shows" : "\(shows.count) shows · \(totalUnplayed) unplayed")
                 .padding(.top, 6)
             HStack(spacing: 8) {
                 Chip(title: "Following", count: store.library.count, isOn: !showPast) { showPast = false }
+                    .accessibilityIdentifier("library.filter.following")
                 Chip(title: "Past shows", count: store.pastShows.count, isOn: showPast) { showPast = true }
+                    .accessibilityIdentifier("library.filter.past")
                 Spacer()
             }
-            .padding(.horizontal, 20).padding(.vertical, 14)
+            .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 8)
         }
     }
 
@@ -114,26 +125,30 @@ struct LibraryView: View {
     private func gridCell(_ p: Podcast) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             GeometryReader { geo in
+                // The lift is a solid copy of the tile, not a blur: a full grid scrolls without offscreen passes.
                 ArtworkView(podcast: p, size: geo.size.width, cornerRadius: geo.size.width * 0.2, shadow: false)
-                    .shadow(color: Color(hex: 0x3C2314, alpha: 0.22), radius: 4, y: 3)
+                    .background {
+                        RoundedRectangle(cornerRadius: geo.size.width * 0.2, style: .continuous)
+                            .fill(Palette.cardEdge).offset(y: 3)
+                    }
             }
             .aspectRatio(1, contentMode: .fit)
             .overlay(alignment: .topTrailing) {
                 let n = store.unplayedCount(p.id)
                 if n > 0 {
-                    Text("\(n)").font(.rounded(12, .heavy)).foregroundStyle(Palette.creamWhite)
-                        .padding(.horizontal, 6).frame(minWidth: 22, minHeight: 22)
-                        .background(Palette.tomato, in: Capsule())
-                        .overlay(Capsule().stroke(Palette.paper, lineWidth: 2))
+                    Text("\(n)").font(.rounded(13, .heavy)).foregroundStyle(Palette.onTomato)
+                        .padding(.horizontal, 6).frame(minWidth: 25, minHeight: 25)
+                        .background(Palette.chipOn, in: Capsule())
+                        .overlay(Capsule().stroke(Palette.paper, lineWidth: 2.5))
                         .offset(x: 6, y: -6)
                 }
             }
             HStack(spacing: 4) {
-                Text(p.title).font(.text(13, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(p.title).font(.text(14, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
                 if store.settings(for: p.id).hasOverrides { PinGlyph().frame(width: 10, height: 10).foregroundStyle(Palette.goldInk) }
             }
             Text(store.latestPubDate(p.id).map { "Updated \(Format.relativeDate($0).lowercasedIfRelative)" } ?? p.author)
-                .font(.text(11.5, .medium)).foregroundStyle(Palette.ink2).lineLimit(1)
+                .font(.text(12, .medium)).foregroundStyle(Palette.ink2).lineLimit(1)
         }
     }
 
@@ -142,7 +157,7 @@ struct LibraryView: View {
             ArtworkView(podcast: p, size: 56, cornerRadius: 12)
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(p.title).font(.text(15.5, .semibold)).foregroundStyle(Palette.ink).lineLimit(1)
+                    Text(p.title).font(.text(16, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
                     if p.isPrivate { PrivateBadge() }
                     if let speed = store.settings(for: p.id).speed { OverridePin(text: Format.speed(speed)) }
                 }
@@ -154,26 +169,25 @@ struct LibraryView: View {
             Spacer()
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
         }
-        .padding(.leading, 20).padding(.trailing, 16).padding(.vertical, 10)
+        .padding(.leading, 12).padding(.trailing, 14).padding(.vertical, 11)
         .contentShape(Rectangle())
     }
 
     @ViewBuilder private var empty: some View {
         if shows.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "square.grid.2x2").font(.system(size: 34)).foregroundStyle(Palette.ink3)
-                Text(showPast ? "No past shows" : "No shows yet").font(.rounded(20, .bold)).foregroundStyle(Palette.ink)
-                Text(showPast ? "Shows you unsubscribe from keep their history here." : "Find some in Discover, or bring everything over from Overcast.")
-                    .font(.text(14)).foregroundStyle(Palette.ink2).multilineTextAlignment(.center)
+            VStack(spacing: 4) {
+                BrandPlaceholder(pose: showPast ? .empty : .searching, title: showPast ? "No past shows" : "No shows yet",
+                                 message: showPast ? "Shows you unsubscribe from keep their history here." : "Find some in Discover, or bring everything over from Overcast.",
+                                 size: 130)
                 if !showPast {
                     PoddleButton(title: "Import from Overcast", systemImage: "square.and.arrow.down", kind: .primary) {
                         app.push(.importOvercast, on: .library)
                     }
-                    .padding(.top, 6)
+                    .accessibilityIdentifier("library.import")
                 }
             }
             .frame(maxWidth: .infinity)
-            .padding(40)
+            .padding(.horizontal, 20).padding(.vertical, 20)
         } else {
             Color.clear.frame(height: 20)
         }

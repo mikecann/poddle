@@ -16,8 +16,8 @@ struct OverridePin: View {
         .padding(.leading, 4)
         .padding(.trailing, text == nil ? 4 : 6)
         .padding(.vertical, 1.5)
-        .foregroundStyle(onDark ? Color(hex: 0xF2C979) : Palette.goldInk)
-        .background(onDark ? Color(hex: 0xE7B24A, alpha: 0.18) : Palette.goldBg, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .foregroundStyle(Palette.goldInk)
+        .background(Palette.goldBg, in: Capsule())
         .textCase(nil)
         .accessibilityLabel(text.map { "Show's own setting, \($0)" } ?? "Show's own setting")
     }
@@ -31,7 +31,7 @@ struct PrivateBadge: View {
         }
         .padding(.leading, 4).padding(.trailing, 6).padding(.vertical, 1.5)
         .foregroundStyle(Palette.ink2)
-        .background(Palette.wash, in: RoundedRectangle(cornerRadius: 6, style: .continuous))
+        .background(Palette.wash, in: Capsule())
         .textCase(nil)
     }
 }
@@ -99,12 +99,13 @@ struct RingProgressStyle: ProgressViewStyle {
 
 // MARK: - Progress
 
+/// The small pill bar on rows ("38m left"). The big ones are curls (`CurlProgressBar`, `Scrubber`).
 struct ProgressBar: View {
     var value: Double
     var width: CGFloat? = 40
-    var height: CGFloat = 4
+    var height: CGFloat = 5
     var tint: Color = Palette.tomato
-    var track: Color = Palette.ink.opacity(0.12)
+    var track: Color = Palette.apricot
 
     var body: some View {
         Capsule().fill(track)
@@ -120,6 +121,7 @@ struct ProgressBar: View {
 
 // MARK: - Chips
 
+/// A pill filter chip: tomato when on, a puffy cream pill when off.
 struct Chip: View {
     var title: String
     var count: Int?
@@ -128,24 +130,20 @@ struct Chip: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: 5) {
+            HStack(spacing: 6) {
                 Text(title)
                 if let count {
-                    Text("\(count)").foregroundStyle(isOn ? Palette.chipOnText.opacity(0.55) : Palette.ink3)
+                    Text("\(count)").foregroundStyle(isOn ? Palette.chipOnText.opacity(0.85) : Palette.ink3)
                 }
             }
-            .font(.text(13, .semibold))
+            .font(.text(14, .bold))
             .foregroundStyle(isOn ? Palette.chipOnText : Palette.ink)
-            .padding(.horizontal, 12)
-            .frame(height: 30)
-            .background {
-                if isOn {
-                    Capsule().fill(Palette.chipOn).shadow(color: Color(hex: 0x28190F, alpha: 0.3), radius: 1, y: 1)
-                }
-            }
-            .raised(Capsule(), fill: isOn ? .clear : Palette.card)
+            .padding(.horizontal, 14)
+            .frame(height: 34)
+            .raised(Capsule(), fill: isOn ? Palette.chipOn : Palette.card)
         }
         .buttonStyle(.pressable)
+        .accessibilityAddTraits(isOn ? .isSelected : [])
         .sensoryFeedback(.selection, trigger: isOn)
     }
 }
@@ -155,8 +153,8 @@ struct Tag: View {
     var text: String
     var body: some View {
         Text(text).font(.text(11.5, .semibold)).foregroundStyle(Palette.ink2)
-            .padding(.horizontal, 8).frame(height: 22)
-            .background(Palette.wash, in: RoundedRectangle(cornerRadius: 7, style: .continuous))
+            .padding(.horizontal, 9).frame(height: 22)
+            .background(Palette.wash, in: Capsule())
     }
 }
 
@@ -172,7 +170,7 @@ struct RoundIconButton: View {
     var body: some View {
         Button(action: action) {
             Image(systemName: systemImage)
-                .font(.system(size: size * 0.46, weight: .medium))
+                .font(.system(size: size * 0.44, weight: .bold))
                 .foregroundStyle(Palette.tomato)
                 .frame(width: size, height: size)
                 .raised(Circle())
@@ -182,20 +180,31 @@ struct RoundIconButton: View {
     }
 }
 
-/// Header text button: "Edit", "Done", "Cancel".
+/// Header text button: "Edit", "Done", "Cancel". `pill` puts it on a puffy cream pill, as in the
+/// mock's headers.
 struct TextButton: View {
     var title: String
     var bold = false
+    var pill = false
     var action: () -> Void
     var body: some View {
         Button(action: action) {
-            Text(title).font(.text(17, bold ? .semibold : .regular)).foregroundStyle(Palette.tomato)
-                .padding(.horizontal, 8).frame(minHeight: 44)
+            if pill {
+                Text(title).font(.text(16, .bold)).foregroundStyle(Palette.tomato)
+                    .padding(.horizontal, 16).frame(height: 38)
+                    .raised(Capsule())
+                    .padding(.horizontal, 4)
+                    .frame(minHeight: 44)
+            } else {
+                Text(title).font(.text(17, bold ? .bold : .medium)).foregroundStyle(Palette.tomato)
+                    .padding(.horizontal, 8).frame(minHeight: 44)
+            }
         }
         .buttonStyle(.pressable)
     }
 }
 
+/// Puffy buttons: tomato for the main action, cream for the rest, blush for quiet ones.
 struct PoddleButton: View {
     enum Kind { case card, primary, quiet }
     var title: String
@@ -207,26 +216,25 @@ struct PoddleButton: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 6) {
-                if let systemImage { Image(systemName: systemImage).font(.system(size: large ? 18 : 15, weight: .semibold)) }
-                Text(title)
+                if let systemImage { Image(systemName: systemImage).font(.system(size: large ? 18 : 15, weight: .bold)) }
+                if !title.isEmpty { Text(title) }
             }
-            .font(.text(large ? 17 : 15, .semibold))
-            .foregroundStyle(kind == .primary ? Palette.creamWhite : kind == .quiet ? Palette.tomato : Palette.ink)
-            .padding(.horizontal, 14)
+            .font(.text(large ? 17 : 15, .bold))
+            .foregroundStyle(kind == .primary ? Palette.onTomato : kind == .quiet ? Palette.tomato : Palette.ink)
+            .padding(.horizontal, title.isEmpty ? 0 : 16)
+            .frame(minWidth: title.isEmpty ? 40 : nil)
             .frame(maxWidth: large ? .infinity : nil)
-            .frame(height: large ? 50 : 36)
+            .frame(height: large ? 52 : 40)
             .background {
-                let shape = RoundedRectangle(cornerRadius: large ? 16 : 12, style: .continuous)
                 switch kind {
                 case .primary:
-                    shape.fill(Fills.tomato)
-                        .overlay(shape.inset(by: 0.5).stroke(LinearGradient(colors: [.white.opacity(0.3), .clear, Color(hex: 0x781E0A, alpha: 0.2)], startPoint: .top, endPoint: .bottom), lineWidth: 1))
-                        .shadow(color: Color(hex: 0xA03C14, alpha: 0.3), radius: 2, y: 2)
-                        .shadow(color: Color(hex: 0xA03C14, alpha: 0.18), radius: 7, y: 6)
+                    Capsule().fill(Fills.tomato)
+                        .overlay(Capsule().inset(by: 1).stroke(LinearGradient(colors: [.white.opacity(0.35), .clear], startPoint: .top, endPoint: .center), lineWidth: 1.5))
+                        .floatShadow(6, y: 4, opacity: 0.22)
                 case .quiet:
-                    shape.fill(Palette.tomato.opacity(0.1))
+                    Capsule().fill(Palette.blush)
                 case .card:
-                    Color.clear.raised(shape)
+                    Color.clear.raised(Capsule())
                 }
             }
         }
@@ -254,8 +262,8 @@ struct WellStepper: View {
                 .contentTransition(.numericText())
             RepeatButton(systemImage: "plus", label: "More", action: onIncrement)
         }
-        .frame(height: 32)
-        .well(cornerRadius: 10)
+        .frame(height: 34)
+        .well(Capsule())
     }
 }
 
@@ -298,7 +306,7 @@ struct RepeatButton: View {
     }
 }
 
-/// Segmented control in a pressed well, the selected segment raised on card.
+/// Segmented control on a puffy pill, the selected segment a tomato pill (the mock's Grid | List).
 struct PoddleSegmented<Value: Hashable>: View {
     var options: [(Value, String)]
     @Binding var selection: Value
@@ -316,18 +324,17 @@ struct PoddleSegmented<Value: Hashable>: View {
                 } label: {
                     HStack(spacing: 5) {
                         if pinned == value {
-                            PinGlyph().frame(width: 15, height: 15).foregroundStyle(Palette.goldInk)
+                            PinGlyph().frame(width: 15, height: 15).foregroundStyle(on ? Palette.chipOnText : Palette.goldInk)
                         }
                         Text(title).lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .font(.text(fontSize, .semibold))
-                    .foregroundStyle(on ? Palette.ink : Palette.ink2)
+                    .font(.text(fontSize, .bold))
+                    .foregroundStyle(on ? Palette.chipOnText : Palette.ink2)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .background {
                         if on {
-                            RoundedRectangle(cornerRadius: height * 0.25, style: .continuous)
-                                .fill(Palette.card)
-                                .shadow(color: Palette.shadow.opacity(0.18), radius: 1.5, y: 1)
+                            Capsule()
+                                .fill(Palette.chipOn)
                                 .matchedGeometryEffect(id: "seg", in: ns)
                         }
                     }
@@ -339,12 +346,12 @@ struct PoddleSegmented<Value: Hashable>: View {
         }
         .padding(3)
         .frame(height: height)
-        .well(cornerRadius: height * 0.32)
+        .raised(Capsule())
         .sensoryFeedback(.selection, trigger: selection)
     }
 }
 
-/// Fern when on, a pressed oat track when off.
+/// Tomato when on, a pressed apricot track when off.
 struct PoddleToggleStyle: ToggleStyle {
     func makeBody(configuration: Configuration) -> some View {
         HStack {
@@ -352,10 +359,10 @@ struct PoddleToggleStyle: ToggleStyle {
             Spacer(minLength: 8)
             ZStack(alignment: configuration.isOn ? .trailing : .leading) {
                 Capsule()
-                    .fill((configuration.isOn ? Palette.fern : Palette.switchOff).shadow(.inner(color: .black.opacity(0.18), radius: 1, y: 1)))
+                    .fill((configuration.isOn ? Palette.chipOn : Palette.switchOff).shadow(.inner(color: .black.opacity(0.15), radius: 1, y: 1)))
                     .frame(width: 51, height: 31)
-                Circle().fill(Color(hex: 0xFFFCF7))
-                    .shadow(color: .black.opacity(0.2), radius: 2, y: 2)
+                Circle().fill(Palette.creamWhite)
+                    .shadow(color: Palette.shadow.opacity(0.3), radius: 1.5, y: 1.5)
                     .frame(width: 27, height: 27)
                     .padding(2)
             }
@@ -383,9 +390,10 @@ struct LargeTitle: View {
     var subtitle: String?
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.rounded(34, .heavy)).tracking(-0.34).foregroundStyle(Palette.ink)
+            Text(title).font(.rounded(36, .heavy)).tracking(-0.5).foregroundStyle(Palette.ink)
+                .accessibilityAddTraits(.isHeader)
             if let subtitle {
-                Text(subtitle).font(.text(14, .medium)).foregroundStyle(Palette.ink2).contentTransition(.numericText())
+                Text(subtitle).font(.text(15, .semibold)).foregroundStyle(Palette.ink2).contentTransition(.numericText())
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -422,8 +430,8 @@ struct BackButton: View {
     var body: some View {
         Button { dismiss() } label: {
             HStack(spacing: 4) {
-                Image(systemName: "chevron.left").font(.system(size: 19, weight: .semibold))
-                Text(title).font(.text(17))
+                Image(systemName: "chevron.left").font(.system(size: 18, weight: .bold))
+                Text(title).font(.text(17, .semibold))
             }
             .foregroundStyle(Palette.tomato)
             .frame(minHeight: 44)
@@ -431,6 +439,7 @@ struct BackButton: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.pressable)
+        .accessibilityIdentifier("back")
     }
 }
 
@@ -450,12 +459,13 @@ struct GroupCard<Content: View>: View {
         VStack(spacing: 0) {
             Group(subviews: content) { subviews in
                 ForEach(Array(subviews.enumerated()), id: \.offset) { i, sub in
-                    if i > 0 { Rectangle().fill(Palette.line).frame(height: 1).padding(.leading, 16) }
+                    if i > 0 { Rectangle().fill(Palette.line).frame(height: 1).padding(.horizontal, 16) }
                     sub
                 }
             }
         }
-        .card(cornerRadius: 16)
+        .padding(.vertical, 2)
+        .card()
         .padding(.horizontal, 16)
     }
 }
@@ -471,13 +481,13 @@ struct Cell<Accessory: View>: View {
     var body: some View {
         HStack(spacing: 12) {
             if let icon {
-                Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.creamWhite)
-                    .frame(width: 30, height: 30)
-                    .background(iconTint, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+                Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.creamWhite)
+                    .frame(width: 32, height: 32)
+                    .background(iconTint, in: Circle())
             }
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.text(16)).foregroundStyle(Palette.ink)
-                if let subtitle { Text(subtitle).font(.text(12.5)).foregroundStyle(Palette.ink2) }
+                Text(title).font(.text(16, .medium)).foregroundStyle(Palette.ink)
+                if let subtitle { Text(subtitle).font(.text(13)).foregroundStyle(Palette.ink2) }
             }
             Spacer(minLength: 8)
             accessory

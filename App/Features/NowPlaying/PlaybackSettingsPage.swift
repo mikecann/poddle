@@ -51,20 +51,17 @@ struct PlaybackSettingsPage: View {
                         .lineLimit(2)
                 }
                 .font(.text(12.5, .medium))
-                .foregroundStyle(custom ? Palette.mustard : NP.fg2)
+                .foregroundStyle(custom ? Palette.goldInk : NP.fg2)
             }
             Spacer(minLength: 4)
             Toggle(isOn: Binding(get: { custom }, set: setCustom)) { EmptyView() }
                 .toggleStyle(.poddle)
                 .fixedSize()
                 .accessibilityLabel("Customize for \(showName)")
+                .accessibilityIdentifier("playbackSettings.customize")
         }
-        .padding(.horizontal, 14).padding(.vertical, 12)
-        .background {
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .fill(custom ? Palette.mustard.opacity(0.14) : NP.util)
-                .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).strokeBorder(custom ? Palette.mustard.opacity(0.45) : .clear, lineWidth: 1))
-        }
+        .padding(.horizontal, 16).padding(.vertical, 14)
+        .cloudCard(fill: custom ? Palette.goldBg : NP.util)
         .padding(.horizontal, 16)
     }
 
@@ -127,9 +124,9 @@ struct PlaybackSettingsPage: View {
             RepeatButton(systemImage: direction < 0 ? "minus" : "plus", label: direction < 0 ? "Slower" : "Faster") {
                 store.setPlaybackSpeed(r.speed.value + Double(direction) * Speed.step, podcastId: podcastId)
             }
-            .frame(width: 48, height: 48)
-            .background(NP.util, in: Circle())
-            Text("0.05×").font(.rounded(11, .semibold)).foregroundStyle(NP.fg3)
+            .frame(width: 50, height: 50)
+            .raised(Circle(), fill: NP.util)
+            Text("0.05×").font(.rounded(11.5, .bold)).foregroundStyle(NP.fg2)
         }
         .offset(y: 16)
     }
@@ -143,8 +140,8 @@ struct PlaybackSettingsPage: View {
                         .font(.rounded(14, .bold)).monospacedDigit()
                         .foregroundStyle(on ? Palette.chipOnText : NP.fg)
                         .padding(.horizontal, 8)
-                        .frame(minWidth: 42, minHeight: 34)
-                        .background(on ? Palette.chipOn : NP.util, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                        .frame(minWidth: 44, minHeight: 36)
+                        .raised(Capsule(), fill: on ? Palette.chipOn : NP.util)
                         .overlay(alignment: .topTrailing) {
                             if custom && abs(p - store.global.speed) < 0.001 {
                                 Circle().fill(Palette.mustard).frame(width: 5, height: 5).padding(4)
@@ -152,6 +149,7 @@ struct PlaybackSettingsPage: View {
                         }
                 }
                 .buttonStyle(.pressable)
+                .accessibilityIdentifier("playbackSettings.preset.\(Format.speedNumber(p))")
             }
         }
         .padding(.horizontal, 16)
@@ -165,18 +163,20 @@ struct PlaybackSettingsPage: View {
                 cellLabel("Smart Speed", "Trims silences · \(Format.saved(player.smartSaved)) saved this episode", icon: "waveform.path", tint: Palette.mustard)
             }
             .toggleStyle(.poddle)
+            .accessibilityIdentifier("playbackSettings.smartSpeed")
             .padding(.horizontal, 16).frame(minHeight: 60)
             Toggle(isOn: Binding(get: { r.voiceBoost.value }, set: { v in edit({ $0.voiceBoost = v }, { $0.voiceBoost = v }) })) {
                 cellLabel("Voice Boost", "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
             }
             .toggleStyle(.poddle)
+            .accessibilityIdentifier("playbackSettings.voiceBoost")
             .padding(.horizontal, 16).frame(minHeight: 60)
         }
     }
 
     private var method: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("Speed-up method").font(.rounded(11, .bold)).tracking(1.1).textCase(.uppercase).foregroundStyle(NP.fg2)
+            Text("Speed-up method").font(.rounded(12, .heavy)).tracking(1.1).textCase(.uppercase).foregroundStyle(NP.fg2)
                 .padding(.horizontal, 32)
             PoddleSegmented(
                 options: TimePitchAlgorithm.allCases.map { ($0, $0.label) },
@@ -204,12 +204,12 @@ struct PlaybackSettingsPage: View {
 
     private func cellLabel(_ title: String, _ subtitle: String, icon: String, tint: Color) -> some View {
         HStack(spacing: 12) {
-            Image(systemName: icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Palette.creamWhite)
-                .frame(width: 30, height: 30)
-                .background(tint, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            Image(systemName: icon).font(.system(size: 14, weight: .bold)).foregroundStyle(Palette.creamWhite)
+                .frame(width: 32, height: 32)
+                .background(tint, in: Circle())
             VStack(alignment: .leading, spacing: 1) {
-                Text(title).font(.text(16)).foregroundStyle(Palette.ink)
-                Text(subtitle).font(.text(12.5)).foregroundStyle(Palette.ink2)
+                Text(title).font(.text(16, .medium)).foregroundStyle(Palette.ink)
+                Text(subtitle).font(.text(13)).foregroundStyle(Palette.ink2)
             }
         }
     }
@@ -242,42 +242,25 @@ struct SpeedDial: View {
     var body: some View {
         ZStack {
             scale
-            // Knurled ring
+            // A ring of curls, like the poodle's coat, around a cream knob.
+            PuffRing(puffs: 18)
+                .fill(Palette.cardEdge)
+                .frame(width: 156, height: 156)
+                .offset(y: 4)
+            PuffRing(puffs: 18)
+                .fill(NP.util)
+                .frame(width: 156, height: 156)
+                .floatShadow(12, y: 10, opacity: 0.2)
             Circle()
-                .fill(AngularGradient(
-                    gradient: Gradient(stops: (0..<60).flatMap { i -> [Gradient.Stop] in
-                        let a = Double(i) / 60
-                        return [
-                            .init(color: Color(hex: 0xD6C6AE), location: a),
-                            .init(color: Color(hex: 0xD6C6AE), location: a + 2.5 / 360),
-                            .init(color: Color(hex: 0xF4EBDD), location: a + 2.5 / 360),
-                            .init(color: Color(hex: 0xF4EBDD), location: a + 6 / 360),
-                        ]
-                    }),
-                    center: .center
-                ))
-                .frame(width: 150, height: 150)
-                .shadow(color: .black.opacity(0.45), radius: 13, y: 14)
-                .shadow(color: .black.opacity(0.3), radius: 3, y: 3)
-            // Knob
-            Circle()
-                .fill(RadialGradient(colors: [Color(hex: 0xFFFCF6), Color(hex: 0xF3EADC), Color(hex: 0xDDCDB6)],
-                                     center: UnitPoint(x: 0.38, y: 0.3), startRadius: 0, endRadius: 90))
-                .overlay(Circle().stroke(.white, lineWidth: 2).blur(radius: 1).offset(y: 1).mask(Circle()))
-                .shadow(color: Color(hex: 0x462814, alpha: 0.25), radius: 1, y: 1)
-                .frame(width: 128, height: 128)
+                .fill(RadialGradient(colors: [NP.util, Palette.blush], center: UnitPoint(x: 0.4, y: 0.3), startRadius: 0, endRadius: 80))
+                .overlay(Circle().stroke(Palette.line, lineWidth: 1))
+                .frame(width: 112, height: 112)
                 .overlay {
                     Capsule()
-                        .fill(LinearGradient(colors: [Color(hex: 0xE8673F), Color(hex: 0xC9461F)], startPoint: .top, endPoint: .bottom))
-                        .frame(width: 7, height: 22)
-                        .offset(y: -64 + 10 + 11)
+                        .fill(Palette.chipOn)
+                        .frame(width: 8, height: 22)
+                        .offset(y: -56 + 9 + 11)
                         .rotationEffect(.degrees(angle(for: value)))
-                }
-                .overlay {
-                    Circle()
-                        .fill(RadialGradient(colors: [Color(hex: 0xFBF5EC), Color(hex: 0xEADFCF)], center: UnitPoint(x: 0.6, y: 0.7), startRadius: 0, endRadius: 40))
-                        .shadow(color: Color(hex: 0x5A3C1E, alpha: 0.18), radius: 2, y: 2)
-                        .frame(width: 60, height: 60)
                 }
         }
         .frame(width: radius * 2, height: radius * 2)

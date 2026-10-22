@@ -16,6 +16,8 @@ struct PodcastView: View {
             content(podcast)
         } else {
             BrandPlaceholder(title: "Show not found", message: "It may no longer be available, or it may be from a private feed.")
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Palette.paper.ignoresSafeArea())
         }
     }
 
@@ -31,29 +33,32 @@ struct PodcastView: View {
                     // The website's page for the show; private feeds have none.
                     if ShareLinks.canShare(podcast) {
                         ShareLink(item: ShareLinks.show(podcast.id), subject: Text(podcast.title)) {
-                            Image(systemName: "square.and.arrow.up").font(.system(size: 16, weight: .medium))
-                                .foregroundStyle(Palette.tomato).frame(width: 36, height: 36).raised(Circle())
+                            Image(systemName: "square.and.arrow.up").font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(Palette.tomato).frame(width: 40, height: 40).raised(Circle())
                         }
                         .buttonStyle(.pressable)
                         .padding(.horizontal, 4)
                         .accessibilityLabel("Share")
+                        .accessibilityIdentifier("podcast.share")
                     }
                     Menu { headerMenu(podcast) } label: {
-                        Image(systemName: "ellipsis").font(.system(size: 16, weight: .bold))
-                            .foregroundStyle(Palette.tomato).frame(width: 36, height: 36).raised(Circle())
+                        Image(systemName: "ellipsis").font(.system(size: 16, weight: .heavy))
+                            .foregroundStyle(Palette.tomato).frame(width: 40, height: 40).raised(Circle())
                     }
                     .menuStyle(.button).buttonStyle(.plain).padding(.horizontal, 4)
                     .accessibilityLabel("More")
+                    .accessibilityIdentifier("podcast.more")
                 }
                 header(podcast)
                     .contextMenu { headerMenu(podcast) }
                 Text(podcast.description)
-                    .font(.text(14.5)).foregroundStyle(Palette.body)
+                    .font(.text(15)).foregroundStyle(Palette.body)
                     .lineLimit(expanded ? nil : 3)
                     .overlay(alignment: .bottomTrailing) {
                         if !expanded {
                             Button("More") { withAnimation { expanded = true } }
-                                .font(.text(14.5, .semibold)).foregroundStyle(Palette.tomato)
+                                .font(.text(15, .bold)).foregroundStyle(Palette.tomato)
+                                .accessibilityIdentifier("podcast.descriptionMore")
                                 .padding(.leading, 44)
                                 .background(LinearGradient(colors: [Palette.paper.opacity(0), Palette.paper, Palette.paper], startPoint: .leading, endPoint: .trailing))
                         }
@@ -61,7 +66,7 @@ struct PodcastView: View {
                     .padding(.horizontal, 20).padding(.top, 14)
                 buttons(podcast).padding(.top, 14)
                 HStack {
-                    Text("Episodes").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
+                    Text("Episodes").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
                     Spacer()
                     Menu {
                         Picker("Order", selection: Binding(get: { order.value }, set: { v in store.updateSettings(podcastId) { $0.episodeOrder = v } })) {
@@ -72,19 +77,23 @@ struct PodcastView: View {
                             Text(order.value.label)
                             Image(systemName: "chevron.up.chevron.down").font(.system(size: 12, weight: .bold))
                         }
-                        .font(.text(14, .semibold)).foregroundStyle(Palette.tomato)
+                        .font(.text(14, .bold)).foregroundStyle(Palette.tomato)
+                        .padding(.horizontal, 12).frame(height: 34)
+                        .raised(Capsule())
                     }
                     .menuStyle(.button).buttonStyle(.plain)
+                    .accessibilityIdentifier("podcast.order")
                 }
                 .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
             }
             .plainListRow()
 
-            ForEach(Array(episodes.enumerated()), id: \.element.id) { index, item in
+            ForEach(episodes) { item in
                 PodcastEpisodeRow(item: item) {
                     if item.isQueued { actions.removeFromUpNext(item) } else { store.queueLast(item.id) }
                 }
-                .overlay(alignment: .top) { if index > 0 { RowDivider(leading: 20) } }
+                .cloudCard()
+                .padding(.vertical, 4)
                 .swipeRow(
                     leading: SwipeEdge(
                         short: .upNext("Add to Up Next") { store.queueLast(item.id) },
@@ -100,10 +109,13 @@ struct PodcastView: View {
                 } preview: {
                     ShowNotesPreview(item: item)
                 }
+                .padding(.horizontal, 12)
+                .accessibilityIdentifier("podcast.episode.\(item.id)")
                 .plainListRow()
             }
         }
         .listStyle(.plain)
+        .accessibilityIdentifier("podcast.list")
         .scrollContentBackground(.hidden)
         .refreshable { await store.refresh(podcastId: podcastId) }
         .task(id: podcastId) { await store.observePodcast(podcastId) }
@@ -117,10 +129,13 @@ struct PodcastView: View {
 
     private func header(_ podcast: Podcast) -> some View {
         HStack(alignment: .bottom, spacing: 16) {
-            ArtworkView(podcast: podcast, size: 128, cornerRadius: 24, shadow: false)
-                .shadow(color: Color(hex: 0x6E460A, alpha: 0.55), radius: 12, y: 14)
+            ArtworkView(podcast: podcast, size: 128, cornerRadius: 0, shadow: false)
+                .clipShape(CloudShape(cornerRadius: 28, scallop: 30, depth: 2.5))
+                .background { CloudShape(cornerRadius: 28, scallop: 30, depth: 2.5).fill(Palette.cardEdge).offset(y: 4) }
+                .floatShadow(10, y: 8, opacity: 0.2)
             VStack(alignment: .leading, spacing: 2) {
-                Text(podcast.title).font(.rounded(30, .heavy)).tracking(-0.6).foregroundStyle(Palette.ink)
+                Text(podcast.title).font(.rounded(30, .heavy)).tracking(-0.5).foregroundStyle(Palette.ink)
+                    .accessibilityAddTraits(.isHeader)
                     .lineLimit(2).fixedSize(horizontal: false, vertical: true)
                 Text(podcast.author).font(.text(14, .medium)).foregroundStyle(Palette.ink2).lineLimit(2)
                 HStack(spacing: 6) {
@@ -146,11 +161,12 @@ struct PodcastView: View {
                         .foregroundStyle(podcast.subscribed ? Palette.fern : Palette.tomato)
                     Text(podcast.subscribed ? "Following" : "Follow")
                 }
-                .font(.text(15, .semibold)).foregroundStyle(Palette.ink)
-                .padding(.horizontal, 14).frame(height: 36)
-                .raised(cornerRadius: 12)
+                .font(.text(15, .bold)).foregroundStyle(Palette.ink)
+                .padding(.horizontal, 16).frame(height: 40)
+                .raised(Capsule())
             }
             .buttonStyle(.pressable)
+            .accessibilityIdentifier("podcast.follow")
 
             Button { app.sheet = .showSettings(podcastId: podcastId) } label: {
                 HStack(spacing: 8) {
@@ -164,10 +180,11 @@ struct PodcastView: View {
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
                 }
                 .foregroundStyle(Palette.ink)
-                .padding(.horizontal, 12).frame(height: 36)
-                .raised(cornerRadius: 12)
+                .padding(.horizontal, 14).frame(height: 40)
+                .raised(Capsule())
             }
             .buttonStyle(.pressable)
+            .accessibilityIdentifier("podcast.settings")
         }
         .padding(.horizontal, 20)
     }
@@ -211,7 +228,7 @@ private struct PodcastEpisodeRow: View {
                     Text("\(Format.relativeDate(item.episode.pubDate)) · \(Format.duration(item.duration))")
                 }
                 .font(.text(12, .semibold)).foregroundStyle(Palette.ink2)
-                Text(item.episode.title).font(.text(15.5, .semibold)).tracking(-0.155).foregroundStyle(Palette.ink).lineLimit(1)
+                Text(item.episode.title).font(.text(16, .bold)).tracking(-0.1).foregroundStyle(Palette.ink).lineLimit(2)
                 HStack(spacing: 7) {
                     if item.isInProgress {
                         ProgressBar(value: item.progress)
@@ -234,9 +251,9 @@ private struct PodcastEpisodeRow: View {
 
             Button(action: onAdd) {
                 Image(systemName: item.isQueued ? "checkmark" : "plus")
-                    .font(.system(size: 17, weight: .semibold))
+                    .font(.system(size: 17, weight: .heavy))
                     .foregroundStyle(item.isQueued ? Palette.fern : Palette.tomato)
-                    .frame(width: 36, height: 36)
+                    .frame(width: 40, height: 40)
                     .background {
                         if item.isQueued { Circle().fill(Palette.fern.opacity(0.12)) } else { Color.clear.raised(Circle()) }
                     }
@@ -245,8 +262,9 @@ private struct PodcastEpisodeRow: View {
             .buttonStyle(.pressable)
             .opacity(item.state.played ? 0.6 : 1)
             .accessibilityLabel(item.isQueued ? "Remove from Up Next" : "Add to Up Next")
+            .accessibilityIdentifier("podcast.episode.add.\(item.id)")
         }
-        .padding(.leading, 20).padding(.trailing, 12)
+        .padding(.leading, 16).padding(.trailing, 10).padding(.vertical, 10)
         .frame(minHeight: 80)
         .contentShape(Rectangle())
     }

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds Poddle for the iOS Simulator, opens every screen directly with -PoddleScreen and saves a
-# screenshot of each to designs/build-shots/. Compare them with designs/shots/c-p*.jpg.
+# screenshot of each to designs/build-shots/. Compare them with designs/explore-poodle/fluff.jpg.
 #
 #   scripts/screenshots.sh                 # all screens, light
 #   scripts/screenshots.sh upNext npSettings    # just these
@@ -21,7 +21,7 @@ BUNDLE=com.mikecann.poddle
 APPEARANCE=${APPEARANCE:-light}
 WAIT=${WAIT:-3}
 
-ALL=(upNext nowPlaying npNotes npSettings queue undoArchive podcast showSettings discover importDone stats yearInReview library libraryList settings import episode)
+ALL=(upNext nowPlaying npNotes npSettings queue undoArchive podcast showSettings discover discoverEmpty importDone stats yearInReview library libraryList settings import episode upNextEmpty notFound sleepTimer signIn)
 SCREENS=("$@")
 [ ${#SCREENS[@]} -eq 0 ] && SCREENS=("${ALL[@]}")
 

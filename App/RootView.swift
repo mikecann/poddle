@@ -21,6 +21,7 @@ struct RootView: View {
         }
         .sheet(item: $app.sheet) { SheetHost(route: $0) }
         .modifier(MobileDownloadPrompt())
+        .modifier(CompanionDirector())
         // Up Next changed: download what's coming, clean up what's done.
         .onChange(of: store.snapshot.queue.map(\.episodeId)) { _, queue in
             // First launch with no cache: the queue arrives after the player was set up.
@@ -32,8 +33,8 @@ struct RootView: View {
         .onChange(of: store.library.count) { old, new in if old > 0, new > old { push.requestAuthorizationIfNeeded() } }
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: .poddleDeviceShaken)) { _ in player.extendSleepTimer() }
-        .fullScreenCover(isPresented: $app.showNowPlaying) { NowPlayingView().preferredColorScheme(.dark) }
-        .fullScreenCover(isPresented: $app.showYearInReview) { YearInReviewView().preferredColorScheme(.dark) }
+        .fullScreenCover(isPresented: $app.showNowPlaying) { NowPlayingView() }
+        .fullScreenCover(isPresented: $app.showYearInReview) { YearInReviewView() }
         #else
         .sheet(isPresented: $app.showNowPlaying) { NowPlayingView().frame(width: 430, height: 860) }
         .sheet(isPresented: $app.showYearInReview) { YearInReviewView().frame(width: 460, height: 860) }
@@ -41,33 +42,49 @@ struct RootView: View {
     }
 }
 
-/// iPhone: custom paper tab bar with the mini player above it. Every tab stays alive so scroll
-/// positions and navigation survive switching.
+/// iPhone: the cloud tab bar with the mini player above it. Every tab stays alive so scroll
+/// positions and navigation survive switching; only the visible one lets the companion move.
 private struct PhoneRoot: View {
     @Environment(AppModel.self) private var app
     @Environment(\.player) private var player
+    @AppStorage(CompanionSettings.showKey) private var showPoddle = true
 
     var body: some View {
         @Bindable var app = app
+        let covered = app.showNowPlaying || app.showYearInReview
         ZStack {
             ForEach(Tab.allCases) { tab in
                 TabRoot(tab: tab)
                     .opacity(app.tab == tab ? 1 : 0)
                     .allowsHitTesting(app.tab == tab)
                     .accessibilityHidden(app.tab != tab)
+                    .environment(\.companionActive, app.tab == tab && !covered)
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
-                UndoToastView().padding(.horizontal, 8)
+                UndoToastView().padding(.horizontal, 10)
                 MobileAllowanceChip()
-                MiniPlayer().padding(.horizontal, 8)
-                PoddleTabBar(selection: $app.tab)
+                VStack(spacing: 6) {
+                    MiniPlayer().padding(.horizontal, 10)
+                    PoddleTabBar(selection: $app.tab)
+                }
+                // Content scrolling under the bottom bar fades into the paper, so Poddle's strip
+                // never sits on top of a row's text or buttons.
+                .background { BottomFade() }
+                .overlay(alignment: .topTrailing) {
+                    // An episode just finished: he pops up where he was peeking, then settles back.
+                    if showPoddle, app.companion.celebrating, !covered {
+                        CelebrationPop()
+                            .padding(.trailing, 4)
+                            .offset(y: -80)
+                    }
+                }
             }
+            .environment(\.companionActive, !covered)
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: player.item?.id)
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.undo.toast?.id)
         }
-        .overlay { GrainOverlay().ignoresSafeArea() }
         .background(PaperBackground())
     }
 }
@@ -86,11 +103,9 @@ private struct SidebarRoot: View {
                             .tag(tab)
                     }
                 } header: {
-                    HStack(spacing: 8) {
-                        AppMark(size: 22)
-                        Text("Poddle").font(.rounded(17, .heavy)).foregroundStyle(Palette.ink)
-                    }
-                    .padding(.bottom, 6)
+                    BrandLockup(size: 22)
+                        .padding(.leading, -12)
+                        .padding(.bottom, 6)
                 }
             }
             .scrollContentBackground(.hidden)
@@ -108,12 +123,17 @@ private struct SidebarRoot: View {
                         MobileAllowanceChip()
                         MiniPlayer()
                     }
+                        .background { BottomFade().padding(.horizontal, -400).padding(.bottom, -10) }
+                        .overlay(alignment: .topTrailing) {
+                            if app.companion.celebrating, !app.showNowPlaying {
+                                CelebrationPop().offset(y: -80)
+                            }
+                        }
                         .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.undo.toast?.id)
                         .frame(maxWidth: 560)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 10)
                 }
-                .overlay { GrainOverlay().ignoresSafeArea() }
                 .background(PaperBackground())
         }
         .tint(Palette.tomato)
@@ -179,7 +199,7 @@ extension View {
         #endif
     }
 
-    /// Paper sheet with the grabber, matching the design's sheets.
+    /// Cream sheet with the grabber, matching the design's sheets.
     func poddleSheet(detents: Set<PresentationDetent> = [.large]) -> some View {
         self
             .background(PaperBackground())
@@ -216,5 +236,18 @@ struct AppMark: View {
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: size * 0.25, style: .continuous))
             .accessibilityHidden(true)
+    }
+}
+
+/// Paper behind the bottom bar, fading in over its top edge (one gradient, no blur or blending).
+private struct BottomFade: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            LinearGradient(colors: [Palette.paper.opacity(0), Palette.paper], startPoint: .top, endPoint: .bottom)
+                .frame(height: 14)
+            Palette.paper
+        }
+        .ignoresSafeArea(edges: .bottom)
+        .allowsHitTesting(false)
     }
 }

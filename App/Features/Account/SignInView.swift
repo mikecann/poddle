@@ -1,7 +1,7 @@
 import SwiftUI
 import PoddleKit
 
-/// The first thing you see signed out: Apple or Google, in Poddle's paper look. Debug simulator
+/// The first thing you see signed out: Poddle waving hello, then Apple or Google on puffy buttons. Debug simulator
 /// builds also get a test sign-in that picks an email (only works on dev, see convex/auth.ts).
 struct SignInView: View {
     @Environment(Account.self) private var account
@@ -18,17 +18,18 @@ struct SignInView: View {
             VStack(spacing: 28) {
                 Spacer(minLength: 40)
                 VStack(spacing: 14) {
-                    Mascot(pose: .waving, size: 180)
-                    PoddleWordmark()
+                    Companion(pose: .waving, motion: .wave, size: 190)
+                        .frame(height: 190)
+                    PoddleWordmark(size: 48)
                     Text("Your shows, your Up Next and your listening stats, on every device you sign in on.")
-                        .font(.text(16))
+                        .font(.text(17, .medium))
                         .foregroundStyle(Palette.ink2)
                         .multilineTextAlignment(.center)
                         .padding(.horizontal, 12)
                 }
 
                 VStack(spacing: 12) {
-                    providerButton("Sign in with Apple", id: "apple", fill: Palette.walnut, text: Palette.creamWhite) {
+                    providerButton("Sign in with Apple", id: "apple", fill: Palette.inverse, text: Palette.inverseInk) {
                         Image(systemName: "apple.logo").font(.system(size: 19, weight: .semibold))
                     } action: { signIn(.apple) }
 
@@ -42,9 +43,11 @@ struct SignInView: View {
 
                     if let errorMessage {
                         HStack(spacing: 10) {
-                            Mascot(pose: .confused, size: 52)
+                            Companion(pose: .confused, motion: .tilt, size: 56, tappable: false)
+                                .frame(width: 56, height: 56)
                             Text(errorMessage)
                         }
+                            .accessibilityIdentifier("signIn.error")
                             .font(.text(14, .medium))
                             .foregroundStyle(Palette.tomato)
                             .multilineTextAlignment(.leading)
@@ -54,7 +57,7 @@ struct SignInView: View {
                 .disabled(working != nil)
 
                 Text("Signing in with Apple and Google using the same email gets you the same account.")
-                    .font(.text(13))
+                    .font(.text(13.5, .medium))
                     .foregroundStyle(Palette.ink3)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal, 20)
@@ -83,13 +86,14 @@ struct SignInView: View {
                 if working == id { ProgressView().tint(text) } else { icon() }
                 Text(title)
             }
-            .font(.text(17, .semibold))
+            .font(.text(17, .bold))
             .foregroundStyle(text)
             .frame(maxWidth: .infinity)
-            .frame(height: 54)
-            .raised(cornerRadius: 16, fill: fill)
+            .frame(height: 56)
+            .raised(Capsule(), fill: fill)
         }
         .buttonStyle(.pressable)
+        .accessibilityIdentifier("signIn.\(id)")
     }
 
     #if DEBUG && targetEnvironment(simulator)
@@ -102,9 +106,10 @@ struct SignInView: View {
                 .autocorrectionDisabled()
                 .textInputAutocapitalization(.never)
                 .keyboardType(.emailAddress)
-                .padding(.horizontal, 14)
-                .frame(height: 44)
-                .well(cornerRadius: 12)
+                .padding(.horizontal, 16)
+                .frame(height: 46)
+                .well(Capsule())
+                .accessibilityIdentifier("signIn.testEmail")
             Button { testSignInNow() } label: {
                 HStack(spacing: 6) {
                     if working == "test" { ProgressView() } else { Image(systemName: "person.crop.circle.badge.checkmark") }
@@ -114,6 +119,7 @@ struct SignInView: View {
                 .foregroundStyle(Palette.ink2)
             }
             .buttonStyle(.plain)
+            .accessibilityIdentifier("signIn.test")
         }
     }
 
