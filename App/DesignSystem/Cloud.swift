@@ -107,14 +107,17 @@ nonisolated struct CurlLine: Shape {
         // Neighbouring curls overlap by about a third, so the outline reads as one fluffy rope.
         let count = max(1, Int(((rect.width - d) / (d * 0.68)).rounded()) + 1)
         let pitch = count > 1 ? (rect.width - d) / CGFloat(count - 1) : 0
-        var curls = Path()
+        var circles = Path()
         for i in 0..<count {
-            curls.addEllipse(in: CGRect(x: rect.minX + CGFloat(i) * pitch, y: rect.minY, width: d, height: d))
+            circles.addEllipse(in: CGRect(x: rect.minX + CGFloat(i) * pitch, y: rect.minY, width: d, height: d))
         }
+        // One merged outline, so a stroke traces only the rope's outside edge, not every circle.
+        let curls = Path(circles.cgPath.normalized(using: .winding))
         let f = min(1, max(0, fraction))
         if f >= 1 { return curls }
         if f <= 0 { return Path() }
-        return curls.intersection(Path(CGRect(x: rect.minX, y: rect.minY, width: rect.width * f, height: d)))
+        let cut = CGPath(rect: CGRect(x: rect.minX, y: rect.minY, width: rect.width * f, height: d), transform: nil)
+        return Path(curls.cgPath.intersection(cut, using: .winding))
     }
 }
 

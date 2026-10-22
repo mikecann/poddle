@@ -37,8 +37,10 @@ struct NowPlayingView: View {
     }
 
     /// Swipe down to close. Only acts on mostly vertical drags, so it never fights the pages.
+    /// Measured in global space: the view moves with the finger, so local translations would feed
+    /// back into themselves and make the sheet jiggle while it's held.
     private var dismissDrag: some Gesture {
-        DragGesture(minimumDistance: 20)
+        DragGesture(minimumDistance: 20, coordinateSpace: .global)
             .onChanged { v in if v.translation.height > 0 && abs(v.translation.height) > abs(v.translation.width) * 1.5 { dragY = v.translation.height } }
             .onEnded { v in
                 if dragY > 0, v.translation.height > 140 || v.predictedEndTranslation.height > 400 { dismiss() }
