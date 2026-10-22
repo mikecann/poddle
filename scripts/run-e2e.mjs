@@ -5,7 +5,7 @@
 //
 //   npm run test:e2e
 
-import { spawnSync } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startWorld } from "../e2e/world/world.mjs";
@@ -20,6 +20,10 @@ for (let i = 0; i < args.length; i++) {
   if (["-g", "--grep", "--scenario"].includes(args[i])) webArgs.push("--grep", args[++i]);
 }
 const secs = (t) => `${((Date.now() - t) / 1000).toFixed(0)} s`;
+// The world's fixture server runs in this process, so the web steps must not block it.
+const run = (cmd, cmdArgs, env) => new Promise((resolve) => {
+  spawn(cmd, cmdArgs, { cwd: root, stdio: "inherit", env }).on("error", () => resolve(false)).on("close", (code) => resolve(code === 0));
+});
 
 const pairing = spawnSync("node", ["scripts/verify-bdd-pairing.mjs"], { cwd: root, stdio: "inherit" });
 if (pairing.status !== 0) process.exit(1);
@@ -30,9 +34,7 @@ let iosOk = false;
 try {
   const env = { ...process.env, PODDLE_E2E_WORLD: "1" };
   const t = Date.now();
-  webOk =
-    spawnSync("npx", ["bddgen"], { cwd: root, stdio: "inherit", env }).status === 0 &&
-    spawnSync("npx", ["playwright", "test", ...webArgs], { cwd: root, stdio: "inherit", env }).status === 0;
+  webOk = (await run("npx", ["bddgen"], env)) && (await run("npx", ["playwright", "test", ...webArgs], env));
   console.log(`[e2e] web ${webOk ? "passed" : "FAILED"} in ${secs(t)}`);
   iosOk = await runIos({ world });
 } finally {
