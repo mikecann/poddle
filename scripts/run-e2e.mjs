@@ -13,6 +13,12 @@ import { runIos } from "./run-e2e-ios.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const started = Date.now();
+// The shared runner passes a name filter to both harnesses. Build/device flags belong to iOS.
+const args = process.argv.slice(2);
+const webArgs = [];
+for (let i = 0; i < args.length; i++) {
+  if (["-g", "--grep", "--scenario"].includes(args[i])) webArgs.push("--grep", args[++i]);
+}
 const secs = (t) => `${((Date.now() - t) / 1000).toFixed(0)} s`;
 
 const pairing = spawnSync("node", ["scripts/verify-bdd-pairing.mjs"], { cwd: root, stdio: "inherit" });
@@ -26,7 +32,7 @@ try {
   const t = Date.now();
   webOk =
     spawnSync("npx", ["bddgen"], { cwd: root, stdio: "inherit", env }).status === 0 &&
-    spawnSync("npx", ["playwright", "test"], { cwd: root, stdio: "inherit", env }).status === 0;
+    spawnSync("npx", ["playwright", "test", ...webArgs], { cwd: root, stdio: "inherit", env }).status === 0;
   console.log(`[e2e] web ${webOk ? "passed" : "FAILED"} in ${secs(t)}`);
   iosOk = await runIos({ world });
 } finally {

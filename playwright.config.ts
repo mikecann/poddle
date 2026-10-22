@@ -20,7 +20,7 @@ export default defineConfig({
   testDir,
   globalSetup: "./e2e/web/globalSetup.ts",
   outputDir: "e2e/.runtime/playwright-results",
-  reporter: [["list"], ["html", { open: "never", outputFolder: "e2e/.runtime/playwright-report" }]],
+  reporter: [["json", { outputFile: "e2e/.runtime/web-results.json" }], ["list"], ["html", { open: "never", outputFolder: "e2e/.runtime/playwright-report" }]],
   fullyParallel: false,
   workers: 1,
   retries: 0,

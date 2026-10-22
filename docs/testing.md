@@ -62,11 +62,65 @@ Both harnesses arrange and inspect the backend through `POST <fixtures>/_world/<
 
 ## Running
 
-- `npm run test:e2e:web`: starts a world (with the website), runs `bddgen` and Playwright. `-- -g "name"` for one scenario. Failures leave a trace, screenshot and the HTML report in `e2e/.runtime/`.
-- `npm run test:e2e:ios`: makes (once) and boots its own simulator, "Poddle E2E" (an iPhone 17 Pro on the newest iOS runtime that has one; iOS 27.1 only offers the "iPhone Duo", so today that's iOS 27.0), builds the app and the UI tests once into their own DerivedData folder, starts a world, runs, then shuts that simulator down. Other simulators are left alone. `--feature <name>`, `-g "part of a scenario name"`, `--no-build`, `--keep-sim`. Logs are `e2e/.runtime/xcodebuild-*.log`, the result bundle `e2e/.runtime/ios.xcresult`.
-- `npm run test:e2e`: both suites on one world.
+Full runs go to **tinker-desk**. Use local runs only for the scenarios you touched. `npm run check` remains the cheap check on every change.
 
-The ports are 3410 (backend), 3411 (site) and 3412 (fixtures); set `E2E_CONVEX_PORT`, `E2E_SITE_PORT` and `E2E_FIXTURE_PORT` to move them. Only one run at a time per set of ports.
+```sh
+npm run test:e2e:remote                           # both suites, one isolated world
+npm run test:e2e:remote -- --dry-run              # plan only, no SSH or test run
+npm run test:e2e:remote -- --suite web
+npm run test:e2e:remote -- --suite ios -g "Download an episode"
+npm run test:e2e:remote -- --suite ios --feature up-next
+npm run test:e2e:remote -- --commit <pushed-sha> --suite web -g "Sign in"
+```
+
+The runner fetches `origin` and refuses a commit that is not reachable from a pushed branch. It tests the commit, not your uncommitted files. Push the commit first. It uses SSH (no GitHub CLI login), fetches on tinker-desk, checks out the commit in its own worktree under `~/.local/share/poddle-e2e/worktree`, runs `npm ci`, verifies and syncs the Swift package cache, installs Playwright Chromium in its own browser cache when needed, and runs the selected suite. The main checkout at `~/dev/me/poddle` is left alone. Arguments after `--suite` are passed to that suite; a `-g` filter on the default combined run reaches both harnesses. Use `--suite ios` for `--feature` and iOS-only flags.
+
+The whole remote run holds `~/.blender-queue.lock` with `lockf`, the same lock render-box uses. It refuses immediately if another render or e2e run owns it. The OS releases the lock when the process exits; do not delete the lock file. `caffeinate -i` keeps the Mac awake during the run.
+
+Results return to `e2e/.remote-results/<sha>/`: `latest.json` contains pass/fail per scenario and setup failures, alongside the xcresult, Xcode logs, web JSON/HTML report and traces, failure screenshots and iOS accessibility dumps. A failing run exits nonzero. Disposable backend configuration and `world.json` are never downloaded or published. Remote copies remain under `~/.local/share/poddle-e2e/results/<sha>/<run-id>/`; these can be removed after inspecting/downloading them. One reusable worktree and package cache avoid growing a checkout and DerivedData per commit.
+
+Local commands for focused checks:
+
+- `npm run test:e2e:web -- -g "name"`: starts a world with the website, runs `bddgen` and Playwright. Failures leave a trace, screenshot and HTML report in `e2e/.runtime/`.
+- `npm run test:e2e:ios -- -g "name"`: creates and boots its own simulator, builds the app and UI tests, starts a world, runs, then shuts that simulator down. Other simulators are left alone. Also accepts `--feature <name>`, `--no-build`, `--keep-sim`. Logs are `e2e/.runtime/xcodebuild-*.log`, the result bundle `e2e/.runtime/ios.xcresult`.
+- `npm run test:e2e`: both suites on one world. Prefer the remote command for this full run.
+
+The iOS runner accepts `E2E_SIM_RUNTIME` (version such as `18.1` or full runtime identifier), `E2E_SIM_DEVICE_TYPE` (CoreSimulator device-type identifier), `E2E_SIM_NAME` (default `Poddle E2E`), and `E2E_SOURCE_PACKAGES` (resolved SPM cache, built with `-disableAutomaticPackageResolution`). Locally the default remains the newest available runtime supporting an iPhone 17 Pro. Remotely the defaults are **iOS 18.1 / iPhone 16**, covering Mike's supported iOS 18 baseline. Existing simulators are matched by name, device type and runtime.
+
+Remote overrides: `E2E_REMOTE_HOST` (or `--host`), `E2E_REMOTE_ROOT`, `E2E_REMOTE_REPO`, `E2E_REMOTE_NODE` (absolute remote Node executable), and the simulator variables above. Local `E2E_SOURCE_PACKAGES` defaults to `/tmp/poddle-dd-check/SourcePackages`; remote Node defaults to `~/.nvm/versions/node/v24.12.0/bin/node`. The controller validates both cached checkout revisions and clean tracked files against `Packages/PoddleKit/Package.resolved`, including ChefKit's project pin, before copying. The worker validates against the selected commit again and seeds Xcode's workspace lock from the tracked package lock. No access to the private ChefKit repo is needed on tinker-desk. If pins change, resolve them on the MacBook and sync a matching cache with the next remote run before relying on nightly.
+
+The ports are 3410 (backend), 3411 (site) and 3412 (fixtures); set `E2E_CONVEX_PORT`, `E2E_SITE_PORT` and `E2E_FIXTURE_PORT` to move them for local runs. Only one run at a time per set of ports.
+
+### Nightly and GitHub reporting
+
+The user launch agent `com.mikecann.poddle-e2e-nightly` runs at **03:00 in tinker-desk's local time zone**. It uses the user's Background launchd domain, so installation over SSH works without a GUI login; launchd runs a missed calendar event when the Mac next wakes. It fetches `origin/main`, skips a SHA already reported, takes the shared render/e2e lock, and runs both suites. If the lock is busy, that night is skipped and the SHA stays eligible for the next launch. It waits for the remote-runner changes to land on main before its first suite run.
+
+The deploy key pushes a small results commit to the **orphan `e2e-nightly` branch**, containing `results/latest.json`, up to 12 failure screenshots within a 5 MiB budget, and the reporting workflow. Each commit replaces the latest result tree; earlier results remain in branch history. Raw logs, traces, accessibility dumps and credentials stay off the branch. The last-nightly SHA is saved only after a successful push, including failed test results, so a push failure can retry. A failed test is rerun when main changes, not every night on the same commit.
+
+`.github/workflows/e2e-nightly-report.yml` runs on pushes to that branch with `GITHUB_TOKEN` (`contents: read`, `issues: write`) and no other secrets. It opens or updates one `e2e-failure` issue, names the tested commit, lists failed scenarios and links screenshots at the immutable report commit. A green run comments on and closes open issues with that label. The workflow is also copied to the orphan branch because push workflows are read from the pushed branch. Deploy-key pushes trigger workflows normally, unlike pushes authenticated with `GITHUB_TOKEN` ([GitHub docs](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows)).
+
+### One-off tinker-desk setup
+
+1. Mike must run **`sudo xcodebuild -runFirstLaunch`** in Terminal on tinker-desk. Its simulator components were older than the selected Xcode build and `xcodebuild -checkFirstLaunchStatus` reported that authorisation was required. Until this completes, simulator builds and tests can refuse their destination. Verify with `xcodebuild -checkFirstLaunchStatus` and `xcrun simctl list runtimes`.
+2. PoddlePlayback uses Swift tools 6.3, compatible with Xcode 26.6 on tinker-desk (Swift 6.3.3); its previous 6.4 manifest requirement blocked package resolution before the simulator check. Install/keep the iOS 18.1 runtime in Xcode Settings > Components, and Node 24 via nvm (`~/.nvm/versions/node/v24.12.0`). Noninteractive SSH has no Node PATH, so use its absolute path or export its bin directory. `lockf`, `caffeinate`, git and rsync ship with macOS.
+3. Keep `~/dev/me/poddle` cloned from `git@github-poddle:mikecann/poddle.git`. The `github-poddle` SSH alias uses the repo-only read-write deploy key. There is no `gh` login and no other GitHub access. Do not copy or print credentials.
+4. Sync the resolved `SourcePackages` directory once from the MacBook, then use a remote iOS run to refresh it when pins change. Keep checkouts, repositories and `workspace-state.json`; the worker remaps absolute git alternates and binary-artifact paths. `Packages/PoddleKit/Package.resolved` has the authoritative checkout revisions.
+5. From a checkout containing these changes on tinker-desk, run:
+
+   ```sh
+   export PATH="$HOME/.nvm/versions/node/v24.12.0/bin:/usr/bin:/bin:/usr/sbin:/sbin"
+   node scripts/install-e2e-nightly.mjs
+   launchctl print user/$(id -u)/com.mikecann.poddle-e2e-nightly
+   ```
+
+   This copies the worker and reporter to `~/.local/share/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, installs `~/Library/LaunchAgents/com.mikecann.poddle-e2e-nightly.plist`, and loads it without starting a suite. Rerun the installer after changing worker/reporting code. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed for the agent.
+6. The first iOS run creates the dedicated simulator. To create it once after Xcode setup, without running tests:
+
+   ```sh
+   xcrun simctl create "Poddle E2E" com.apple.CoreSimulator.SimDeviceType.iPhone-16 com.apple.CoreSimulator.SimRuntime.iOS-18-1
+   ```
+
+   Check `xcrun simctl list devices` first to avoid a duplicate. Once the code is pushed, verify one app and one web scenario remotely, then run the full suite remotely before an App Store build.
 
 ## Writing scenarios
 

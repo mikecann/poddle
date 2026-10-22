@@ -47,10 +47,11 @@ These must keep end-to-end coverage. Change one, and its feature changes in the 
 
 ### End-to-end cadence
 
-The e2e suites are slow (the app's takes about 15 minutes) and they aren't the default check for small changes.
+The e2e suites are slow (the app's takes about 17 minutes). Full runs belong on **tinker-desk**, through `npm run test:e2e:remote`, so the M5 MacBook stays free. Local e2e runs are for the scenarios you touched.
 
 - **Narrow changes:** run the smallest relevant checks: `npm test`, one Vitest file, `swift test` in one package, or one feature or scenario of an e2e suite.
-- **Run the whole suite** (or every feature covering what you touched) when the change is large or risky: auth, sync and the outbox, playback, navigation that spans screens, the website's pages, anything on a critical path above, and before an App Store build.
+- **Run the whole suite remotely** (or every feature covering what you touched) when the change is large or risky: auth, sync and the outbox, playback, navigation that spans screens, the website's pages, anything on a critical path above, and before an App Store build.
+- **Nightly:** tinker-desk runs the full suite at 03:00 local when `origin/main` has moved. Results go to the orphan `e2e-nightly` branch; GitHub updates one `e2e-failure` issue and closes it after a green run.
 - A regression on a critical path still gets its scenario. The cadence is about when to run the full suite, not whether to cover the bug.
 
 `npm run check` (typecheck, Vitest, BDD pairing and drift) runs no simulator or browser, so run it on every change.
@@ -65,16 +66,18 @@ The e2e suites are slow (the app's takes about 15 minutes) and they aren't the d
 | One Vitest file | `npx vitest run tests/queue.test.ts` |
 | BDD pairing and drift (no browsers, no simulators) | `npm run test:bdd-check` |
 | PoddleKit / PoddlePlayback | `cd Packages/PoddleKit && swift test` (same for `PoddlePlayback`) |
-| Website e2e, every scenario | `npm run test:e2e:web` |
+| Website e2e, every scenario (remote) | `npm run test:e2e:remote -- --suite web` |
 | One website scenario | `npm run test:e2e:web -- -g "scenario name"` |
-| App e2e, every scenario | `npm run test:e2e:ios` |
+| App e2e, every scenario (remote) | `npm run test:e2e:remote -- --suite ios` |
 | One app feature | `npm run test:e2e:ios -- --feature up-next` |
 | One app scenario | `npm run test:e2e:ios -- -g "part of its name"` |
 | App e2e without rebuilding | `npm run test:e2e:ios -- --no-build -g "…"` |
-| Both e2e suites on one world | `npm run test:e2e` |
+| Both e2e suites on one world (remote) | `npm run test:e2e:remote` |
+| Remote plan without running | `npm run test:e2e:remote -- --dry-run` |
+| One remote app scenario | `npm run test:e2e:remote -- --suite ios -g "scenario name"` |
 | A world to poke at by hand | `npm run e2e:world` (Ctrl-C stops it) |
 
-Failures leave screenshots, accessibility trees, traces and logs in `e2e/.runtime/` (git-ignored). `docs/testing.md` says what's where.
+Remote results come back to `e2e/.remote-results/<sha>/`. Local failures leave screenshots, accessibility trees, traces and logs in `e2e/.runtime/` (both git-ignored). `docs/testing.md` says what's where.
 
 ## Rules that bite
 

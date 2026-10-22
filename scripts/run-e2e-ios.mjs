@@ -22,8 +22,9 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const runtime = path.join(root, "e2e", ".runtime");
-const SIM_NAME = "Poddle E2E";
-const SIM_TYPE = "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro";
+const SIM_NAME = process.env.E2E_SIM_NAME ?? "Poddle E2E";
+const SIM_TYPE = process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro";
+const SIM_RUNTIME = process.env.E2E_SIM_RUNTIME;
 
 const args = process.argv.slice(2);
 const flag = (name) => args.includes(name);
@@ -43,6 +44,9 @@ export async function runIos({ world } = {}) {
   const udid = ensureSimulator();
   const derivedData = path.join(os.homedir(), "Library/Developer/Xcode/DerivedData", `Poddle-e2e-${createHash("sha1").update(root).digest("hex").slice(0, 8)}`);
   const common = ["-project", "Poddle.xcodeproj", "-scheme", "Poddle", "-configuration", "Debug", "-destination", `id=${udid}`, "-derivedDataPath", derivedData];
+
+  // Reuse resolved private packages on runners without GitHub access to ChefKit.
+  if (process.env.E2E_SOURCE_PACKAGES) common.push("-clonedSourcePackagesDirPath", process.env.E2E_SOURCE_PACKAGES, "-disableAutomaticPackageResolution");
 
   log(`booting ${SIM_NAME} (${udid})`);
   sh("xcrun", ["simctl", "boot", udid], { allowFail: true });
@@ -83,20 +87,20 @@ export async function runIos({ world } = {}) {
 }
 
 /**
- * The "Poddle E2E" iPhone 17 Pro, on the newest iOS runtime that has one (made if it isn't
- * there). Some runtimes only offer unusual devices (iOS 27.1 has just the "iPhone Duo"), so
+ * The configured simulator, created if necessary. By default it is a "Poddle E2E"
+ * iPhone 17 Pro on the newest iOS runtime that supports one. Some runtimes only offer unusual devices (iOS 27.1 has just the "iPhone Duo"), so
  * the newest runtime with a plain iPhone 17 Pro wins.
  */
 function ensureSimulator() {
   const devices = JSON.parse(sh("xcrun", ["simctl", "list", "devices", "-j"])).devices;
   const runtimes = JSON.parse(sh("xcrun", ["simctl", "list", "runtimes", "-j"])).runtimes
-    .filter((r) => r.platform === "iOS" && r.isAvailable && r.supportedDeviceTypes?.some((d) => d.identifier === SIM_TYPE))
+    .filter((r) => r.platform === "iOS" && r.isAvailable && (!SIM_RUNTIME || r.identifier === SIM_RUNTIME || r.version === SIM_RUNTIME) && r.supportedDeviceTypes?.some((d) => d.identifier === SIM_TYPE))
     .sort((a, b) => compareVersions(b.version, a.version));
-  if (!runtimes.length) throw new Error("No iOS simulator runtime with an iPhone 17 Pro is installed");
+  if (!runtimes.length) throw new Error(`No available iOS runtime ${SIM_RUNTIME ?? "(newest)"} supports ${SIM_TYPE}. Check xcodebuild -checkFirstLaunchStatus and installed runtimes.`);
   const newest = runtimes[0];
-  const existing = (devices[newest.identifier] ?? []).find((d) => d.name === SIM_NAME && d.isAvailable);
+  const existing = (devices[newest.identifier] ?? []).find((d) => d.name === SIM_NAME && d.deviceTypeIdentifier === SIM_TYPE && d.isAvailable);
   if (existing) return existing.udid;
-  log(`creating ${SIM_NAME} (iPhone 17 Pro, ${newest.name})`);
+  log(`creating ${SIM_NAME} (${SIM_TYPE}, ${newest.name})`);
   return sh("xcrun", ["simctl", "create", SIM_NAME, SIM_TYPE, newest.identifier]).trim();
 }
 
