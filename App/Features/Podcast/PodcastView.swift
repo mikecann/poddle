@@ -28,13 +28,16 @@ struct PodcastView: View {
                 TopBar {
                     BackButton(title: "Library")
                 } trailing: {
-                    ShareLink(item: URL(string: podcast.isPrivate ? "https://poddle.app" : podcast.feedURL)!) {
-                        Image(systemName: "square.and.arrow.up").font(.system(size: 16, weight: .medium))
-                            .foregroundStyle(Palette.tomato).frame(width: 36, height: 36).raised(Circle())
+                    // The website's page for the show; private feeds have none.
+                    if ShareLinks.canShare(podcast) {
+                        ShareLink(item: ShareLinks.show(podcast.id), subject: Text(podcast.title)) {
+                            Image(systemName: "square.and.arrow.up").font(.system(size: 16, weight: .medium))
+                                .foregroundStyle(Palette.tomato).frame(width: 36, height: 36).raised(Circle())
+                        }
+                        .buttonStyle(.pressable)
+                        .padding(.horizontal, 4)
+                        .accessibilityLabel("Share")
                     }
-                    .buttonStyle(.pressable)
-                    .padding(.horizontal, 4)
-                    .disabled(podcast.isPrivate)
                     Menu { headerMenu(podcast) } label: {
                         Image(systemName: "ellipsis").font(.system(size: 16, weight: .bold))
                             .foregroundStyle(Palette.tomato).frame(width: 36, height: 36).raised(Circle())

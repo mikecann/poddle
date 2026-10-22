@@ -6,6 +6,8 @@ PODDLE_CONVEX_URL = https:/$()/striped-turtle-260.ap-southeast-2.convex.cloud
 PODDLE_APS_ENVIRONMENT = development
 // Associated domains: the dev site is fetched straight from the domain in developer mode.
 PODDLE_SITE_DOMAIN = striped-turtle-260.ap-southeast-2.convex.site?mode=developer
+// The website, for share links (ShareLinks): dev's own site.
+PODDLE_SITE_URL = https:/$()/striped-turtle-260.ap-southeast-2.convex.site
 
 // convex-swift ships no x86_64 simulator slice, so build simulators for Apple Silicon only
 EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64

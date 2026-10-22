@@ -122,7 +122,16 @@ struct NowPlayingView: View {
             Button { app.nowPlayingSheet = .queue } label: { Label("Up Next", systemImage: "list.bullet.indent") }
             Button { app.nowPlayingSheet = .showSettings(podcastId: item.podcast.id) } label: { Label("All show settings", systemImage: "slider.horizontal.3") }
             Button { app.goToShow(item.podcast.id) } label: { Label("Go to show", systemImage: "rectangle.stack") }
-            ShareLink(item: URL(string: item.episode.enclosureURL)!) { Label("Share episode", systemImage: "square.and.arrow.up") }
+            if ShareLinks.canShare(item.podcast) {
+                ShareLink(item: ShareLinks.episode(item.id), subject: Text(item.episode.title)) {
+                    Label("Share episode", systemImage: "square.and.arrow.up")
+                }
+                if player.position >= 1 {
+                    ShareLink(item: ShareLinks.episode(item.id, at: player.position), subject: Text(item.episode.title)) {
+                        Label("Share from \(Format.clock(player.position))", systemImage: "clock")
+                    }
+                }
+            }
             Divider()
             Button { markPlayedAndSkip(item) } label: { Label("Mark played and skip", systemImage: "checkmark.circle") }
         } label: {

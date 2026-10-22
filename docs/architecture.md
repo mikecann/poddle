@@ -12,8 +12,9 @@ poddle/
   Packages/
     PoddleKit/            Swift package: models, the API layer over convex-swift, local cache + outbox, settings resolution, formatting
     PoddlePlayback/       Swift package: the audio engine (AVAudioEngine, time-pitch, Smart Speed, Voice Boost), remote commands, Now Playing info
-  convex/                 Convex backend (TypeScript)
-  package.json            backend tooling
+  convex/                 Convex backend (TypeScript), which also serves the website
+  web/                    the website (Vite + React + TypeScript), poddle.mikecann.app
+  package.json            backend and website tooling
   docs/  designs/  scripts/
 ```
 
@@ -30,6 +31,15 @@ poddle/
 - **Backend data:** shows, episodes, show notes, feed bookkeeping and the directory cache are shared. Everything else is personal and keyed by `userId`, with every index starting with it (the few exceptions are commented in `convex/schema.ts`). Public functions are built with `userQuery`/`userMutation`/`userAction` (`convex/lib/auth.ts`), which put the caller on `ctx.userId`; the `lib/` helpers read it from there, and internal functions that work for one person use `asUser(ctx, userId)`. A person's library is their `subscriptions` rows, which also decide which shared shows and episodes `sync:changes` sends them.
 - **App:** `Account` (PoddleKit) keeps the Convex Auth session in the Keychain (one per deployment), refreshes the minute-long access token and hands it to convex-swift through its auth callback. `LiveStore` belongs to one person at a time: its cache and outbox live under `Application Support/Poddle/<deployment>/<user id>/`, and `switchAccount` swaps them when someone signs in or out. Signed in but offline, the app opens from that person's cache and the outbox replays once the client has a token again. The pre-accounts cache and outbox (straight under the deployment folder) go to the first person to sign in on the device after the update.
 - **Scripts** act as a named user through the admin path (`admin: { token, email }`, checked against `PODDLE_API_TOKEN`).
+
+## Website
+
+- **Where:** `web/` is a Vite + React single-page app, built into `web/dist` and uploaded to Convex static hosting (`@convex-dev/static-hosting`) on the same deployment. Prod serves it on the HTTP-actions custom domain `poddle.mikecann.app`; dev on `striped-turtle-260.ap-southeast-2.convex.site`. `convex/http.ts` keeps the app's routes (and Convex Auth's components) at the root and registers static hosting's catch-all under them.
+- **Pages:** `/` (landing and sign-in), `/e/<id>` (public episode, with a web player that starts at `?t=`), `/s/<id>` (public show), `/me` (signed in: Up Next, shows, recently listened, a stats glance; read-only).
+- **Link previews:** chat apps don't run JavaScript, so `/e/*` and `/s/*` are HTTP actions that fetch the uploaded `index.html` and swap the block between `<!--poddle:meta-->` markers for the page's tags and data (`convex/lib/meta.ts`). Everything else is the static file.
+- **Privacy:** the public pages read only `share:episode` and `share:show`, which return catalogue fields and treat private feeds as not found (`convex/lib/sharePages.ts`). `/me` uses the person's own signed-in queries, like the app.
+- **Sign-in:** Convex Auth's React client (`ConvexAuthProvider`, `useSignInWithApple`/`useSignInWithGoogle`). Dev builds (`npm run web:upload:dev`) add a test sign-in form; the server refuses it on prod anyway.
+- **App side:** `ShareLinks` (PoddleKit) makes and reads the links; the app's associated domains (`applinks:$(PODDLE_SITE_DOMAIN)`) open them, `AppModel.open` fetches what isn't in the library yet (`PoddleStore.loadShared`) and shows it.
 
 ## Conventions
 

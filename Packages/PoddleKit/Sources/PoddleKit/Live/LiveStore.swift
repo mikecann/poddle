@@ -935,6 +935,23 @@ public actor LiveStore: PoddleDataSource {
         }
     }
 
+    public func loadShared(_ target: ShareLinks.Target) async -> Bool {
+        let gen = generation
+        let d = JSONDecoder()
+        switch target {
+        case let .episode(id, _):
+            guard let data = try? await transport.query("episodes:get", ["episodeId": .string(id)]),
+                  let got = (try? d.decode(EpisodeGetDoc?.self, from: data)) ?? nil, gen == generation else { return false }
+            upsert(got.row)
+        case let .show(id):
+            guard let data = try? await transport.query("podcasts:get", ["podcastId": .string(id)]),
+                  let got = (try? d.decode(PodcastGetDoc?.self, from: data)) ?? nil, gen == generation else { return false }
+            cache.snapshot.podcasts[got.podcast._id] = got.podcast.model
+        }
+        changed()
+        return true
+    }
+
     public func showNotes(episodeId: String) async -> String? {
         guard let data = try? await transport.query("episodes:get", ["episodeId": .string(episodeId)]) else { return nil }
         return (try? JSONValue.decode(data))?["showNotesHtml"]?.string

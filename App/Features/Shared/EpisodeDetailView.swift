@@ -54,9 +54,20 @@ struct EpisodeDetailView: View {
                     }
 
                     HStack(spacing: 8) {
-                        PoddleButton(title: player.currentEpisodeId == item.id && player.isPlaying ? "Playing" : "Play", systemImage: "play.fill", kind: .primary) {
-                            player.play(item.id)
-                            app.showNowPlaying = true
+                        if let start = app.linkStarts[item.id], player.currentEpisodeId != item.id {
+                            // Opened from a shared link with ?t=.
+                            PoddleButton(title: "Play from \(Format.clock(start))", systemImage: "play.fill", kind: .primary) {
+                                store.moveToTop(item.id)
+                                player.load(item.id, position: start, smartSaved: 0)
+                                player.resume()
+                                app.linkStarts[item.id] = nil
+                                app.showNowPlaying = true
+                            }
+                        } else {
+                            PoddleButton(title: player.currentEpisodeId == item.id && player.isPlaying ? "Playing" : "Play", systemImage: "play.fill", kind: .primary) {
+                                player.play(item.id)
+                                app.showNowPlaying = true
+                            }
                         }
                         if item.isQueued {
                             PoddleButton(title: "In Up Next", systemImage: "checkmark") {

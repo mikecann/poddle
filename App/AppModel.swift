@@ -72,6 +72,10 @@ final class AppModel {
     var isMock = false
     /// Tapped download over mobile data in Wi-Fi-only mode: ask what to do (decisions.md).
     var mobilePromptEpisodeId: String?
+    /// Start times from shared links (`/e/<id>?t=`), which the episode page offers to play from.
+    var linkStarts: [String: Double] = [:]
+    /// A shared link that went nowhere (a private feed's, or a deleted episode).
+    var linkNotFound = false
 
     func path(_ tab: Tab) -> Binding<[Route]> {
         Binding { self.paths[tab] ?? [] } set: { self.paths[tab] = $0 }
@@ -88,6 +92,26 @@ final class AppModel {
         sheet = nil
         tab = .library
         paths[.library] = [.podcast(podcastId)]
+    }
+
+    /// A website link (`https://poddle.mikecann.app/e/<id>?t=…`, `/s/<id>`, or `poddle://e/…` from
+    /// its "Open in Poddle" button): fetch the episode or show if it isn't here yet, then show it.
+    func open(_ url: URL, store: PoddleStore) {
+        guard let target = ShareLinks.parse(url) else { return }
+        Task {
+            guard await store.loadShared(target) else {
+                linkNotFound = true
+                return
+            }
+            switch target {
+            case let .episode(id, startAt):
+                if let startAt { linkStarts[id] = startAt } else { linkStarts[id] = nil }
+                showNowPlaying = false
+                sheet = .episode(id)
+            case let .show(id):
+                goToShow(id)
+            }
+        }
     }
 
     /// `-PoddleScreen <name>` opens a screen directly, for automated screenshots.

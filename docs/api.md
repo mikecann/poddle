@@ -35,6 +35,7 @@ Set with `npx convex env set NAME value` on the deployment.
 | `PODDLE_ALLOWED_EMAILS` | for sign-up | Comma-separated emails that may make an account. Unset: nobody new. Existing accounts always sign in. |
 | `PODDLE_TEST_SIGNIN` | dev only | Exactly `1` enables test sign-in. Never set it on prod (it's refused on prod's addresses anyway). |
 | `PODDLE_API_TOKEN` | for scripts | Long random string for the admin path. |
+| `PODDLE_SITE_URL` | prod | The website's public origin, `https://poddle.mikecann.app`. Link previews' canonical URLs, and an allowed sign-in return origin. Unset on dev (the request's own origin). |
 | `APNS_KEY_P8` | for push | Contents of the `.p8` auth key. PEM (newlines or literal `\n`) or the bare base64 body. |
 | `APNS_KEY_ID` | for push | The key's 10-character ID. |
 | `APNS_TEAM_ID` | for push | `4DTAZSZL6B` |
@@ -61,7 +62,7 @@ Convex Auth v2 (`@convex-dev/auth` 2.0.0-beta.0), set up like Walkies: `convex/c
 - **One person, two providers:** Apple and Google with the same verified email land in the same user (`existingUser` in `users.ts`). Apple's "Hide my email" relay addresses are different emails, so they don't match (and aren't on the allowlist).
 - **Allowlist:** `PODDLE_ALLOWED_EMAILS`, enforced in one place (`convex/lib/allowlist.ts`, called only when a new user would be made). To open sign-up, make `maySignUp` return true.
 - **Return URLs to register** with Apple and Google: `https://striped-turtle-260.ap-southeast-2.convex.site/oauth/{apple,google}/callback` (dev) and `https://coordinated-dodo-120.ap-southeast-2.convex.site/oauth/{apple,google}/callback` (prod). Convex Auth builds them from `CONVEX_SITE_URL`.
-- **Custom domain:** if prod's `CONVEX_SITE_URL` is overridden to `https://poddle.mikecann.app`, the callbacks become `https://poddle.mikecann.app/oauth/{apple,google}/callback` (register those too, and add the domain to the Apple Services ID), JWTs are issued by and verified against that URL (`convex/auth.config.ts`), so existing sessions stop working and everyone signs in once more, and the app's `returnURL` must follow (it's derived from the `.convex.cloud` URL today, `LiveConfig.siteURL`). The website, which will sign in with the same Convex Auth, adds its own origin to `allowedRedirectOrigins` in `convex/auth.ts`.
+- **Custom domain:** if prod's `CONVEX_SITE_URL` is overridden to `https://poddle.mikecann.app`, the callbacks become `https://poddle.mikecann.app/oauth/{apple,google}/callback` (register those too, and add the domain to the Apple Services ID), JWTs are issued by and verified against that URL (`convex/auth.config.ts`), so existing sessions stop working and everyone signs in once more, and the app's `returnURL` must follow (it's derived from the `.convex.cloud` URL today, `LiveConfig.siteURL`). The website signs in with the same Convex Auth (its web flow): it starts on its own page and comes back to it, so `allowedRedirectOrigins` in `convex/auth.ts` holds the deployment's site and `PODDLE_SITE_URL`.
 
 ## Documents
 
@@ -122,6 +123,30 @@ Tombstones for `sync:changes`. `_id`, `table` (currently `queueItems`), `docId` 
 - **PodcastSummary** = `{ _id, title, author?, artworkUrl?, isPrivate }`
 - **DirectoryResult** = `{ appleId?: Int, title, author?, artworkUrl?, feedUrl?, genre?, episodeCount?: Int, podcastId?: Id, subscribed: Bool }`. `podcastId` is set when the feed is already in the library.
 - **Paginated<T>** = `{ page: [T], isDone: Bool, continueCursor: String }` (plus Convex's optional `splitCursor`, `pageStatus`). Pass `paginationOpts: { numItems: Int, cursor: String | null }`.
+
+## Website and share links
+
+The website (`web/`) is served by the same deployment: Convex static hosting for its files, plus HTTP actions in `convex/http.ts`. Prod's public address is `https://poddle.mikecann.app` (its HTTP-actions custom domain); dev's is its own `.convex.site`.
+
+| Route | What it serves |
+|---|---|
+| `/e/<episodeId>` (`?t=<seconds>` optional) | The site's `index.html` with that episode's `<title>`, Open Graph and Twitter card tags, and its `share:episode` data embedded as `<script id="poddle-page">` (`convex/lib/meta.ts`). 404 with neutral "not found" tags for unknown ids and private feeds. |
+| `/s/<podcastId>` | The same for a show (`share:show`). |
+| `/.well-known/apple-app-site-association` | `application/json`, no redirect: `applinks` for app `4DTAZSZL6B.com.mikecann.poddle` on `/e/*` and `/s/*`, plus `webcredentials`. |
+| `/app/signed-in` | The app's sign-in return (below). |
+| `/auth/*`, `/oauth/*` | Convex Auth's components. |
+| everything else | The static site; paths without an extension fall back to `index.html` (`/`, `/me`). |
+
+**Public functions** (no sign-in, no `admin`): the only ones that don't act for a caller. They return shared catalogue data, only the fields the pages need, and nothing personal.
+
+| Function | Kind | Args | Returns |
+|---|---|---|---|
+| `share:episode` | query | `episodeId: String` | `{ _id, title, pubDate?, duration?, summary?, artworkUrl?, audioUrl?, audioType?, season?, episodeNumber?, showNotesHtml?, podcast: { _id, title, author?, artworkUrl? } } \| null`. `audioUrl` is absent for ghost episodes. `showNotesHtml` is the feed's HTML: sanitise before showing it. |
+| `share:show` | query | `podcastId: String` | `{ show: { _id, title, author?, description? (plain text), artworkUrl?, link?, feedUrl, episodeCount, latestEpisodeAt? }, episodes: [{ _id, title, pubDate?, duration?, summary? }] (newest 20) } \| null` |
+
+**Private feeds never have a public page** (`lib/sharePages.ts`): both return `null`, exactly like an id that doesn't exist (or isn't an id at all), when the show has `isPrivate`, its feed URL carries credentials or a token-ish query param (`parse.looksPrivate`), anyone has switched it to private in their library, or (for an episode) its enclosure URL carries a token. Those episodes are also left out of `share:show`'s list, and so are ghosts. Tests: `tests/share.test.ts`.
+
+**Share links:** `https://<site>/e/<episodeId>?t=<whole seconds>` and `https://<site>/s/<podcastId>` (PoddleKit's `ShareLinks`). The website's "Open in Poddle" button uses `poddle://e/<id>?t=…` and `poddle://s/<id>`, because iOS never opens a universal link from a page on the same site. The app reads both forms. `PODDLE_SITE_URL` (optional) is the site's public origin, used for canonical and `og:url` tags and as an extra allowed sign-in return origin; unset, it's the request's own origin.
 
 ## Functions
 
@@ -212,6 +237,7 @@ Both updates are LWW **per field**. The speed sheet's scope switch is client log
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|
 | `sessions:record` | mutation | `sessions: [SessionInput]` | `{ inserted, updated, unchanged }` |
+| `sessions:recent` | query | `limit?` (1–50, default 12) | `[{ row: EpisodeRow, lastListenedAt }]`: episodes listened to most recently, newest first, once each (the website's "Recently listened"). |
 
 `SessionInput` = `{ sessionId (UUID), episodeId, deviceId?, startedAt, endedAt, contentStart, contentEnd, rate, smartSpeed, smartRemovedContent, voiceBoost, route?, utcOffsetMinutes? }`.
 

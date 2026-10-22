@@ -1,9 +1,11 @@
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import { userMutation, type UserMutationCtx as MutationCtx } from "./lib/auth";
+import { userMutation, userQuery, type UserMutationCtx as MutationCtx } from "./lib/auth";
 import { ensureLibraryRow } from "./lib/library";
 import { applySessionToRollups } from "./lib/rollups";
+import { episodeRows } from "./lib/rows";
 import { userUtcOffset } from "./lib/state";
+import { vEpisodeRow } from "./lib/validators";
 
 // Listening sessions (spec §2.9): an append-only log keyed by client UUID.
 // The app re-sends an open session every 30 s with the same id and a later end;
@@ -86,5 +88,34 @@ export const record = userMutation({
       counts[result]++;
     }
     return counts;
+  },
+});
+
+const RECENT_SESSIONS_SCANNED = 300;
+
+/** Episodes listened to most recently, newest first, one row each (the website's "Recently listened"). */
+export const recent = userQuery({
+  args: { limit: v.optional(v.number()) },
+  returns: v.array(v.object({ row: vEpisodeRow, lastListenedAt: v.number() })),
+  handler: async (ctx, { limit }) => {
+    const wanted = Math.min(Math.max(Math.floor(limit ?? 12), 1), 50);
+    const sessions = await ctx.db
+      .query("listeningSessions")
+      .withIndex("by_user_startedAt", (q) => q.eq("userId", ctx.userId))
+      .order("desc")
+      .take(RECENT_SESSIONS_SCANNED);
+    const latest = new Map<Id<"episodes">, number>();
+    for (const s of sessions) {
+      if (latest.size >= wanted) break;
+      if (!latest.has(s.episodeId)) latest.set(s.episodeId, s.endedAt);
+    }
+    const out = [];
+    for (const [episodeId, lastListenedAt] of latest) {
+      const episode = await ctx.db.get(episodeId);
+      if (!episode) continue;
+      const [row] = await episodeRows(ctx, [episode]);
+      if (row) out.push({ row, lastListenedAt });
+    }
+    return out;
   },
 });

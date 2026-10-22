@@ -410,6 +410,22 @@ public final class PoddleStore {
     /// Keeps a podcast page live while it's on screen.
     public func observePodcast(_ podcastId: String) async { await dataSource.observePodcast(podcastId) }
 
+    /// A shared link's episode or show, fetched if it isn't in the store yet (it may not be in the
+    /// library at all). False if it can't be found, e.g. a private feed's or a deleted one.
+    public func loadShared(_ target: ShareLinks.Target) async -> Bool {
+        let loaded = {
+            switch target {
+            case let .episode(id, _): self.item(id) != nil
+            case let .show(id): self.podcast(id).map { !$0.feedURL.isEmpty } ?? false
+            }
+        }
+        if loaded() { return true }
+        guard await dataSource.loadShared(target) else { return false }
+        // The snapshot arrives through the data source's stream a moment later.
+        for _ in 0..<30 where !loaded() { try? await Task.sleep(for: .milliseconds(100)) }
+        return loaded()
+    }
+
     public func loadShowNotes(_ episodeId: String) async {
         guard showNotes[episodeId] == nil, let html = await dataSource.showNotes(episodeId: episodeId), !html.isEmpty else { return }
         showNotes[episodeId] = html

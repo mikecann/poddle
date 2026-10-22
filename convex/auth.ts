@@ -39,9 +39,12 @@ export const signInForTesting = mutation({
 });
 
 // The iPhone app runs Apple's and Google's sign-in pages in a secure sheet, which
-// ends on this deployment's own site (see http.ts). The website (later) will add
-// its own origin here.
-const allowedRedirectOrigins = [new URL(env.CONVEX_SITE_URL).origin];
+// ends on this deployment's own site (see http.ts). The website comes back to
+// whichever page started the sign-in: the deployment's own site, or its public
+// address (PODDLE_SITE_URL, the custom domain on prod).
+const allowedRedirectOrigins = [
+  ...new Set([env.CONVEX_SITE_URL, env.PODDLE_SITE_URL].flatMap((u) => (u ? [new URL(u).origin] : []))),
+];
 
 export const { startSignInWithApple, completeSignInWithApple } = setupApple(auth, {
   component: components.authApple,

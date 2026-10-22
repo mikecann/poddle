@@ -411,3 +411,35 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         #expect(LiveStore.cachedSnapshot(disk: nil) == LibrarySnapshot())
     }
 }
+
+@Suite struct SharedLinkTests {
+    @Test func fetchesALinkedEpisodeAndShowThatArentInTheLibrary() async throws {
+        let fake = FakeTransport()
+        fake.respond = { name, args in
+            switch (name, args["episodeId"]?.string ?? args["podcastId"]?.string) {
+            case ("episodes:get", "e9"?):
+                Data(#"{"row":{"episode":{"_id":"e9","podcastId":"p9","title":"Shared","duration":600,"transcripts":[],"isGhost":false,"firstSeenAt":1,"updatedAt":1},"state":null,"podcast":{"_id":"p9","title":"Elsewhere","isPrivate":false}},"inQueue":false}"#.utf8)
+            case ("podcasts:get", "p9"?):
+                Data(#"{"podcast":{"_id":"p9","_creationTime":1,"feedUrl":"https://b.example/feed","title":"Elsewhere","description":"About it","isPrivate":false,"subscribed":false,"subscriptionUpdatedAt":0,"episodeCount":1,"createdAt":1,"updatedAt":1},"overrides":{},"resolved":{},"feed":{}}"#.utf8)
+            case ("sync:changes", _):
+                Data(#"{"page":[],"isDone":true,"continueCursor":"","maxUpdatedAt":null}"#.utf8)
+            default: Data("null".utf8)
+            }
+        }
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let live = makeStore(fake, disk)
+        let store = await MainActor.run { PoddleStore(dataSource: live, deviceId: "device-1") }
+
+        #expect(await store.loadShared(.episode(id: "e9", startAt: 30)))
+        await MainActor.run {
+            #expect(store.item("e9")?.episode.title == "Shared")
+            #expect(store.podcast("p9")?.subscribed == false)
+        }
+        #expect(await store.loadShared(.show(id: "p9")))
+        await MainActor.run { #expect(store.podcast("p9")?.feedURL == "https://b.example/feed") }
+        // Private feeds and unknown ids come back null from the server.
+        #expect(await store.loadShared(.episode(id: "nope", startAt: nil)) == false)
+        await live.stop()
+    }
+}

@@ -34,6 +34,9 @@ public protocol PoddleDataSource: Sendable {
     func observePodcast(_ podcastId: String) async
     /// Full show notes HTML, which the synced episode list leaves out.
     func showNotes(episodeId: String) async -> String?
+    /// A shared link's episode or show (`episodes:get` / `podcasts:get`), added to the snapshot even
+    /// when it isn't in the library. False if there's no such thing (or no connection).
+    func loadShared(_ target: ShareLinks.Target) async -> Bool
     func connectionStatus() async -> AsyncStream<ConnectionStatus>
 
     /// Listening sessions for stats (`sessions:record`). The same `sessionId` is re-sent every 30 s
@@ -65,6 +68,7 @@ extension PoddleDataSource {
     public func refresh(podcastId: String?) async throws {}
     public func observePodcast(_ podcastId: String) async {}
     public func showNotes(episodeId: String) async -> String? { nil }
+    public func loadShared(_ target: ShareLinks.Target) async -> Bool { false }
     public func connectionStatus() async -> AsyncStream<ConnectionStatus> { AsyncStream { $0.finish() } }
 }
 

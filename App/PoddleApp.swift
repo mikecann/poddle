@@ -120,9 +120,22 @@ struct PoddleApp: App {
                 .preferredColorScheme(Self.forcedScheme)
                 .tint(Palette.tomato)
                 .onChange(of: account?.userId) { _, userId in Task { await accountChanged(to: userId) } }
+                // Share links from the website (universal links) and its poddle:// "Open in Poddle" button.
+                .onOpenURL { url in app.open(url, store: store) }
+                .alert("Couldn't open that link", isPresented: $app.linkNotFound) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text("That episode or show isn't available. It may be from a private feed.")
+                }
                 #if DEBUG
                 // `-PoddleSignOut YES`: signs out at launch, the same way Settings does (for unattended checks).
                 .task { if UserDefaults.standard.bool(forKey: "PoddleSignOut") { await account?.signOut() } }
+                // `-PoddleOpenURL <url>`: opens a share link at launch, as if tapped (for unattended checks).
+                .task {
+                    guard let raw = UserDefaults.standard.string(forKey: "PoddleOpenURL"), let url = URL(string: raw) else { return }
+                    try? await Task.sleep(for: .seconds(3))
+                    app.open(url, store: store)
+                }
                 #endif
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {

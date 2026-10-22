@@ -111,6 +111,16 @@ struct EpisodeRowDoc: Decodable, Sendable {
     var podcast: PodcastSummaryDoc
 }
 
+/// `episodes:get`.
+struct EpisodeGetDoc: Decodable, Sendable {
+    var row: EpisodeRowDoc
+}
+
+/// `podcasts:get`.
+struct PodcastGetDoc: Decodable, Sendable {
+    var podcast: PodcastDoc
+}
+
 struct UpNextEntryDoc: Decodable, Sendable {
     var item: QueueItemDoc
     var row: EpisodeRowDoc

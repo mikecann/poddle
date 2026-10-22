@@ -4,6 +4,7 @@ import core from "@convex-dev/auth/convex.config.js";
 import apple from "@convex-dev/auth/components/apple/convex.config.js";
 import google from "@convex-dev/auth/components/google/convex.config.js";
 import anonymous from "@convex-dev/auth/components/anonymous/convex.config.js";
+import staticHosting from "@convex-dev/static-hosting/convex.config.js";
 
 const app = defineApp({
   env: {
@@ -35,6 +36,10 @@ const app = defineApp({
     APNS_TEAM_ID: v.optional(v.string()),
     APNS_TOPIC: v.optional(v.string()),
     APNS_ENV: v.optional(v.string()),
+    // The website's public address, e.g. https://poddle.mikecann.app on prod. Used
+    // for link previews' canonical URLs and as an allowed sign-in return origin.
+    // Unset: the deployment's own site.
+    PODDLE_SITE_URL: v.optional(v.string()),
   },
 });
 
@@ -66,5 +71,8 @@ app.use(google, {
 });
 // Only for test sign-in on dev; refused unless PODDLE_TEST_SIGNIN=1 (users.ts).
 app.use(anonymous);
+// The website (web/). No httpPrefix: http.ts keeps its routes at the root and
+// registers the static catch-all under them.
+app.use(staticHosting);
 
 export default app;

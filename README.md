@@ -24,6 +24,8 @@ With none, the app runs on live data (`LiveStore` over Convex: the dev deploymen
 
 Signing in (Debug simulator builds only): `-PoddleTestSignIn <email>` signs in at launch with test sign-in if signed out (the dev deployment needs `PODDLE_TEST_SIGNIN=1`; it reuses the user with that email, e.g. `mike.cann@gmail.com` on the dev copy of prod, or makes a test user). `-PoddleSignOut YES` (Debug) signs out at launch, the same way Settings does. The sign-in screen also has the test button with an email field.
 
+Share links (Debug): `-PoddleOpenURL <url>` opens a website link at launch as if it had been tapped, e.g. `https://striped-turtle-260.ap-southeast-2.convex.site/e/<id>?t=754` or `poddle://s/<id>`.
+
 Smaller ones: `-PoddlePaused YES` stops a mock screenshot run starting playback, `-PoddleAutoplay YES` starts the real engine playing at launch, and `-PoddleQuery <text>` pre-fills Discover.
 
 ## Backend
@@ -52,6 +54,19 @@ The app needs no secrets: Debug talks to dev (`striped-turtle-260`) and Release 
 | `npm test` | Vitest + convex-test, once |
 | `npm run test:watch` | Vitest in watch mode |
 | `npm run check` | Typecheck, then tests |
+
+## Website
+
+`web/` is the website, [poddle.mikecann.app](https://poddle.mikecann.app): public pages for an episode (`/e/<id>`, with a player that starts at `?t=`) and a show (`/s/<id>`), with link previews for iMessage, Slack, X and WhatsApp, and a signed-in `/me` with your Up Next, shows, recent listening and stats. It's served by Convex static hosting on the same deployment as the backend; `docs/architecture.md` ("Website") has the details and `docs/api.md` ("Website and share links") the routes and the public queries.
+
+| Script | What it does |
+|---|---|
+| `npm run web:dev` | Vite dev server on http://localhost:5174, against dev |
+| `npm run web:build` | Build into `web/dist` |
+| `npm run web:upload:dev` | Build (with the dev-only test sign-in form) and upload to dev's static hosting |
+| `npm run web:upload:prod` | Build and upload to prod (see `docs/runbooks/website-prod.md`) |
+
+Deploy the backend first (`npx convex dev --once` on dev), since the site's `/e` and `/s` pages and its queries live there. In the app, episode and show context menus and the show page share these links (`ShareLinks.episode(id, at:)`, `ShareLinks.show(id)`), and opening one goes to that episode or show, fetching it if it isn't in your library. Private feeds get no links and no pages.
 
 ## Accounts and sign-in
 

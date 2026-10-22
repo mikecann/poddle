@@ -20,6 +20,8 @@
 	</dict>
 	<key>PoddleConvexURL</key>
 	<string>$(PODDLE_CONVEX_URL)</string>
+	<key>PoddleSiteURL</key>
+	<string>$(PODDLE_SITE_URL)</string>
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>

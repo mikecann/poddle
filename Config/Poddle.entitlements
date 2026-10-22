@@ -4,14 +4,16 @@
 <dict>
 	<key>aps-environment</key>
 	<string>$(PODDLE_APS_ENVIRONMENT)</string>
-	<!-- Links the app to the deployment's site (and the website later), which serves
-	     /.well-known/apple-app-site-association (convex/http.ts), for passwords and
-	     passkeys. Sign-in doesn't rely on it: Apple's and Google's pages come back on
-	     poddle://, which ASWebAuthenticationSession catches without any entitlement. -->
+	<!-- Links the app to the website (poddle.mikecann.app in Release, dev's own site in
+	     Debug), which serves /.well-known/apple-app-site-association (convex/http.ts):
+	     applinks opens its /e/* and /s/* share pages in the app, webcredentials is for
+	     passwords and passkeys later. Sign-in doesn't rely on it: Apple's and Google's
+	     pages come back on poddle://, which ASWebAuthenticationSession catches without
+	     any entitlement. -->
 	<key>com.apple.developer.associated-domains</key>
 	<array>
+		<string>applinks:$(PODDLE_SITE_DOMAIN)</string>
 		<string>webcredentials:$(PODDLE_SITE_DOMAIN)</string>
-		<string>webcredentials:poddle.mikecann.app</string>
 	</array>
 </dict>
 </plist>

@@ -4,7 +4,9 @@
 // Release talks to the prod deployment (Sydney).
 PODDLE_CONVEX_URL = https:/$()/coordinated-dodo-120.ap-southeast-2.convex.cloud
 PODDLE_APS_ENVIRONMENT = production
-PODDLE_SITE_DOMAIN = coordinated-dodo-120.ap-southeast-2.convex.site
+// Associated domains and share links: the website, on prod's custom domain.
+PODDLE_SITE_DOMAIN = poddle.mikecann.app
+PODDLE_SITE_URL = https:/$()/poddle.mikecann.app
 
 // convex-swift ships no x86_64 simulator slice, so build simulators for Apple Silicon only
 EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64

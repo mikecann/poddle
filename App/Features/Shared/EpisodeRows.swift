@@ -215,8 +215,11 @@ struct EpisodeActions {
                 Button { archive(item) } label: { Label("Archive", systemImage: "archivebox") }
             }
         }
-        ShareLink(item: URL(string: item.episode.enclosureURL) ?? URL(string: "https://poddle.app")!, subject: Text(item.episode.title)) {
-            Label("Share", systemImage: "square.and.arrow.up")
+        // The website's page for it; private feeds have none.
+        if ShareLinks.canShare(item.podcast) {
+            ShareLink(item: ShareLinks.episode(id), subject: Text(item.episode.title)) {
+                Label("Share", systemImage: "square.and.arrow.up")
+            }
         }
         if context != .podcast {
             Button { app.goToShow(item.podcast.id) } label: { Label("Go to show", systemImage: "rectangle.stack") }
