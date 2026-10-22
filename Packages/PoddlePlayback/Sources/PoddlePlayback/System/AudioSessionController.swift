@@ -20,6 +20,9 @@ final class AudioSessionController {
         #if os(iOS)
         let center = NotificationCenter.default
         let session = AVAudioSession.sharedInstance()
+        // The iOS 27 SDK's split notifications only compile with Xcode 27 (Swift 6.4); older
+        // toolchains (tinker-desk's e2e runner) build the iOS 18 path only.
+        #if compiler(>=6.4)
         if #available(iOS 27, *) {
             // iOS 27 splits interruptions into "the system deactivated us" and "you may resume".
             observers.append(center.addObserver(forName: AVAudioSession.didBecomeInactiveNotification, object: session, queue: .main) { [weak self] note in
@@ -33,21 +36,11 @@ final class AudioSessionController {
                 MainActor.assumeIsolated { self?.onEvent?(.interruptionEnded(shouldResume: shouldResume)) }
             })
         } else {
-            // iOS 18: one notification with a began/ended type and a "should resume" option.
-            observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: .main) { [weak self] note in
-                let rawType = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
-                let rawOptions = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
-                let type = AVAudioSession.InterruptionType(rawValue: rawType)
-                let shouldResume = AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume)
-                MainActor.assumeIsolated {
-                    switch type {
-                    case .began: self?.onEvent?(.interruptionBegan)
-                    case .ended: self?.onEvent?(.interruptionEnded(shouldResume: shouldResume))
-                    default: break
-                    }
-                }
-            })
+            observeInterruptions(center: center, session: session)
         }
+        #else
+        observeInterruptions(center: center, session: session)
+        #endif
         observers.append(center.addObserver(forName: AVAudioSession.routeChangeNotification, object: session, queue: .main) { [weak self] note in
             let raw = note.userInfo?[AVAudioSessionRouteChangeReasonKey] as? UInt ?? 0
             let reason = AVAudioSession.RouteChangeReason(rawValue: raw)
@@ -59,6 +52,25 @@ final class AudioSessionController {
         })
         #endif
     }
+
+    #if os(iOS)
+    /// iOS 18's single interruption notification, with a began/ended type and a "should resume" option.
+    private func observeInterruptions(center: NotificationCenter, session: AVAudioSession) {
+        observers.append(center.addObserver(forName: AVAudioSession.interruptionNotification, object: session, queue: .main) { [weak self] note in
+            let rawType = note.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt ?? 0
+            let rawOptions = note.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0
+            let type = AVAudioSession.InterruptionType(rawValue: rawType)
+            let shouldResume = AVAudioSession.InterruptionOptions(rawValue: rawOptions).contains(.shouldResume)
+            MainActor.assumeIsolated {
+                switch type {
+                case .began: self?.onEvent?(.interruptionBegan)
+                case .ended: self?.onEvent?(.interruptionEnded(shouldResume: shouldResume))
+                default: break
+                }
+            }
+        })
+    }
+    #endif
 
     isolated deinit {
         observers.forEach(NotificationCenter.default.removeObserver)
