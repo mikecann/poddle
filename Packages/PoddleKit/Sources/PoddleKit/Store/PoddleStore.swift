@@ -439,6 +439,19 @@ public final class PoddleStore {
     }
 
     public func resetImport() { importProgress = nil }
+
+    /// Someone else signed in (or out): drop everything that was the last person's. The data
+    /// source pushes the new person's snapshot straight after.
+    public func resetForAccountChange(seed: LibrarySnapshot = .init()) {
+        pending = []
+        snapshot = seed
+        stats = nil
+        years = []
+        yearInReview = nil
+        importProgress = nil
+        lastError = nil
+        showNotes = [:]
+    }
 }
 
 extension Array {

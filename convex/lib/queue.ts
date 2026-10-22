@@ -1,8 +1,9 @@
 import { generateKeyBetween } from "fractional-indexing";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { UserMutationCtx as MutationCtx, UserQueryCtx as QueryCtx } from "./auth";
+import { ensureLibraryRow } from "./library";
 
-// Up Next: one row per queued episode with a fractional string order key.
+// Up Next (per person, `ctx.userId`): one row per queued episode with a fractional string order key.
 // Keys are always computed on the server inside a transaction, so two devices
 // moving things "between the same neighbours" can never collide. Every op
 // carries the client time `at`; ops older than the item's last change (or its
@@ -14,36 +15,46 @@ export type AddedBy = Doc<"queueItems">["addedBy"];
 export async function queueItemFor(ctx: QueryCtx, episodeId: Id<"episodes">) {
   return await ctx.db
     .query("queueItems")
-    .withIndex("by_episode", (q) => q.eq("episodeId", episodeId))
+    .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", episodeId))
     .unique();
 }
 
 export async function orderedQueue(ctx: QueryCtx) {
-  return await ctx.db.query("queueItems").withIndex("by_orderKey").collect();
+  return await ctx.db
+    .query("queueItems")
+    .withIndex("by_user_orderKey", (q) => q.eq("userId", ctx.userId))
+    .collect();
 }
 
 async function queueTombstone(ctx: QueryCtx, episodeId: Id<"episodes">) {
   return await ctx.db
     .query("deletions")
-    .withIndex("by_table_episode", (q) => q.eq("table", "queueItems").eq("episodeId", episodeId))
+    .withIndex("by_user_table_episode", (q) => q.eq("userId", ctx.userId).eq("table", "queueItems").eq("episodeId", episodeId))
     .unique();
 }
 
 /** Keys of the first `n` items, skipping `exclude`. */
 async function firstKeys(ctx: QueryCtx, n: number, exclude?: Id<"queueItems">) {
-  const items = await ctx.db.query("queueItems").withIndex("by_orderKey").take(n + 1);
+  const items = await ctx.db
+    .query("queueItems")
+    .withIndex("by_user_orderKey", (q) => q.eq("userId", ctx.userId))
+    .take(n + 1);
   return items.filter((i) => i._id !== exclude).slice(0, n);
 }
 
 async function lastItem(ctx: QueryCtx, exclude?: Id<"queueItems">) {
-  const items = await ctx.db.query("queueItems").withIndex("by_orderKey").order("desc").take(2);
+  const items = await ctx.db
+    .query("queueItems")
+    .withIndex("by_user_orderKey", (q) => q.eq("userId", ctx.userId))
+    .order("desc")
+    .take(2);
   return items.find((i) => i._id !== exclude) ?? null;
 }
 
 async function itemAfter(ctx: QueryCtx, key: string, exclude?: Id<"queueItems">) {
   const items = await ctx.db
     .query("queueItems")
-    .withIndex("by_orderKey", (q) => q.gt("orderKey", key))
+    .withIndex("by_user_orderKey", (q) => q.eq("userId", ctx.userId).gt("orderKey", key))
     .take(2);
   return items.find((i) => i._id !== exclude) ?? null;
 }
@@ -51,7 +62,7 @@ async function itemAfter(ctx: QueryCtx, key: string, exclude?: Id<"queueItems">)
 async function itemBefore(ctx: QueryCtx, key: string, exclude?: Id<"queueItems">) {
   const items = await ctx.db
     .query("queueItems")
-    .withIndex("by_orderKey", (q) => q.lt("orderKey", key))
+    .withIndex("by_user_orderKey", (q) => q.eq("userId", ctx.userId).lt("orderKey", key))
     .order("desc")
     .take(2);
   return items.find((i) => i._id !== exclude) ?? null;
@@ -89,7 +100,9 @@ export async function addToQueue(
   if (existing) {
     await ctx.db.patch(existing._id, { orderKey, orderUpdatedAt: at, updatedAt: now });
   } else {
+    await ensureLibraryRow(ctx, episode.podcastId);
     await ctx.db.insert("queueItems", {
+      userId: ctx.userId,
       episodeId: episode._id,
       podcastId: episode.podcastId,
       orderKey,
@@ -148,6 +161,7 @@ export async function removeFromQueue(ctx: MutationCtx, episodeId: Id<"episodes"
     });
   } else {
     await ctx.db.insert("deletions", {
+      userId: ctx.userId,
       table: "queueItems",
       docId: item?._id ?? "",
       episodeId,

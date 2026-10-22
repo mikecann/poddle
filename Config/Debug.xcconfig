@@ -1,11 +1,11 @@
-// Settings for Debug builds. Committed; the secrets come from the gitignored Secrets.xcconfig,
-// which scripts/write-secrets.sh writes. Without it the app builds, and the Settings
-// "Connection" row takes a pasted URL and token.
-#include? "Secrets.xcconfig"
+// Settings for Debug builds. Committed: there are no secrets, people sign in.
+// xcconfig treats // as a comment, so URLs are written https:/$()/…
 
-// Debug talks to the dev deployment.
-PODDLE_CONVEX_URL = $(PODDLE_CONVEX_URL_DEBUG)
+// Debug talks to the dev deployment (Sydney).
+PODDLE_CONVEX_URL = https:/$()/striped-turtle-260.ap-southeast-2.convex.cloud
 PODDLE_APS_ENVIRONMENT = development
+// Associated domains: the dev site is fetched straight from the domain in developer mode.
+PODDLE_SITE_DOMAIN = striped-turtle-260.ap-southeast-2.convex.site?mode=developer
 
 // convex-swift ships no x86_64 simulator slice, so build simulators for Apple Silicon only
 EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64

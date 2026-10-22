@@ -1,10 +1,10 @@
-// Settings for Release builds. Committed; the secrets come from the gitignored Secrets.xcconfig,
-// which scripts/write-secrets.sh writes.
-#include? "Secrets.xcconfig"
+// Settings for Release builds. Committed: there are no secrets, people sign in.
+// xcconfig treats // as a comment, so URLs are written https:/$()/…
 
-// Release talks to the prod deployment.
-PODDLE_CONVEX_URL = $(PODDLE_CONVEX_URL_RELEASE)
+// Release talks to the prod deployment (Sydney).
+PODDLE_CONVEX_URL = https:/$()/coordinated-dodo-120.ap-southeast-2.convex.cloud
 PODDLE_APS_ENVIRONMENT = production
+PODDLE_SITE_DOMAIN = coordinated-dodo-120.ap-southeast-2.convex.site
 
 // convex-swift ships no x86_64 simulator slice, so build simulators for Apple Silicon only
 EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64

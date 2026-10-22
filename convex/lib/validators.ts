@@ -1,8 +1,17 @@
 import { v, type Infer } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import schema from "../schema";
+import schema, { podcastFields } from "../schema";
 
-export const vPodcastDoc = doc(schema, "podcasts");
+/** A show as the app sees it: the shared show plus the caller's subscription (lib/library.ts). */
+export const vPodcastDoc = v.object({
+  _id: v.id("podcasts"),
+  _creationTime: v.number(),
+  ...podcastFields,
+  subscribed: v.boolean(),
+  subscribedAt: v.optional(v.number()),
+  unsubscribedAt: v.optional(v.number()),
+  subscriptionUpdatedAt: v.number(),
+});
 export const vEpisodeDoc = doc(schema, "episodes");
 export const vEpisodeStateDoc = doc(schema, "episodeStates");
 export const vQueueItemDoc = doc(schema, "queueItems");

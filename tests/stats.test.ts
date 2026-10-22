@@ -11,7 +11,8 @@ import {
   zoneOffsetMinutes,
 } from "../convex/lib/statsMath";
 import { upsertSession } from "../convex/sessions";
-import { setup, TOKEN, type T } from "./helpers";
+import { asUser } from "../convex/lib/auth";
+import { setup, type T } from "./helpers";
 import { seedShow } from "./seed";
 
 const H = 3600_000;
@@ -95,7 +96,6 @@ async function record(t: T, s: { id: string; ep: Id<"episodes">; start: number; 
   const wall = s.mins * 60;
   const content = wall * s.rate + (s.removed ?? 0);
   return await t.mutation(api.sessions.record, {
-    token: TOKEN,
     sessions: [
       {
         sessionId: s.id,
@@ -126,9 +126,9 @@ describe("stats queries", () => {
     await record(t, { id: "s2", ep: b.episodeIds[0]!, start: syd(2025, 10, 15, 21), mins: 20, rate: 1 });
     // Previous week: excluded.
     await record(t, { id: "s3", ep: a.episodeIds[1]!, start: syd(2025, 10, 8, 8), mins: 10, rate: 1 });
-    await t.mutation(api.episodes.setPlayedState, { token: TOKEN, episodeId: a.episodeIds[0]!, played: true, at: syd(2025, 10, 14, 9) });
+    await t.mutation(api.episodes.setPlayedState, { episodeId: a.episodeIds[0]!, played: true, at: syd(2025, 10, 14, 9) });
 
-    const s = await t.query(api.stats.summary, { token: TOKEN, period: "week", anchorDay: "2025-10-15" });
+    const s = await t.query(api.stats.summary, { period: "week", anchorDay: "2025-10-15" });
     expect(s.startDay).toBe("2025-10-13");
     expect(s.totals.wall).toBeCloseTo(50 * 60, 6);
     // s1 content = 1800×2 + 60 = 3660; s2 content = 1200.
@@ -155,7 +155,7 @@ describe("stats queries", () => {
     expect(await record(t, { id: "s1", ep: a.episodeIds[0]!, start, mins: 25, rate: 1 })).toMatchObject({ updated: 1 });
     expect(await record(t, { id: "s1", ep: a.episodeIds[0]!, start, mins: 25, rate: 1 })).toMatchObject({ unchanged: 1 });
     expect(await record(t, { id: "s1", ep: a.episodeIds[0]!, start, mins: 15, rate: 1 })).toMatchObject({ unchanged: 1 });
-    const s = await t.query(api.stats.summary, { token: TOKEN, period: "month", anchorDay: "2025-10-01" });
+    const s = await t.query(api.stats.summary, { period: "month", anchorDay: "2025-10-01" });
     expect(s.totals.wall).toBeCloseTo(25 * 60, 6);
     expect(s.totals.sessions).toBe(1);
     expect(s.completion.started).toBe(1);
@@ -164,8 +164,9 @@ describe("stats queries", () => {
   test("estimated sessions count in totals and streaks but not the heatmap", async () => {
     const t = setup();
     const a = await seedShow(t, 1);
+    const userId = await t.userId();
     await t.run(async (ctx) => {
-      await upsertSession(ctx, {
+      await upsertSession(asUser(ctx, userId), {
         sessionId: "overcast:1",
         episodeId: a.episodeIds[0]!,
         podcastId: a.podcastId,
@@ -183,7 +184,7 @@ describe("stats queries", () => {
         updatedAt: 0,
       });
     });
-    const y = await t.query(api.stats.yearInReview, { token: TOKEN, year: 2025 });
+    const y = await t.query(api.stats.yearInReview, { year: 2025 });
     expect(y.totals.wall).toBe(3600);
     expect(y.totals.estimatedWall).toBe(3600);
     expect(y.includesEstimated).toBe(true);
@@ -200,12 +201,12 @@ describe("stats queries", () => {
     const a = await seedShow(t, 1, { title: "secret" });
     await t.run(async (ctx) => ctx.db.patch(a.podcastId, { isPrivate: true }));
     await record(t, { id: "p1", ep: a.episodeIds[0]!, start: syd(2025, 10, 14, 8), mins: 30, rate: 1 });
-    const y = await t.query(api.stats.yearInReview, { token: TOKEN, year: 2025 });
+    const y = await t.query(api.stats.yearInReview, { year: 2025 });
     expect(y.topShows).toEqual([]);
     expect(y.topEpisode).toBeNull();
     expect(y.firstEpisode).toBeNull();
     expect(y.totals.wall).toBe(1800);
-    const withPrivate = await t.query(api.stats.yearInReview, { token: TOKEN, year: 2025, includePrivate: true });
+    const withPrivate = await t.query(api.stats.yearInReview, { year: 2025, includePrivate: true });
     expect(withPrivate.topShows).toHaveLength(1);
   });
 });

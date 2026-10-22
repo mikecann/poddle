@@ -159,6 +159,12 @@ public final class MockPlayer: PoddlePlayer {
         }
     }
 
+    public func unload() {
+        pause()
+        currentEpisodeId = nil
+        position = 0
+    }
+
     private func finishEpisode() {
         guard let id = currentEpisodeId else { return }
         store.markPlayed(id)

@@ -11,6 +11,8 @@ struct PoddleApp: App {
     @State private var store: PoddleStore
     @State private var app: AppModel
     @State private var push: PushCoordinator
+    /// Who's signed in. Nil on sample data, which needs nobody.
+    @State private var account: Account?
     @Environment(\.scenePhase) private var scenePhase
     private let player: any PoddlePlayer
 
@@ -27,12 +29,15 @@ struct PoddleApp: App {
         let fakePlayback = defaults.object(forKey: "PoddleMockPlayer") != nil ? defaults.bool(forKey: "PoddleMockPlayer") : screen != nil
 
         let store: PoddleStore
+        var account: Account?
         if mock {
             var seed = MockData.snapshot()
             if realAudio { seed = MockData.withRealAudio(seed) }
             store = MockStore.makeStore(seed: seed, downloads: fakePlayback ? MockData.downloads() : [:])
         } else {
-            store = Self.liveStore()
+            let live = Self.liveStore()
+            store = live.store
+            account = live.account
         }
         let app = AppModel()
         app.isMock = mock
@@ -57,33 +62,72 @@ struct PoddleApp: App {
         _store = State(initialValue: store)
         _app = State(initialValue: app)
         _push = State(initialValue: services.push)
+        _account = State(initialValue: account)
         self.player = player
     }
 
-    /// The Convex-backed store, seeded from the on-disk cache so the first frame has data.
-    private static func liveStore() -> PoddleStore {
-        // Built without Config/Secrets.xcconfig and nothing pasted in Settings yet: connect to
-        // nothing and let the Settings "Connection" row fix it.
-        let config = LiveConfigStore.resolve()
-            ?? LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!, token: "")
-        let live = LiveStore(deploymentURL: config.deploymentURL, token: config.token, deviceId: LiveConfigStore.deviceId())
-        let seed = LiveStore.cachedSnapshot(disk: .forDeployment(config.deploymentURL))
-        return PoddleStore(dataSource: live, seed: seed, deviceId: live.deviceId)
+    /// The Convex-backed store for whoever's signed in, seeded from their on-disk cache so the
+    /// first frame has data (offline too). Signed out, it's empty until someone signs in.
+    private static func liveStore() -> (store: PoddleStore, account: Account) {
+        let config = LiveConfigStore.bundled()
+            ?? LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!)
+        let account = Account(config: config)
+        let disk = account.userId.map { LiveDisk.forUser($0, deployment: config.deploymentURL) }
+        if let disk { LiveDisk.adoptPreAccountFiles(deployment: config.deploymentURL, into: disk) }
+        let live = LiveStore(
+            deploymentURL: config.deploymentURL, deviceId: LiveConfigStore.deviceId(),
+            userId: account.userId, auth: account.isSignedIn ? account : nil
+        )
+        let store = PoddleStore(dataSource: live, seed: LiveStore.cachedSnapshot(disk: disk), deviceId: live.deviceId)
+        return (store, account)
+    }
+
+    /// Someone signed in or out (or their session ran out). The player lets go, sessions still
+    /// waiting go into the previous person's outbox, then everything switches to the new person.
+    private func accountChanged(to userId: String?) async {
+        guard let account, let live = store.dataSource as? LiveStore, await live.userId != userId else { return }
+        player.unload()
+        // Let the closing listening segment reach the forwarder, then hand it to the old outbox.
+        try? await Task.sleep(for: .milliseconds(300))
+        await AppServices.current?.sessions?.flush()
+        await live.flush()
+        let disk = userId.map { LiveDisk.forUser($0, deployment: account.config.deploymentURL) }
+        if let disk { LiveDisk.adoptPreAccountFiles(deployment: account.config.deploymentURL, into: disk) }
+        await live.switchAccount(userId: userId, auth: userId == nil ? nil : account)
+        store.resetForAccountChange(seed: LiveStore.cachedSnapshot(disk: disk))
+        app.paths = [:]
+        app.tab = .upNext
+        if userId != nil {
+            push.registerAgain()
+            if let head = store.queue.first { player.load(head.id) }
+        }
     }
 
     var body: some Scene {
         WindowGroup {
-            RootView()
+            Group {
+                if let account, !account.isSignedIn {
+                    SignInView()
+                } else {
+                    RootView()
+                }
+            }
                 .environment(store)
                 .environment(\.player, player)
                 .environment(app)
                 .environment(push)
+                .environment(account)
                 .preferredColorScheme(Self.forcedScheme)
                 .tint(Palette.tomato)
+                .onChange(of: account?.userId) { _, userId in Task { await accountChanged(to: userId) } }
+                #if DEBUG
+                // `-PoddleSignOut YES`: signs out at launch, the same way Settings does (for unattended checks).
+                .task { if UserDefaults.standard.bool(forKey: "PoddleSignOut") { await account?.signOut() } }
+                #endif
                 .onChange(of: scenePhase) { _, phase in
                     switch phase {
                     // Foreground: ask Convex to re-check feeds not checked in the last 2 minutes.
-                    case .active: Task { await store.refresh() }
+                    case .active: if account?.isSignedIn != false { Task { await store.refresh() } }
                     case .background: if let live = store.dataSource as? LiveStore { Task { await live.flush() } }
                     default: break
                     }

@@ -36,6 +36,9 @@ final class FakeTransport: ConvexTransport, @unchecked Sendable {
     var mutations: [Call] { locked { _mutations } }
     var queries: [Call] { locked { _queries } }
     var actions: [Call] { locked { _actions } }
+    private var _auth: (any AuthTokenSource)?
+    var auth: (any AuthTokenSource)? { locked { _auth } }
+    func setAuth(_ source: (any AuthTokenSource)?) async { locked { _auth = source } }
 
     func query(_ name: String, _ args: [String: JSONValue]) async throws -> Data {
         guard online else { throw TransportError.network("offline") }

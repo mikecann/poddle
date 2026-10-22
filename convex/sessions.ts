@@ -1,7 +1,7 @@
 import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { MutationCtx } from "./_generated/server";
-import { userMutation } from "./lib/auth";
+import { userMutation, type UserMutationCtx as MutationCtx } from "./lib/auth";
+import { ensureLibraryRow } from "./lib/library";
 import { applySessionToRollups } from "./lib/rollups";
 import { userUtcOffset } from "./lib/state";
 
@@ -28,14 +28,15 @@ export const vSessionInput = v.object({
 });
 export type SessionInput = Infer<typeof vSessionInput>;
 
-type Stored = Omit<Doc<"listeningSessions">, "_id" | "_creationTime">;
+type Stored = Omit<Doc<"listeningSessions">, "_id" | "_creationTime" | "userId">;
 
 /** Insert or replace a session by id, keeping the stats rollups in step. */
 export async function upsertSession(ctx: MutationCtx, s: Stored): Promise<"inserted" | "updated" | "unchanged"> {
   const existing = await ctx.db
     .query("listeningSessions")
-    .withIndex("by_sessionId", (q) => q.eq("sessionId", s.sessionId))
+    .withIndex("by_user_sessionId", (q) => q.eq("userId", ctx.userId).eq("sessionId", s.sessionId))
     .unique();
+  const stored = { ...s, userId: ctx.userId };
   if (existing) {
     const same =
       existing.endedAt === s.endedAt &&
@@ -47,11 +48,12 @@ export async function upsertSession(ctx: MutationCtx, s: Stored): Promise<"inser
     // An older snapshot of a session we already have (out-of-order replay).
     if (same || s.endedAt < existing.endedAt) return "unchanged";
     await applySessionToRollups(ctx, existing, -1);
-    await ctx.db.replace(existing._id, s);
+    await ctx.db.replace(existing._id, stored);
     await applySessionToRollups(ctx, s, 1);
     return "updated";
   }
-  await ctx.db.insert("listeningSessions", s);
+  await ensureLibraryRow(ctx, s.podcastId);
+  await ctx.db.insert("listeningSessions", stored);
   await applySessionToRollups(ctx, s, 1);
   return "inserted";
 }

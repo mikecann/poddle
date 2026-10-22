@@ -3,7 +3,7 @@ import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { parseOvercastOpml, upNextPlan } from "../convex/lib/opml";
 import { upNextOrder } from "../convex/overcastImport";
-import { drain, fixture, mockFetch, setup, TOKEN, type T } from "./helpers";
+import { drain, fixture, mockFetch, podcastViews, setup, type T } from "./helpers";
 
 // overcast-real-shape.opml follows the structure of a real "All data" export
 // (made-up shows): three playlists, shows with no `subscribed` attribute,
@@ -29,16 +29,15 @@ afterEach(() => {
 
 async function runImport(t: T) {
   const batchId = await t.mutation(api.overcastImport.startOvercastImport, {
-    token: TOKEN,
     opml: fixture("overcast-real-shape.opml"),
     assumedSpeed: 2,
   });
   await drain(t);
-  return (await t.query(api.overcastImport.getImport, { token: TOKEN, batchId }))!;
+  return (await t.query(api.overcastImport.getImport, { batchId }))!;
 }
 
 async function upNextTitles(t: T) {
-  return (await t.query(api.queue.upNext, { token: TOKEN })).map((q) => q.row.episode.title);
+  return (await t.query(api.queue.upNext, {})).map((q) => q.row.episode.title);
 }
 
 describe("parsing the real export's shape", () => {
@@ -144,8 +143,9 @@ describe("importing the real export's shape", () => {
       ["Queue", 0, 0, 1],
     ]);
 
+    const podcasts = await podcastViews(t);
     const db = await t.run(async (ctx) => ({
-      podcasts: await ctx.db.query("podcasts").collect(),
+      podcasts,
       episodes: await ctx.db.query("episodes").collect(),
       states: await ctx.db.query("episodeStates").collect(),
       sessions: await ctx.db.query("listeningSessions").collect(),
@@ -185,7 +185,7 @@ describe("importing the real export's shape", () => {
 
     // Nothing in the Inbox; Up Next in "All Episodes" order: its pinned episode,
     // then priority shows newest first, then the rest.
-    expect(await t.query(api.episodes.inbox, { token: TOKEN })).toEqual([]);
+    expect(await t.query(api.episodes.inbox, {})).toEqual([]);
     expect(await upNextTitles(t)).toEqual([
       "Deep 2: In progress",
       "Deep 3: Untouched",
@@ -198,11 +198,11 @@ describe("importing the real export's shape", () => {
   test("re-running doesn't duplicate Up Next or undo his changes", async () => {
     const t = setup();
     await runImport(t);
-    const queue = await t.query(api.queue.upNext, { token: TOKEN });
+    const queue = await t.query(api.queue.upNext, {});
     const slow2 = queue.find((q) => q.row.episode.title === "Slow 2: Untouched")!.row.episode;
     const brief5 = queue.find((q) => q.row.episode.title === "Brief 5: Untouched")!.row.episode;
-    await t.mutation(api.queue.remove, { token: TOKEN, episodeId: slow2._id, at: NOW });
-    await t.mutation(api.queue.move, { token: TOKEN, episodeId: brief5._id, afterEpisodeId: null, at: NOW });
+    await t.mutation(api.queue.remove, { episodeId: slow2._id, at: NOW });
+    await t.mutation(api.queue.move, { episodeId: brief5._id, afterEpisodeId: null, at: NOW });
 
     const again = await runImport(t);
     expect(again.counts.upNextEpisodes).toBe(4);
@@ -218,26 +218,34 @@ describe("importing the real export's shape", () => {
   test("re-running fixes shows an earlier import wrongly subscribed", async () => {
     const t = setup();
     const addedAt = Date.UTC(2016, 9, 4, 5, 30);
+    const userId = await t.userId();
     const podcastId = await t.run(async (ctx) => {
       const id = await ctx.db.insert("podcasts", {
         feedUrl: "https://feeds.example.com/dead.xml",
         title: "Old Thing",
         overcastId: 9100004,
         isPrivate: false,
-        subscribed: true,
-        subscribedAt: addedAt,
-        subscriptionUpdatedAt: addedAt,
         episodeCount: 0,
         createdAt: 1,
         updatedAt: 1,
       });
-      await ctx.db.insert("libraryEvents", { eventId: `subscribed:${id}:${addedAt}`, type: "subscribed", podcastId: id, at: addedAt, updatedAt: 1 });
+      await ctx.db.insert("subscriptions", {
+        userId,
+        podcastId: id,
+        subscribed: true,
+        subscribedAt: addedAt,
+        subscriptionUpdatedAt: addedAt,
+        addedAt: 1,
+        updatedAt: 1,
+      });
+      await ctx.db.insert("libraryEvents", { userId, eventId: `subscribed:${id}:${addedAt}`, type: "subscribed", podcastId: id, at: addedAt, updatedAt: 1 });
       return id;
     });
     const batch = await runImport(t);
     expect(batch.counts.subscribedPodcasts).toBe(3);
+    const views = await podcastViews(t);
     const after = await t.run(async (ctx) => ({
-      podcast: (await ctx.db.get(podcastId))!,
+      podcast: views.find((p) => p._id === podcastId)!,
       events: await ctx.db.query("libraryEvents").collect(),
       feedState: await ctx.db
         .query("feedStates")
@@ -251,22 +259,22 @@ describe("importing the real export's shape", () => {
 
   test("a show he's re-subscribed to in Poddle stays subscribed", async () => {
     const t = setup();
+    const userId = await t.userId();
     await t.run(async (ctx) => {
-      await ctx.db.insert("podcasts", {
+      const podcastId = await ctx.db.insert("podcasts", {
         feedUrl: "https://feeds.example.com/dead.xml",
         title: "Old Thing",
         overcastId: 9100004,
         isPrivate: false,
-        subscribed: true,
-        subscriptionUpdatedAt: NOW - 1000,
         episodeCount: 0,
         createdAt: 1,
         updatedAt: 1,
       });
+      await ctx.db.insert("subscriptions", { userId, podcastId, subscribed: true, subscriptionUpdatedAt: NOW - 1000, addedAt: 1, updatedAt: 1 });
     });
     const batch = await runImport(t);
     expect(batch.counts.subscribedPodcasts).toBe(3);
-    const old = await t.run(async (ctx) => await ctx.db.query("podcasts").withIndex("by_overcastId", (q) => q.eq("overcastId", 9100004)).unique());
+    const old = (await podcastViews(t)).find((p) => p.overcastId === 9100004);
     expect(old?.subscribed).toBe(true);
   });
 });

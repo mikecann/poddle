@@ -3,7 +3,8 @@ import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { ensureFeedState } from "./feeds";
-import { userMutation, userQuery } from "./lib/auth";
+import { asUser, userMutation, userQuery, type UserMutationCtx } from "./lib/auth";
+import { ensureLibraryRow, hasSubscribers, subscriptionFor } from "./lib/library";
 import { findByEnclosure, findByGuid, findByLink, findByTitleDate, findByUniqueTitle } from "./lib/ingest";
 import { countsAsListened } from "./lib/opml";
 import { enclosureKey } from "./lib/parse";
@@ -13,7 +14,8 @@ import { upsertSession } from "./sessions";
 import { setArchived, setPlayed, setPosition, setStarred, stateFor, userUtcOffset } from "./lib/state";
 import { vImportBatchDoc } from "./lib/validators";
 
-// Overcast "All data" import (spec §2.2, decisions.md). Pipeline:
+// Overcast "All data" import (spec §2.2, decisions.md), into the library of
+// whoever started it (the batch's `userId`). Pipeline:
 //   startOvercastImport → importActions.parse (stage podcasts + episodes)
 //   → importActions.processBatch, repeatedly: fetch a few feeds; once every feed
 //     is in, match each show's staged episodes, creating ghosts, states and
@@ -68,6 +70,7 @@ export const startOvercastImport = userMutation({
     if (!(assumedSpeed >= 0.5 && assumedSpeed <= 3)) throw new Error("assumedSpeed must be between 0.5 and 3");
     const now = Date.now();
     const batchId = await ctx.db.insert("importBatches", {
+      userId: ctx.userId,
       source: "overcast",
       status: "parsing",
       assumedSpeed,
@@ -85,14 +88,29 @@ export const startOvercastImport = userMutation({
 export const getImport = userQuery({
   args: { batchId: v.id("importBatches") },
   returns: v.union(vImportBatchDoc, v.null()),
-  handler: async (ctx, { batchId }) => await ctx.db.get(batchId),
+  handler: async (ctx, { batchId }) => {
+    const batch = await ctx.db.get(batchId);
+    return batch?.userId === ctx.userId ? batch : null;
+  },
 });
 
 export const latestImport = userQuery({
   args: {},
   returns: v.union(vImportBatchDoc, v.null()),
-  handler: async (ctx) => await ctx.db.query("importBatches").withIndex("by_startedAt").order("desc").first(),
+  handler: async (ctx) =>
+    await ctx.db
+      .query("importBatches")
+      .withIndex("by_user_startedAt", (q) => q.eq("userId", ctx.userId))
+      .order("desc")
+      .first(),
 });
+
+/** The batch and a ctx acting as its owner. */
+async function batchCtx(ctx: MutationCtx, batchId: Id<"importBatches">) {
+  const batch = await ctx.db.get(batchId);
+  if (!batch?.userId) return null;
+  return { batch, ctx: asUser(ctx, batch.userId) };
+}
 
 // ---- Internal steps ----
 
@@ -146,7 +164,10 @@ export const stageFeeds = internalMutation({
     ),
   },
   returns: v.null(),
-  handler: async (ctx, { batchId, feeds }) => {
+  handler: async (rawCtx, { batchId, feeds }) => {
+    const owned = await batchCtx(rawCtx, batchId);
+    if (!owned) return null;
+    const { ctx } = owned;
     let subscribed = 0;
     let episodes = 0;
     for (const feed of feeds) {
@@ -171,8 +192,7 @@ export const stageFeeds = internalMutation({
       }
       if (feed.notifications) await setShowOverride(ctx, podcast._id, { notifications: true }, at);
       // The import fetches the feed itself; keep the poller off it until then.
-      const current = (await ctx.db.get(podcast._id))!;
-      const stateId = await ensureFeedState(ctx, podcast._id, current.subscribed, false);
+      const stateId = await ensureFeedState(ctx, podcast._id, await hasSubscribers(ctx, podcast._id), false);
       await ctx.db.patch(stateId, { nextCheckAt: Date.now() + 6 * 3600_000 });
 
       let newestExportedAt: number | undefined;
@@ -194,34 +214,36 @@ export const stageFeeds = internalMutation({
  * as "1") is put back, and that run's "subscribed" event removed, unless
  * he's changed the subscription in Poddle since.
  */
-async function importUnsubscribed(ctx: MutationCtx, podcast: Doc<"podcasts">, at: number, addedAt: number | undefined) {
-  if (podcast.subscriptionUpdatedAt === 0) {
-    await ctx.db.patch(podcast._id, { subscriptionUpdatedAt: at, subscribedAt: podcast.subscribedAt ?? addedAt });
+async function importUnsubscribed(ctx: UserMutationCtx, podcast: Doc<"podcasts">, at: number, addedAt: number | undefined) {
+  const sub = await ensureLibraryRow(ctx, podcast._id);
+  const now = Date.now();
+  if (sub.subscriptionUpdatedAt === 0) {
+    await ctx.db.patch(sub._id, { subscriptionUpdatedAt: at, subscribedAt: sub.subscribedAt ?? addedAt, updatedAt: now });
     return;
   }
-  if (!podcast.subscribed || podcast.subscriptionUpdatedAt > at) return;
-  const now = Date.now();
-  await ctx.db.patch(podcast._id, { subscribed: false, subscriptionUpdatedAt: at, unsubscribedAt: undefined, updatedAt: now });
+  if (!sub.subscribed || sub.subscriptionUpdatedAt > at) return;
+  await ctx.db.patch(sub._id, { subscribed: false, subscriptionUpdatedAt: at, unsubscribedAt: undefined, updatedAt: now });
+  await ensureFeedState(ctx, podcast._id, await hasSubscribers(ctx, podcast._id), false);
   const event = await ctx.db
     .query("libraryEvents")
-    .withIndex("by_eventId", (q) => q.eq("eventId", `subscribed:${podcast._id}:${at}`))
+    .withIndex("by_user_eventId", (q) => q.eq("userId", ctx.userId).eq("eventId", `subscribed:${podcast._id}:${at}`))
     .unique();
   if (event) {
     await ctx.db.delete(event._id);
-    await ctx.db.insert("deletions", { table: "libraryEvents", docId: event._id, deletedAt: now, updatedAt: now });
+    await ctx.db.insert("deletions", { userId: ctx.userId, table: "libraryEvents", docId: event._id, deletedAt: now, updatedAt: now });
   }
 }
 
 /** Per-show setting override, LWW on `at` so anything he's changed in Poddle since wins. */
 async function setShowOverride(
-  ctx: MutationCtx,
+  ctx: UserMutationCtx,
   podcastId: Id<"podcasts">,
   values: Partial<Pick<Doc<"podcastSettings">, "notifications" | "newEpisodes">>,
   at: number,
 ) {
   const existing = await ctx.db
     .query("podcastSettings")
-    .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+    .withIndex("by_user_podcast", (q) => q.eq("userId", ctx.userId).eq("podcastId", podcastId))
     .unique();
   const fieldTimes = { ...(existing?.fieldTimes ?? {}) };
   const patch: Record<string, unknown> = {};
@@ -232,7 +254,7 @@ async function setShowOverride(
   }
   if (!Object.keys(patch).length) return;
   if (existing) await ctx.db.patch(existing._id, { ...patch, fieldTimes, updatedAt: Date.now() });
-  else await ctx.db.insert("podcastSettings", { podcastId, ...patch, fieldTimes, updatedAt: Date.now() });
+  else await ctx.db.insert("podcastSettings", { userId: ctx.userId, podcastId, ...patch, fieldTimes, updatedAt: Date.now() });
 }
 
 const vPlaylist = v.object({
@@ -258,7 +280,10 @@ export const beginFetching = internalMutation({
     }),
   },
   returns: v.null(),
-  handler: async (ctx, { batchId, warning, playlists, upNextPlan }) => {
+  handler: async (rawCtx, { batchId, warning, playlists, upNextPlan }) => {
+    const owned = await batchCtx(rawCtx, batchId);
+    if (!owned) return null;
+    const { ctx } = owned;
     const resolve = async (overcastIds: number[]) => {
       const podcasts: Doc<"podcasts">[] = [];
       for (const overcastId of overcastIds) {
@@ -284,7 +309,8 @@ export const beginFetching = internalMutation({
     // Overcast's priority shows get "Up Next top" for new episodes.
     const priority = await resolve(upNextPlan.priorityPodcastIds);
     for (const podcast of priority) {
-      await setShowOverride(ctx, podcast._id, { newEpisodes: "upNextTop" }, podcast.subscribedAt ?? 1);
+      const sub = await subscriptionFor(ctx, podcast._id);
+      await setShowOverride(ctx, podcast._id, { newEpisodes: "upNextTop" }, sub?.subscribedAt ?? 1);
     }
     await ctx.db.patch(batchId, {
       status: "fetching",
@@ -415,10 +441,12 @@ const DAY = 86_400_000;
 export const matchPodcast = internalMutation({
   args: { batchId: v.id("importBatches"), row: vMatchRow },
   returns: v.boolean(),
-  handler: async (ctx, { batchId, row }) => {
-    const batch = await ctx.db.get(batchId);
-    const podcast = await ctx.db.get(row.podcastId);
-    if (!batch || !podcast) return true;
+  handler: async (rawCtx, { batchId, row }) => {
+    const owned = await batchCtx(rawCtx, batchId);
+    const podcast = await rawCtx.db.get(row.podcastId);
+    if (!owned || !podcast) return true;
+    const { batch, ctx } = owned;
+    const subscribed = (await subscriptionFor(ctx, podcast._id))?.subscribed ?? false;
     const items = await ctx.db
       .query("importItems")
       .withIndex("by_batch_podcast", (q) => q.eq("batchId", batchId).eq("podcastId", row.podcastId))
@@ -435,7 +463,7 @@ export const matchPodcast = internalMutation({
           delta.ghostsOlderThanFeed++;
         else delta.ghostsMissingFromFeed++;
       }
-      const r = await applyImportedState(ctx, batch, podcast, episode, item, estimatedDuration);
+      const r = await applyImportedState(ctx, batch, subscribed, episode, item, estimatedDuration);
       if (item.played) delta.playedEpisodes++;
       else if ((item.progress ?? 0) > 0) delta.inProgressEpisodes++;
       if (item.userRecommendedAt) delta.starredEpisodes++;
@@ -451,7 +479,7 @@ export const matchPodcast = internalMutation({
     if (done) {
       delta.podcastsProcessed = 1;
       if (!row.feedOk) delta.feedsFailed = 1;
-      if (podcast.subscribed && row.feedOk) await stageUntouchedEpisodes(ctx, batchId, podcast._id, row);
+      if (subscribed && row.feedOk) await stageUntouchedEpisodes(ctx, batchId, podcast._id, row);
       const episodeCount = await countEpisodes(ctx, row.podcastId);
       await ctx.db.patch(row.podcastId, { episodeCount, updatedAt: Date.now() });
     }
@@ -474,7 +502,7 @@ async function countEpisodes(ctx: MutationCtx, podcastId: Id<"podcasts">) {
  * sitting unplayed in Overcast, so they're Up Next too.
  */
 async function stageUntouchedEpisodes(
-  ctx: MutationCtx,
+  ctx: UserMutationCtx,
   batchId: Id<"importBatches">,
   podcastId: Id<"podcasts">,
   row: { newestExportedAt?: number; addedAt?: number },
@@ -551,9 +579,9 @@ async function matchOrGhost(ctx: MutationCtx, podcastId: Id<"podcasts">, item: D
  * shows are staged for Up Next; everything else is archived (decisions.md).
  */
 async function applyImportedState(
-  ctx: MutationCtx,
+  ctx: UserMutationCtx,
   batch: Doc<"importBatches">,
-  podcast: Doc<"podcasts">,
+  subscribed: boolean,
   episode: Doc<"episodes">,
   item: Doc<"importItems">,
   estimatedDuration: number | undefined,
@@ -562,7 +590,7 @@ async function applyImportedState(
   if (item.played) await setPlayed(ctx, episode, true, at);
   else if ((item.progress ?? 0) > 0) await setPosition(ctx, episode, item.progress!, at, "overcast-import");
   if (item.userRecommendedAt) await setStarred(ctx, episode, true, item.userRecommendedAt);
-  if (!item.played && !item.userDeleted && podcast.subscribed) {
+  if (!item.played && !item.userDeleted && subscribed) {
     await ctx.db.insert("importUpNext", {
       batchId: batch._id,
       episodeId: episode._id,
@@ -622,9 +650,10 @@ async function applyImportedState(
 export const finishBatch = internalMutation({
   args: { batchId: v.id("importBatches") },
   returns: v.null(),
-  handler: async (ctx, { batchId }) => {
-    const batch = await ctx.db.get(batchId);
-    if (!batch) return null;
+  handler: async (rawCtx, { batchId }) => {
+    const owned = await batchCtx(rawCtx, batchId);
+    if (!owned) return null;
+    const { batch, ctx } = owned;
     const rows = await ctx.db
       .query("importUpNext")
       .withIndex("by_batch", (q) => q.eq("batchId", batchId))

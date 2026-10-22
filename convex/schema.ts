@@ -3,6 +3,11 @@ import { v } from "convex/values";
 import { globalSettingFields, podcastOverrideFields } from "./lib/settings";
 
 // Conventions:
+// - Shared tables (podcasts, feedStates, episodes, episodeNotes, directoryCache) hold
+//   feed and catalog data that's the same for everyone. Every other table is
+//   personal: it has a `userId` and every index on it starts with `userId`. The
+//   exceptions are documented on the index (lookups that must see every person,
+//   like fanning a new episode out to its subscribers).
 // - Wall-clock times are ms since the epoch. Content times are seconds.
 // - Every synced table has `updatedAt` (server ms) and a `by_updatedAt` index so
 //   the app can catch up with `sync:changes` after being offline.
@@ -36,36 +41,96 @@ export const vImportStatus = v.union(
   v.literal("failed"),
 );
 
+/**
+ * Owner of a personal row. Optional only until the accounts migration
+ * (`migrations:run`) has given every existing row an owner on prod; then make
+ * it `v.id("users")` (docs/runbooks/accounts-prod.md, last step). New rows always
+ * get one.
+ */
+export const vOwner = v.optional(v.id("users"));
+
+/** Shared show fields. Who's subscribed lives in `subscriptions`. */
+export const podcastFields = {
+  feedUrl: v.string(),
+  title: v.string(),
+  author: v.optional(v.string()),
+  description: v.optional(v.string()),
+  artworkUrl: v.optional(v.string()),
+  link: v.optional(v.string()),
+  language: v.optional(v.string()),
+  appleId: v.optional(v.number()),
+  overcastId: v.optional(v.number()),
+  /** Default for new subscribers: feeds with credentials or token-ish query params. Each person can override it. */
+  isPrivate: v.boolean(),
+  latestEpisodeAt: v.optional(v.number()),
+  episodeCount: v.number(),
+  lastFetchedAt: v.optional(v.number()),
+  createdAt: v.number(),
+  updatedAt: v.number(),
+};
+
+/**
+ * Subscription fields from the single-user days. The accounts migration moves
+ * them into `subscriptions` and clears them; delete them once it has run on prod.
+ */
+const legacyPodcastFields = {
+  subscribed: v.optional(v.boolean()),
+  subscribedAt: v.optional(v.number()),
+  unsubscribedAt: v.optional(v.number()),
+  subscriptionUpdatedAt: v.optional(v.number()),
+};
+
 export default defineSchema({
-  podcasts: defineTable({
-    feedUrl: v.string(),
-    title: v.string(),
-    author: v.optional(v.string()),
-    description: v.optional(v.string()),
-    artworkUrl: v.optional(v.string()),
-    link: v.optional(v.string()),
-    language: v.optional(v.string()),
-    appleId: v.optional(v.number()),
-    overcastId: v.optional(v.number()),
-    isPrivate: v.boolean(),
+  /** People. Rows are made by Convex Auth's createUser callbacks (users.ts) and the accounts migration. */
+  users: defineTable({
+    name: v.optional(v.string()),
+    email: v.optional(v.string()),
+    emailVerified: v.optional(v.boolean()),
+    /** Google photo. */
+    picture: v.optional(v.string()),
+    /** Set when this user was folded into another one with the same verified email. */
+    mergedInto: v.optional(v.id("users")),
+    /** Made by the dev-only test sign-in. */
+    isTest: v.optional(v.boolean()),
+  }).index("by_email", ["email"]),
+
+  /** Test sign-in hands the email it wants to `users:createUserAnonymous` through here (dev only). */
+  testSignIns: defineTable({ email: v.string() }),
+
+  podcasts: defineTable({ ...podcastFields, ...legacyPodcastFields })
+    .index("by_feedUrl", ["feedUrl"])
+    .index("by_overcastId", ["overcastId"])
+    .index("by_appleId", ["appleId"])
+    .index("by_updatedAt", ["updatedAt"]),
+
+  /**
+   * A show in someone's library, subscribed or not. Every show a person has
+   * any state for (an episode state, a queue item, a session) has one of these,
+   * which is what `sync:changes` uses to decide which shared shows and episodes
+   * to send them.
+   */
+  subscriptions: defineTable({
+    userId: vOwner,
+    podcastId: v.id("podcasts"),
     subscribed: v.boolean(),
     /** When first subscribed (Overcast's `overcastAddedDate` on import). */
     subscribedAt: v.optional(v.number()),
     unsubscribedAt: v.optional(v.number()),
     /** Client time of the last subscribe/unsubscribe, for LWW. */
     subscriptionUpdatedAt: v.number(),
-    latestEpisodeAt: v.optional(v.number()),
-    episodeCount: v.number(),
-    lastFetchedAt: v.optional(v.number()),
-    createdAt: v.number(),
+    /** This person's "private" switch; absent means the show's default. */
+    isPrivate: v.optional(v.boolean()),
+    /** Server time the show joined the library, so sync sends its whole back catalogue once. */
+    addedAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_feedUrl", ["feedUrl"])
-    .index("by_overcastId", ["overcastId"])
-    .index("by_appleId", ["appleId"])
-    .index("by_subscribed_title", ["subscribed", "title"])
-    .index("by_subscribedAt", ["subscribedAt"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_podcast", ["userId", "podcastId"])
+    .index("by_user_subscribed", ["userId", "subscribed"])
+    .index("by_user_subscribedAt", ["userId", "subscribedAt"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"])
+    // Not user-first: a new episode has to reach every subscriber, and polling
+    // needs to know whether anyone still subscribes.
+    .index("by_podcast_subscribed", ["podcastId", "subscribed"]),
 
   /** Fetch bookkeeping, kept off `podcasts` so polling doesn't churn the app's subscriptions. */
   feedStates: defineTable({
@@ -120,6 +185,7 @@ export default defineSchema({
     .index("by_podcast_enclosureKey", ["podcastId", "enclosureKey"])
     .index("by_podcast_title", ["podcastId", "title"])
     .index("by_podcast_link", ["podcastId", "link"])
+    .index("by_podcast_updatedAt", ["podcastId", "updatedAt"])
     .index("by_updatedAt", ["updatedAt"]),
 
   /** Show notes HTML, split out so episode lists stay light. */
@@ -133,6 +199,7 @@ export default defineSchema({
 
   /** User state per episode, never touched by feed refreshes. */
   episodeStates: defineTable({
+    userId: vOwner,
     episodeId: v.id("episodes"),
     podcastId: v.id("podcasts"),
     position: v.number(),
@@ -154,15 +221,16 @@ export default defineSchema({
     inboxUpdatedAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_episode", ["episodeId"])
-    .index("by_podcast", ["podcastId"])
-    .index("by_inbox", ["inInbox", "inboxAt"])
-    .index("by_podcast_inbox", ["podcastId", "inInbox"])
-    .index("by_starred", ["starred", "starredAt"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_episode", ["userId", "episodeId"])
+    .index("by_user_podcast", ["userId", "podcastId"])
+    .index("by_user_inbox", ["userId", "inInbox", "inboxAt"])
+    .index("by_user_podcast_inbox", ["userId", "podcastId", "inInbox"])
+    .index("by_user_starred", ["userId", "starred", "starredAt"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
   /** Up Next. One row per queued episode. The lowest orderKey is what's playing. */
   queueItems: defineTable({
+    userId: vOwner,
     episodeId: v.id("episodes"),
     podcastId: v.id("podcasts"),
     orderKey: v.string(),
@@ -172,12 +240,13 @@ export default defineSchema({
     orderUpdatedAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_orderKey", ["orderKey"])
-    .index("by_episode", ["episodeId"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_orderKey", ["userId", "orderKey"])
+    .index("by_user_episode", ["userId", "episodeId"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
   /** Tombstones so `sync:changes` can report deletions. */
   deletions: defineTable({
+    userId: vOwner,
     table: v.string(),
     docId: v.string(),
     /** For queue items: the episode, so a stale replayed add can be ignored. */
@@ -186,28 +255,32 @@ export default defineSchema({
     deletedAt: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_updatedAt", ["updatedAt"])
-    .index("by_table_episode", ["table", "episodeId"]),
+    .index("by_user_updatedAt", ["userId", "updatedAt"])
+    .index("by_user_table_episode", ["userId", "table", "episodeId"]),
 
   podcastSettings: defineTable({
+    userId: vOwner,
     podcastId: v.id("podcasts"),
     ...podcastOverrideFields,
     /** Per-field client timestamps for LWW. */
     fieldTimes: v.record(v.string(), v.number()),
     updatedAt: v.number(),
   })
-    .index("by_podcast", ["podcastId"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_podcast", ["userId", "podcastId"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
+  /** One row per person (absent until they change something). */
   globalSettings: defineTable({
+    userId: vOwner,
     ...Object.fromEntries(
       Object.entries(globalSettingFields).map(([k, val]) => [k, v.optional(val)]),
     ) as { [K in keyof typeof globalSettingFields]: ReturnType<typeof v.optional<(typeof globalSettingFields)[K]>> },
     fieldTimes: v.record(v.string(), v.number()),
     updatedAt: v.number(),
-  }).index("by_updatedAt", ["updatedAt"]),
+  }).index("by_user_updatedAt", ["userId", "updatedAt"]),
 
   listeningSessions: defineTable({
+    userId: vOwner,
     /** Client-generated UUID. Re-sending the same id updates the session. */
     sessionId: v.string(),
     episodeId: v.id("episodes"),
@@ -229,13 +302,13 @@ export default defineSchema({
     importBatchId: v.optional(v.id("importBatches")),
     updatedAt: v.number(),
   })
-    .index("by_sessionId", ["sessionId"])
-    .index("by_startedAt", ["startedAt"])
-    .index("by_episode", ["episodeId"])
-    .index("by_podcast_startedAt", ["podcastId", "startedAt"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_sessionId", ["userId", "sessionId"])
+    .index("by_user_startedAt", ["userId", "startedAt"])
+    .index("by_user_podcast_startedAt", ["userId", "podcastId", "startedAt"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
   libraryEvents: defineTable({
+    userId: vOwner,
     /** Client UUID or a deterministic id; makes inserts idempotent. */
     eventId: v.string(),
     type: vLibraryEventType,
@@ -244,11 +317,12 @@ export default defineSchema({
     at: v.number(),
     updatedAt: v.number(),
   })
-    .index("by_eventId", ["eventId"])
-    .index("by_type_at", ["type", "at"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_eventId", ["userId", "eventId"])
+    .index("by_user_type_at", ["userId", "type", "at"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
   devices: defineTable({
+    userId: vOwner,
     deviceId: v.string(),
     name: v.string(),
     platform: v.string(),
@@ -257,11 +331,14 @@ export default defineSchema({
     lastSeenAt: v.number(),
     updatedAt: v.number(),
   })
+    .index("by_user_updatedAt", ["userId", "updatedAt"])
+    // Not user-first: a phone (and its push token) belongs to whoever signed in
+    // on it last, so registering has to find it whoever had it before.
     .index("by_deviceId", ["deviceId"])
-    .index("by_apnsToken", ["apnsToken"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_apnsToken", ["apnsToken"]),
 
   importBatches: defineTable({
+    userId: vOwner,
     source: v.literal("overcast"),
     status: vImportStatus,
     assumedSpeed: v.number(),
@@ -332,8 +409,11 @@ export default defineSchema({
     ),
     updatedAt: v.number(),
   })
-    .index("by_startedAt", ["startedAt"])
-    .index("by_updatedAt", ["updatedAt"]),
+    .index("by_user_startedAt", ["userId", "startedAt"])
+    .index("by_user_updatedAt", ["userId", "updatedAt"]),
+
+  // importItems, importQueue and importUpNext are scratch space for one batch,
+  // so they're keyed by the (personal) batch rather than the user.
 
   /** Staged Overcast episodes waiting for their feed to be fetched and matched. */
   importItems: defineTable({
@@ -382,6 +462,7 @@ export default defineSchema({
   // ---- Stats rollups (maintained on every session write) ----
 
   statsDays: defineTable({
+    userId: vOwner,
     day: v.string(), // local YYYY-MM-DD
     wall: v.number(),
     content: v.number(),
@@ -393,9 +474,10 @@ export default defineSchema({
     episodesStarted: v.number(),
     episodesCompleted: v.number(),
     liveHours: v.array(v.number()), // 24 buckets of live wall seconds
-  }).index("by_day", ["day"]),
+  }).index("by_user_day", ["userId", "day"]),
 
   statsMonths: defineTable({
+    userId: vOwner,
     month: v.string(), // local YYYY-MM
     wall: v.number(),
     content: v.number(),
@@ -407,9 +489,10 @@ export default defineSchema({
     episodesStarted: v.number(),
     episodesCompleted: v.number(),
     heatmap: v.array(v.number()), // 7 × 24, Monday first, live wall seconds
-  }).index("by_month", ["month"]),
+  }).index("by_user_month", ["userId", "month"]),
 
   statsShowDays: defineTable({
+    userId: vOwner,
     day: v.string(),
     podcastId: v.id("podcasts"),
     wall: v.number(),
@@ -417,9 +500,10 @@ export default defineSchema({
     speedSaved: v.number(),
     smartSaved: v.number(),
     sessions: v.number(),
-  }).index("by_day_podcast", ["day", "podcastId"]),
+  }).index("by_user_day_podcast", ["userId", "day", "podcastId"]),
 
   statsShowMonths: defineTable({
+    userId: vOwner,
     month: v.string(),
     podcastId: v.id("podcasts"),
     wall: v.number(),
@@ -428,18 +512,19 @@ export default defineSchema({
     smartSaved: v.number(),
     sessions: v.number(),
   })
-    .index("by_month_podcast", ["month", "podcastId"])
-    .index("by_podcast_month", ["podcastId", "month"]),
+    .index("by_user_month_podcast", ["userId", "month", "podcastId"])
+    .index("by_user_podcast_month", ["userId", "podcastId", "month"]),
 
   episodeTotals: defineTable({
+    userId: vOwner,
     episodeId: v.id("episodes"),
     podcastId: v.id("podcasts"),
     wall: v.number(),
     content: v.number(),
     sessions: v.number(),
   })
-    .index("by_episode", ["episodeId"])
-    .index("by_wall", ["wall"]),
+    .index("by_user_episode", ["userId", "episodeId"])
+    .index("by_user_wall", ["userId", "wall"]),
 
   /** iTunes Search API responses, cached for 24 h (Apple allows ~20 calls a minute). */
   directoryCache: defineTable({

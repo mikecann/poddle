@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import { countsAsListened, parseOvercastOpml } from "../convex/lib/opml";
-import { drain, fixture, mockFetch, setup, TOKEN, type T } from "./helpers";
+import { drain, fixture, mockFetch, podcastViews, setup, type T } from "./helpers";
 
 const NOW = Date.UTC(2025, 9, 15);
 
@@ -63,17 +63,17 @@ describe("parseOvercastOpml", () => {
 
 async function runImport(t: T, assumedSpeed = 1.5) {
   const batchId = await t.mutation(api.overcastImport.startOvercastImport, {
-    token: TOKEN,
     opml: fixture("overcast-all-data.opml"),
     assumedSpeed,
   });
   await drain(t);
-  return (await t.query(api.overcastImport.getImport, { token: TOKEN, batchId }))!;
+  return (await t.query(api.overcastImport.getImport, { batchId }))!;
 }
 
 async function snapshot(t: T) {
+  const podcasts = await podcastViews(t);
   return await t.run(async (ctx) => ({
-    podcasts: await ctx.db.query("podcasts").collect(),
+    podcasts,
     episodes: await ctx.db.query("episodes").collect(),
     states: await ctx.db.query("episodeStates").collect(),
     sessions: await ctx.db.query("listeningSessions").collect(),
@@ -137,9 +137,9 @@ describe("Overcast import", () => {
     expect(st("TTW 5: Barely started").position).toBe(120);
     // Overcast has no Inbox: unplayed episodes go to Up Next (chronological, as
     // the main playlist sorts), including the one he hadn't touched yet.
-    expect(await t.query(api.episodes.inbox, { token: TOKEN })).toEqual([]);
+    expect(await t.query(api.episodes.inbox, {})).toEqual([]);
     expect(db.states.find((s) => s.episodeId === ep("TTW 6: Brand new")._id)).toBeUndefined();
-    const queue = await t.query(api.queue.upNext, { token: TOKEN });
+    const queue = await t.query(api.queue.upNext, {});
     expect(queue.map((q) => q.row.episode.title)).toEqual(["TTW 2: Halfway", "TTW 5: Barely started", "TTW 6: Brand new"]);
     // The dead feed's episode is a ghost; its session uses the overall median.
     expect(ep("DF 1").isGhost).toBe(true);
@@ -159,9 +159,9 @@ describe("Overcast import", () => {
     ]);
 
     // Past shows: unsubscribed with history.
-    expect((await t.query(api.podcasts.pastShows, { token: TOKEN })).map((p) => p.title)).toEqual(["Old Favourite"]);
+    expect((await t.query(api.podcasts.pastShows, {})).map((p) => p.title)).toEqual(["Old Favourite"]);
     // Stats see the history.
-    const y = await t.query(api.stats.summary, { token: TOKEN, period: "year", anchorDay: "2025-06-01" });
+    const y = await t.query(api.stats.summary, { period: "year", anchorDay: "2025-06-01" });
     expect(y.completion.completed).toBe(3); // TTW 1, TTW 3, DF 1
     expect(y.includesEstimated).toBe(true);
   });
@@ -171,7 +171,7 @@ describe("Overcast import", () => {
     await runImport(t);
     const before = await snapshot(t);
     const ttw2 = before.episodes.find((e) => e.title === "TTW 2: Halfway")!;
-    await t.mutation(api.episodes.updatePosition, { token: TOKEN, episodeId: ttw2._id, position: 4000, positionUpdatedAt: NOW, deviceId: "phone" });
+    await t.mutation(api.episodes.updatePosition, { episodeId: ttw2._id, position: 4000, positionUpdatedAt: NOW, deviceId: "phone" });
 
     const again = await runImport(t);
     expect(again.counts.sessions).toBe(6);
@@ -182,20 +182,19 @@ describe("Overcast import", () => {
     expect(after.sessions).toHaveLength(before.sessions.length);
     expect(after.events).toHaveLength(before.events.length);
     expect(after.states.find((s) => s.episodeId === ttw2._id)?.position).toBe(4000);
-    const y = await t.query(api.stats.summary, { token: TOKEN, period: "all" });
+    const y = await t.query(api.stats.summary, { period: "all" });
     expect(y.totals.sessions).toBe(6);
-    expect(await t.query(api.queue.upNext, { token: TOKEN })).toHaveLength(3);
+    expect(await t.query(api.queue.upNext, {})).toHaveLength(3);
   });
 
   test("warns on the plain subscriptions export", async () => {
     const t = setup();
     const batchId = await t.mutation(api.overcastImport.startOvercastImport, {
-      token: TOKEN,
       opml: `<?xml version="1.0"?><opml version="1.0"><body><outline type="rss" text="Old" title="Old" xmlUrl="https://feeds.example.com/oldfav.xml"/></body></opml>`,
       assumedSpeed: 1,
     });
     await drain(t);
-    const batch = await t.query(api.overcastImport.getImport, { token: TOKEN, batchId });
+    const batch = await t.query(api.overcastImport.getImport, { batchId });
     expect(batch?.status).toBe("done");
     expect(batch?.warning).toMatch(/All data/);
     expect(batch?.counts.subscribedPodcasts).toBe(1);

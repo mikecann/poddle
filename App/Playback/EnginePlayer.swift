@@ -177,6 +177,14 @@ final class EnginePlayer: PoddlePlayer {
         wasPlaying = false
     }
 
+    func unload() {
+        pause()
+        engine.unload()
+        currentEpisodeId = nil
+        pendingPosition = 0
+        chapters = []
+    }
+
     func seek(to seconds: Double) {
         let target = min(max(0, seconds), duration > 0 ? duration : seconds)
         if engine.item == nil { pendingPosition = target } else { engine.seek(to: target) }

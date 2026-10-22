@@ -18,7 +18,6 @@ else
   echo "No API key at $ASC_KEY (or PUSH=0): building without push"
   extra+=(CODE_SIGN_ENTITLEMENTS=)
 fi
-[[ -f Config/Secrets.xcconfig ]] || scripts/write-secrets.sh
 xcodebuild -project Poddle.xcodeproj -scheme Poddle -configuration Release \
   -destination 'generic/platform=iOS' -derivedDataPath "$DD" "${extra[@]}" build | grep -E " error:|BUILD (SUCCEEDED|FAILED)"
 APP="$DD/Build/Products/Release-iphoneos/Poddle.app"

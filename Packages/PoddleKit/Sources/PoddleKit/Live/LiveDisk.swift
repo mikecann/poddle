@@ -1,7 +1,7 @@
 import Foundation
 
-/// One backend call an outbox entry still has to make. `args` never holds the token; it's added
-/// at send time so a token change doesn't strand queued work.
+/// One backend call an outbox entry still has to make. It's sent as whoever the outbox belongs to
+/// (each signed-in person has their own).
 public struct OutboxCall: Codable, Sendable, Hashable {
     public var name: String
     public var args: [String: JSONValue]
@@ -31,7 +31,7 @@ public struct OutboxEntry: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
-/// Everything LiveStore keeps on disk for one deployment: the last synced state (so the app opens
+/// Everything LiveStore keeps on disk for one person on one deployment: the last synced state (so the app opens
 /// instantly and works offline), the `sync:changes` cursors and the last stats it saw.
 public struct LiveCache: Codable, Sendable, Hashable {
     public var snapshot = LibrarySnapshot()
@@ -54,17 +54,37 @@ public struct OutboxFile: Codable, Sendable, Hashable {
     public init(pending: [OutboxEntry] = [], failed: [OutboxEntry] = []) { self.pending = pending; self.failed = failed }
 }
 
-/// JSON files under Application Support/Poddle/<deployment>/.
+/// JSON files under Application Support/Poddle/<deployment>/<user id>/, so nobody signed in on
+/// the same device ever sees another person's cache or queued actions.
 public struct LiveDisk: Sendable {
     public let directory: URL
 
     public init(directory: URL) { self.directory = directory }
 
-    /// The default folder for a deployment, e.g. `…/Application Support/Poddle/qualified-hedgehog-912`.
-    public static func forDeployment(_ url: URL) -> LiveDisk {
+    /// The folder for one person on a deployment, e.g. `…/Poddle/striped-turtle-260/<user id>`.
+    public static func forUser(_ userId: String, deployment url: URL) -> LiveDisk {
+        LiveDisk(directory: deploymentFolder(url).appending(path: userId, directoryHint: .isDirectory))
+    }
+
+    static func deploymentFolder(_ url: URL) -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         let name = url.host()?.split(separator: ".").first.map(String.init) ?? "default"
-        return LiveDisk(directory: base.appending(path: "Poddle", directoryHint: .isDirectory).appending(path: name, directoryHint: .isDirectory))
+        return base.appending(path: "Poddle", directoryHint: .isDirectory).appending(path: name, directoryHint: .isDirectory)
+    }
+
+    /// Before accounts, the one cache and outbox sat straight in the deployment's folder. They're
+    /// Mike's (the only person who used the app then), so the first person to sign in on this
+    /// device after the update gets them, queued actions and all. Anyone later starts empty.
+    public static func adoptPreAccountFiles(deployment url: URL, into disk: LiveDisk) {
+        let old = deploymentFolder(url)
+        let fm = FileManager.default
+        for name in ["cache.json", "outbox.json"] {
+            let from = old.appending(path: name)
+            guard fm.fileExists(atPath: from.path()) else { continue }
+            let to = disk.directory.appending(path: name)
+            try? fm.createDirectory(at: disk.directory, withIntermediateDirectories: true)
+            if fm.fileExists(atPath: to.path()) { try? fm.removeItem(at: from) } else { try? fm.moveItem(at: from, to: to) }
+        }
     }
 
     var cacheURL: URL { directory.appending(path: "cache.json") }

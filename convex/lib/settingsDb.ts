@@ -1,15 +1,18 @@
 import type { Id } from "../_generated/dataModel";
-import type { QueryCtx } from "../_generated/server";
+import type { UserQueryCtx } from "./auth";
 import { resolveGlobalSettings, resolveShowSettings, showSettingKeys, type ShowOverrides } from "./settings";
 
-export async function globalSettingsDoc(ctx: QueryCtx) {
-  return await ctx.db.query("globalSettings").first();
+export async function globalSettingsDoc(ctx: UserQueryCtx) {
+  return await ctx.db
+    .query("globalSettings")
+    .withIndex("by_user_updatedAt", (q) => q.eq("userId", ctx.userId))
+    .first();
 }
 
-export async function podcastSettingsDoc(ctx: QueryCtx, podcastId: Id<"podcasts">) {
+export async function podcastSettingsDoc(ctx: UserQueryCtx, podcastId: Id<"podcasts">) {
   return await ctx.db
     .query("podcastSettings")
-    .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+    .withIndex("by_user_podcast", (q) => q.eq("userId", ctx.userId).eq("podcastId", podcastId))
     .unique();
 }
 
@@ -20,7 +23,7 @@ export function overridesOf(doc: Record<string, unknown> | null): ShowOverrides 
   return out as ShowOverrides;
 }
 
-export async function resolvedSettingsFor(ctx: QueryCtx, podcastId: Id<"podcasts">) {
+export async function resolvedSettingsFor(ctx: UserQueryCtx, podcastId: Id<"podcasts">) {
   const [g, p] = await Promise.all([globalSettingsDoc(ctx), podcastSettingsDoc(ctx, podcastId)]);
   return resolveShowSettings(resolveGlobalSettings(g), overridesOf(p));
 }

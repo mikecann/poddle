@@ -55,7 +55,16 @@ final class PushCoordinator {
         }
     }
 
+    /// The last token iOS gave us, to register again for whoever signs in next.
+    @ObservationIgnored private var lastToken: Data?
+
+    /// Someone (else) signed in: this device's push token now belongs to them (`devices:register`).
+    func registerAgain() {
+        if let lastToken { didRegister(deviceToken: lastToken) }
+    }
+
     func didRegister(deviceToken: Data) {
+        lastToken = deviceToken
         let hex = deviceToken.map { String(format: "%02x", $0) }.joined()
         let source = store.dataSource
         Task {

@@ -4,6 +4,7 @@ import { createPrivateKey, sign } from "node:crypto";
 import http2 from "node:http2";
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { internalAction, type ActionCtx } from "./_generated/server";
 import { userAction } from "./lib/auth";
 
@@ -84,8 +85,9 @@ function sendOne(session: http2.ClientHttp2Session, cfg: ApnsConfig, jwt: string
   });
 }
 
-async function sendAlertToAll(
+async function sendAlertToUser(
   ctx: ActionCtx,
+  userId: Id<"users">,
   alert: { title: string; body: string; threadId?: string; data?: Record<string, string> },
 ): Promise<{ sent: number; failed: number; skipped?: string }> {
   const cfg = apnsConfig();
@@ -93,7 +95,7 @@ async function sendAlertToAll(
     console.log(`[apns] not configured, skipping: ${alert.title}: ${alert.body}`);
     return { sent: 0, failed: 0, skipped: "unconfigured" };
   }
-  const targets: { token: string; environment?: "sandbox" | "production" }[] = await ctx.runQuery(internal.devices.pushTargets, {});
+  const targets: { token: string; environment?: "sandbox" | "production" }[] = await ctx.runQuery(internal.devices.pushTargets, { userId });
   if (!targets.length) return { sent: 0, failed: 0, skipped: "noDevices" };
   const payload = JSON.stringify({
     aps: { alert: { title: alert.title, body: alert.body }, sound: "default", "thread-id": alert.threadId },
@@ -130,15 +132,15 @@ async function sendAlertToAll(
 const vSendResult = v.object({ sent: v.number(), failed: v.number(), skipped: v.optional(v.string()) });
 
 export const sendNewEpisodeAlert = internalAction({
-  args: { episodeId: v.id("episodes") },
+  args: { episodeId: v.id("episodes"), userId: v.id("users") },
   returns: vSendResult,
-  handler: async (ctx, { episodeId }): Promise<{ sent: number; failed: number; skipped?: string }> => {
+  handler: async (ctx, { episodeId, userId }): Promise<{ sent: number; failed: number; skipped?: string }> => {
     const alert: { title: string; body: string; podcastId: string } | null = await ctx.runQuery(
       internal.devices.alertForEpisode,
       { episodeId },
     );
     if (!alert) return { sent: 0, failed: 0, skipped: "missingEpisode" };
-    return await sendAlertToAll(ctx, {
+    return await sendAlertToUser(ctx, userId, {
       title: alert.title,
       body: alert.body,
       threadId: alert.podcastId,
@@ -147,9 +149,9 @@ export const sendNewEpisodeAlert = internalAction({
   },
 });
 
-/** Send a test notification to every registered device. */
+/** Send a test notification to every device you're signed in on. */
 export const sendTestPush = userAction({
   args: { message: v.optional(v.string()) },
   returns: vSendResult,
-  handler: async (ctx, { message }) => await sendAlertToAll(ctx, { title: "Poddle", body: message ?? "Test notification" }),
+  handler: async (ctx, { message }) => await sendAlertToUser(ctx, ctx.userId, { title: "Poddle", body: message ?? "Test notification" }),
 });

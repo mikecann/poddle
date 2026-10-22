@@ -3,7 +3,9 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import { userMutation, userQuery } from "./lib/auth";
 import { vDeviceDoc } from "./lib/validators";
 
-// Devices and their APNs tokens. `deviceId` is a stable UUID the app keeps in the Keychain.
+// Devices and their APNs tokens. `deviceId` is a stable UUID the app keeps in the
+// Keychain. A device belongs to whoever signed in on it last, so pushes for one
+// person never reach a phone someone else has since signed in on.
 
 export const register = userMutation({
   args: {
@@ -16,7 +18,7 @@ export const register = userMutation({
   returns: v.id("devices"),
   handler: async (ctx, args) => {
     const now = Date.now();
-    // A token belongs to one device; drop it from any other row.
+    // A token belongs to one device; drop it from any other row, whoever's it is.
     if (args.apnsToken) {
       const holders = await ctx.db
         .query("devices")
@@ -29,26 +31,39 @@ export const register = userMutation({
     const existing = await ctx.db
       .query("devices")
       .withIndex("by_deviceId", (q) => q.eq("deviceId", args.deviceId))
-      .unique();
-    if (existing) {
-      await ctx.db.patch(existing._id, { ...args, lastSeenAt: now, updatedAt: now });
-      return existing._id;
+      .collect();
+    const mine = existing.find((d) => d.userId === ctx.userId);
+    // Signed in as someone else on this device: the old rows stop getting pushes.
+    for (const d of existing) {
+      if (d !== mine && d.apnsToken) await ctx.db.patch(d._id, { apnsToken: undefined, updatedAt: now });
     }
-    return await ctx.db.insert("devices", { ...args, lastSeenAt: now, updatedAt: now });
+    if (mine) {
+      await ctx.db.patch(mine._id, { ...args, lastSeenAt: now, updatedAt: now });
+      return mine._id;
+    }
+    return await ctx.db.insert("devices", { ...args, userId: ctx.userId, lastSeenAt: now, updatedAt: now });
   },
 });
 
 export const list = userQuery({
   args: {},
   returns: v.array(vDeviceDoc),
-  handler: async (ctx) => await ctx.db.query("devices").collect(),
+  handler: async (ctx) =>
+    await ctx.db
+      .query("devices")
+      .withIndex("by_user_updatedAt", (q) => q.eq("userId", ctx.userId))
+      .collect(),
 });
 
+/** One person's devices with a push token. */
 export const pushTargets = internalQuery({
-  args: {},
+  args: { userId: v.id("users") },
   returns: v.array(v.object({ token: v.string(), environment: v.optional(v.union(v.literal("sandbox"), v.literal("production"))) })),
-  handler: async (ctx) => {
-    const devices = await ctx.db.query("devices").collect();
+  handler: async (ctx, { userId }) => {
+    const devices = await ctx.db
+      .query("devices")
+      .withIndex("by_user_updatedAt", (q) => q.eq("userId", userId))
+      .collect();
     return devices.flatMap((d) => (d.apnsToken ? [{ token: d.apnsToken, environment: d.apnsEnvironment }] : []));
   },
 });

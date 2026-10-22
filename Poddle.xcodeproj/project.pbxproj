@@ -17,7 +17,6 @@
 		AA0000000000000000000103 /* PoddlePlayback */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = PoddlePlayback; path = Packages/PoddlePlayback; sourceTree = "<group>"; };
 		AA0000000000000000000111 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
 		AA0000000000000000000112 /* Release.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Release.xcconfig; sourceTree = "<group>"; };
-		AA0000000000000000000113 /* Secrets.example.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.example.xcconfig; sourceTree = "<group>"; };
 		AA0000000000000000000114 /* Poddle.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Poddle.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -87,7 +86,6 @@
 			children = (
 				AA0000000000000000000111 /* Debug.xcconfig */,
 				AA0000000000000000000112 /* Release.xcconfig */,
-				AA0000000000000000000113 /* Secrets.example.xcconfig */,
 				AA0000000000000000000114 /* Poddle.entitlements */,
 			);
 			path = Config;

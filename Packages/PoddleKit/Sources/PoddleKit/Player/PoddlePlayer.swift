@@ -38,6 +38,8 @@ public protocol PoddlePlayer: AnyObject, Observable, Sendable {
     func setSleepTimer(_ timer: SleepTimer)
     /// Shake: a running minute timer starts again from full; one that just stopped playback restarts.
     func extendSleepTimer()
+    /// Pauses (saving the position) and lets go of the episode, e.g. on signing out.
+    func unload()
 }
 
 extension PoddlePlayer {

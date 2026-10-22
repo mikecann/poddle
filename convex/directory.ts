@@ -2,6 +2,7 @@
 
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { userAction } from "./lib/auth";
 import { fetchWithTimeout, USER_AGENT } from "./lib/feedFetch";
@@ -36,9 +37,9 @@ async function itunesJson(ctx: ActionCtx, url: string): Promise<ItunesItem[]> {
   return results;
 }
 
-async function toResults(ctx: ActionCtx, items: ItunesItem[]): Promise<DirectoryResult[]> {
+async function toResults(ctx: ActionCtx & { userId: Id<"users"> }, items: ItunesItem[]): Promise<DirectoryResult[]> {
   const feedUrls = items.map((i) => i.feedUrl).filter((u): u is string => !!u);
-  const matches = await ctx.runQuery(internal.directoryCache.libraryMatches, { feedUrls });
+  const matches = await ctx.runQuery(internal.directoryCache.libraryMatches, { userId: ctx.userId, feedUrls });
   const byUrl = new Map(matches.map((m) => [m.feedUrl, m]));
   return items.map((i) => {
     const match = i.feedUrl ? byUrl.get(i.feedUrl) : undefined;

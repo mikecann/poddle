@@ -38,7 +38,7 @@ export const refreshNow = userAction({
       const result = await refreshPodcast(ctx, podcastId, { force: false });
       return { scheduled: 0, result };
     }
-    const scheduled: number = await ctx.runMutation(internal.feeds.scheduleRefreshAll, {});
+    const scheduled: number = await ctx.runMutation(internal.feeds.scheduleRefreshAll, { userId: ctx.userId });
     return { scheduled };
   },
 });
@@ -88,7 +88,7 @@ export const previewFeed = userAction({
     const normalized = normalizeFeedUrl(finalUrl);
     const matches: { podcastId: Id<"podcasts">; subscribed: boolean }[] = await ctx.runQuery(
       internal.directoryCache.libraryMatches,
-      { feedUrls: [normalized] },
+      { userId: ctx.userId, feedUrls: [normalized] },
     );
     const match = matches[0];
     return {

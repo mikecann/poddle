@@ -11,7 +11,9 @@ import Foundation
 ///   entry and retry; an outright rejection moves it to `failed`, which is kept too.
 /// - Snapshots pushed to the store are the server state with every queued action applied on top,
 ///   so the app looks right offline and across relaunches.
-/// - Everything is cached as JSON under Application Support, per deployment.
+/// - Everything is cached as JSON under Application Support, per deployment and per person.
+///   Calls are made as the signed-in person (`switchAccount`); signed out, nothing is synced or
+///   sent and the snapshot is empty.
 public actor LiveStore: PoddleDataSource {
     public struct Timing: Sendable {
         public var retry: Duration
@@ -34,12 +36,17 @@ public actor LiveStore: PoddleDataSource {
     static let tombstoneWindow: Millis = 89 * 86_400_000
 
     public private(set) var deploymentURL: URL
-    private var token: String
+    /// Who's signed in. The cache, outbox and every call are theirs.
+    public private(set) var userId: String?
+    private var auth: (any AuthTokenSource)?
     public nonisolated let deviceId: String
     private let makeTransport: @Sendable (URL) -> any ConvexTransport
-    private let makeDisk: @Sendable (URL) -> LiveDisk
+    private let makeDisk: @Sendable (URL, String) -> LiveDisk
     private var transport: any ConvexTransport
-    private var disk: LiveDisk
+    /// Nil while signed out: nothing is read or written.
+    private var disk: LiveDisk?
+    /// The transport hasn't been given `auth` yet.
+    private var authPending = true
     private let timing: Timing
     private let now: @Sendable () -> Date
 
@@ -62,33 +69,61 @@ public actor LiveStore: PoddleDataSource {
     private var syncing = false
     private var emitPending = false
     private var savePending = false
-    /// Bumped by `reconfigure` so work started against the old deployment stops writing.
+    /// Bumped by `switchAccount` so work started for the previous person stops writing.
     private var generation = 0
 
+    /// - Parameters:
+    ///   - userId: who's signed in (nil: nobody yet). Their cache and outbox load straight away,
+    ///     so an offline launch works; calls wait for `auth`.
+    ///   - auth: hands the Convex client access tokens (`Account`).
     public init(
-        deploymentURL: URL, token: String, deviceId: String,
+        deploymentURL: URL, deviceId: String, userId: String?, auth: (any AuthTokenSource)?,
         transport: (@Sendable (URL) -> any ConvexTransport)? = nil,
-        disk: (@Sendable (URL) -> LiveDisk)? = nil,
+        disk: (@Sendable (URL, String) -> LiveDisk)? = nil,
         timing: Timing = .standard, now: @escaping @Sendable () -> Date = { Date() }
     ) {
         let makeTransport = transport ?? { ConvexMobileTransport(deploymentURL: $0) }
-        let makeDisk = disk ?? { LiveDisk.forDeployment($0) }
+        let makeDisk = disk ?? { LiveDisk.forUser($1, deployment: $0) }
         self.deploymentURL = deploymentURL
-        self.token = token
+        self.userId = userId
+        self.auth = auth
         self.deviceId = deviceId
         self.makeTransport = makeTransport
         self.makeDisk = makeDisk
         self.transport = makeTransport(deploymentURL)
-        self.disk = makeDisk(deploymentURL)
+        let disk = userId.map { makeDisk(deploymentURL, $0) }
+        self.disk = disk
         self.timing = timing
         self.now = now
-        self.cache = self.disk.loadCache() ?? LiveCache()
-        self.outbox = self.disk.loadOutbox()
+        self.cache = disk?.loadCache() ?? LiveCache()
+        self.outbox = disk?.loadOutbox() ?? OutboxFile()
+    }
+
+    /// Someone signed in, or out. Everything stops, the next person's cache and outbox load (or
+    /// nothing, signed out), and syncing starts again as them. The previous person's files stay on
+    /// disk for when they sign back in.
+    public func switchAccount(userId: String?, auth: (any AuthTokenSource)?) {
+        stop()
+        self.userId = userId
+        self.auth = auth
+        disk = userId.map { makeDisk(deploymentURL, $0) }
+        cache = disk?.loadCache() ?? LiveCache()
+        outbox = disk?.loadOutbox() ?? OutboxFile()
+        confirmed = []
+        liveQueue = false
+        liveGlobal = false
+        transport = makeTransport(deploymentURL)
+        authPending = true
+        connected = false
+        lastError = nil
+        if !listeners.isEmpty { startIfNeeded() }
+        changed(save: false)
     }
 
     /// What to paint on launch before the network answers: the cached server state with any
-    /// queued actions applied on top.
-    public static func cachedSnapshot(disk: LiveDisk) -> LibrarySnapshot {
+    /// queued actions applied on top. Empty when nobody's signed in.
+    public static func cachedSnapshot(disk: LiveDisk?) -> LibrarySnapshot {
+        guard let disk else { return LibrarySnapshot() }
         let cache = disk.loadCache() ?? LiveCache()
         return overlay(cache.snapshot, disk.loadOutbox().pending)
     }
@@ -103,18 +138,18 @@ public actor LiveStore: PoddleDataSource {
 
     private func current() -> LibrarySnapshot { Self.overlay(cache.snapshot, confirmed + outbox.pending) }
 
-    private func withToken(_ args: [String: JSONValue]) -> [String: JSONValue] {
-        var a = args
-        a["token"] = .string(token)
-        return a
-    }
-
     // MARK: - Lifecycle
 
     private func startIfNeeded() {
-        guard !started else { return }
+        guard !started, userId != nil else { return }
         started = true
         let gen = generation
+        if authPending {
+            authPending = false
+            let transport = transport
+            let auth = auth
+            tasks.append(Task { await transport.setAuth(auth) })
+        }
         let states = transport.connectionStates()
         tasks.append(Task { [weak self] in
             for await up in states {
@@ -162,27 +197,6 @@ public actor LiveStore: PoddleDataSource {
         draining = false
         syncing = false
         saveNow()
-    }
-
-    /// Points at a different deployment or token (the Settings "Connection" row). Each deployment
-    /// keeps its own cache and outbox.
-    public func reconfigure(deploymentURL url: URL, token: String) {
-        stop()
-        self.token = token
-        if url != deploymentURL {
-            deploymentURL = url
-            disk = makeDisk(url)
-            cache = disk.loadCache() ?? LiveCache()
-            outbox = disk.loadOutbox()
-            confirmed = []
-            liveQueue = false
-            liveGlobal = false
-        }
-        transport = makeTransport(url)
-        connected = false
-        lastError = nil
-        if !listeners.isEmpty { startIfNeeded() }
-        changed(save: false)
     }
 
     /// Writes the cache now (on backgrounding, and in tests).
@@ -259,10 +273,12 @@ public actor LiveStore: PoddleDataSource {
 
     private func saveNow() {
         savePending = false
+        guard let disk else { return }
         do { try disk.save(cache) } catch { lastError = "Couldn't save the cache: \(error.localizedDescription)" }
     }
 
     private func saveOutbox() {
+        guard let disk else { return }
         do { try disk.save(outbox) } catch { lastError = "Couldn't save the outbox: \(error.localizedDescription)" }
     }
 
@@ -303,7 +319,7 @@ public actor LiveStore: PoddleDataSource {
     /// consumer goes away.
     private func resilient(_ name: String, _ args: [String: JSONValue]) -> AsyncStream<Data> {
         let transport = transport
-        let full = withToken(args)
+        let full = args
         let timing = timing
         let (stream, continuation) = AsyncStream.makeStream(of: Data.self, bufferingPolicy: .bufferingNewest(1))
         let task = Task { [weak self] in
@@ -396,7 +412,7 @@ public actor LiveStore: PoddleDataSource {
 
     /// Pages through every synced table changed since the last catch-up and upserts it.
     public func catchUp() async {
-        guard !syncing else { return }
+        guard !syncing, userId != nil else { return }
         syncing = true
         defer { syncing = false }
         let gen = generation
@@ -409,10 +425,10 @@ public actor LiveStore: PoddleDataSource {
                 var cursor: JSONValue = .null
                 var maxSeen = since
                 while true {
-                    let args = withToken([
+                    let args: [String: JSONValue] = [
                         "table": .string(table), "since": .number(since),
                         "paginationOpts": ["numItems": .number(Self.syncPageSize), "cursor": cursor],
-                    ])
+                    ]
                     let data = try await transport.query("sync:changes", args)
                     guard gen == generation else { return }
                     let done = try applySyncPage(table, data, maxSeen: &maxSeen, cursor: &cursor)
@@ -496,6 +512,8 @@ public actor LiveStore: PoddleDataSource {
     // MARK: - Outbox
 
     public func send(_ mutation: Mutation) async throws {
+        // Signed out: there's nobody to send it as.
+        guard userId != nil else { return }
         let at = nowMillis
         let calls = Self.calls(for: mutation, at: at, base: current(), deviceId: deviceId)
         guard !calls.isEmpty else { return }
@@ -592,7 +610,7 @@ public actor LiveStore: PoddleDataSource {
                         guard let result = entry.lastResult, result != .null else { entry.done += 1; continue }
                         args[key] = result
                     }
-                    let data = try await transport.mutation(call.name, withToken(args))
+                    let data = try await transport.mutation(call.name, args)
                     guard gen == generation else { return }
                     entry.lastResult = try? JSONValue.decode(data)
                     entry.done += 1
@@ -830,15 +848,15 @@ public actor LiveStore: PoddleDataSource {
 
     public func stats(year: Int) async throws -> StatsSummary {
         let (anchor, today) = statsArgs(year: year)
-        let y = try await transport.query("stats:summary", withToken(["period": "year", "anchorDay": .string(anchor)]))
-        let a = try await transport.query("stats:summary", withToken(["period": "all"]))
+        let y = try await transport.query("stats:summary", ["period": "year", "anchorDay": .string(anchor)])
+        let a = try await transport.query("stats:summary", ["period": "all"])
         let all = try JSONDecoder().decode(SummaryDoc.self, from: a)
         return StatsMapping.summary(year: year, try JSONDecoder().decode(SummaryDoc.self, from: y), allTime: all, today: today, estimatedBefore: nil)
     }
 
     public func availableYears() async throws -> [Int] {
         if !cache.years.isEmpty { return cache.years }
-        let data = try await transport.query("stats:summary", withToken(["period": "all"]))
+        let data = try await transport.query("stats:summary", ["period": "all"])
         let years = StatsMapping.years(from: try JSONDecoder().decode(SummaryDoc.self, from: data), current: Calendar.current.component(.year, from: now()))
         cache.years = years
         scheduleSave()
@@ -869,14 +887,14 @@ public actor LiveStore: PoddleDataSource {
     }
 
     public func yearInReview(year: Int) async throws -> YearInReview {
-        let data = try await transport.query("stats:yearInReview", withToken(["year": .number(Double(year)), "includePrivate": true]))
+        let data = try await transport.query("stats:yearInReview", ["year": .number(Double(year)), "includePrivate": true])
         return StatsMapping.yearInReview(try JSONDecoder().decode(YearInReviewDoc.self, from: data))
     }
 
     // MARK: - Discover
 
     public func search(_ term: String) async throws -> SearchResponse {
-        let data = try await transport.action("directory:search", withToken(["term": .string(term), "limit": 50]))
+        let data = try await transport.action("directory:search", ["term": .string(term), "limit": 50])
         let results = try JSONDecoder().decode([DirectoryResultDoc].self, from: data).compactMap(\.model)
         return SearchResponse(results: results, totalCount: results.count)
     }
@@ -888,18 +906,18 @@ public actor LiveStore: PoddleDataSource {
         guard !trimmed.isEmpty else { return nil }
         let isDirectory = trimmed.allSatisfy(\.isNumber) || trimmed.contains("podcasts.apple.com") || trimmed.contains("overcast.fm")
         if isDirectory {
-            let data = try await transport.action("directory:lookup", withToken(["appleIdOrUrl": .string(trimmed)]))
+            let data = try await transport.action("directory:lookup", ["appleIdOrUrl": .string(trimmed)])
             if let hit = try JSONDecoder().decode(DirectoryResultDoc?.self, from: data)?.model { return hit }
         }
         let full = trimmed.contains("://") ? trimmed : "https://" + trimmed
-        let data = try await transport.action("feedActions:previewFeed", withToken(["url": .string(full)]))
+        let data = try await transport.action("feedActions:previewFeed", ["url": .string(full)])
         return try JSONDecoder().decode(FeedPreviewDoc.self, from: data).model
     }
 
     public func refresh(podcastId: String?) async throws {
         var args: [String: JSONValue] = [:]
         if let podcastId, !podcastId.hasPrefix("local-") { args["podcastId"] = .string(podcastId) }
-        _ = try await transport.action("feedActions:refreshNow", withToken(args))
+        _ = try await transport.action("feedActions:refreshNow", (args))
         await catchUp()
     }
 
@@ -918,7 +936,7 @@ public actor LiveStore: PoddleDataSource {
     }
 
     public func showNotes(episodeId: String) async -> String? {
-        guard let data = try? await transport.query("episodes:get", withToken(["episodeId": .string(episodeId)])) else { return nil }
+        guard let data = try? await transport.query("episodes:get", ["episodeId": .string(episodeId)]) else { return nil }
         return (try? JSONValue.decode(data))?["showNotesHtml"]?.string
     }
 
@@ -926,14 +944,12 @@ public actor LiveStore: PoddleDataSource {
 
     public func importOvercast(fileName: String, data: Data, assumedSpeed: Double) async -> AsyncThrowingStream<ImportProgress, Error> {
         let transport = transport
-        let token = token
         let started = nowMillis
         return AsyncThrowingStream { continuation in
             let task = Task {
-                func args(_ a: [String: JSONValue]) -> [String: JSONValue] { var a = a; a["token"] = .string(token); return a }
                 do {
                     continuation.yield(ImportProgress(phase: .reading, fileName: fileName, importedAt: started))
-                    let urlData = try await transport.mutation("overcastImport:generateUploadUrl", args([:]))
+                    let urlData = try await transport.mutation("overcastImport:generateUploadUrl", [:])
                     guard let urlString = try JSONValue.decode(urlData).string, let url = URL(string: urlString) else {
                         throw TransportError.server("No upload URL")
                     }
@@ -941,11 +957,11 @@ public actor LiveStore: PoddleDataSource {
                     guard let storageId = try JSONValue.decode(uploaded)["storageId"]?.string else {
                         throw TransportError.server("The upload didn't return a storage ID")
                     }
-                    let batchData = try await transport.mutation("overcastImport:startOvercastImport", args([
+                    let batchData = try await transport.mutation("overcastImport:startOvercastImport", [
                         "storageId": .string(storageId), "assumedSpeed": .number(Speed.snap(assumedSpeed)),
-                    ]))
+                    ])
                     guard let batchId = try JSONValue.decode(batchData).string else { throw TransportError.server("No import ID") }
-                    for try await update in transport.subscribe("overcastImport:getImport", args(["batchId": .string(batchId)])) {
+                    for try await update in transport.subscribe("overcastImport:getImport", ["batchId": .string(batchId)]) {
                         guard let batch = try JSONDecoder().decode(ImportBatchDoc?.self, from: update) else { continue }
                         let progress = batch.progress(fileName: fileName)
                         continuation.yield(progress)

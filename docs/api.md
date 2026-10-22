@@ -5,7 +5,9 @@ The contract between the Convex backend (`convex/`) and the Swift app (`Packages
 ## Calling convention
 
 - Functions are addressed as `"module:function"`, e.g. `"queue:add"`.
-- **Every public function takes a `token: String` arg**: the `PODDLE_API_TOKEN` from the Keychain. It's compared in constant time. A wrong token throws a `ConvexError` with data `{ code: "unauthorized", message }`. If the server has no token set: `{ code: "unconfigured", message }`.
+- **Every public function acts for the signed-in caller** (Convex Auth, see [Accounts and sign-in](#accounts-and-sign-in)). Send the access token as the client's auth token; there's no token arg. Not signed in (or a session for a user that no longer exists) throws a `ConvexError` `{ code: "unauthenticated", message }`.
+- **Admin path for scripts:** any public function also takes an optional `admin: { token, email }`. The token is compared in constant time with `PODDLE_API_TOKEN` and the call acts as the user with that email. Wrong token: `{ code: "unauthorized" }`; none set on the server: `{ code: "unconfigured" }`; no such user: `{ code: "unknownUser" }`. The app never sends it.
+- Everything a function reads or writes is the caller's: their subscriptions, episode state, queue, settings, sessions, stats, imports and devices. Shows and episodes are shared catalog data, the same for everyone.
 - Other failures throw a plain `Error` (e.g. `"Episode … not found"`), which the client sees as a server error.
 - Every arg and return value is validated. Optional fields are **absent** from returned documents (not `null`) unless this doc says `| null`. Decode them as Swift optionals.
 
@@ -27,7 +29,12 @@ Set with `npx convex env set NAME value` on the deployment.
 
 | Name | Required | Meaning |
 |---|---|---|
-| `PODDLE_API_TOKEN` | yes | Long random string. Every public function checks it. |
+| `AUTH_PRIVATE_KEY`, `AUTH_JWKS` | yes | Convex Auth's signing keys. `node scripts/set-auth-keys.mjs <dev\|prod>` |
+| `AUTH_APPLE_CLIENT_ID`, `AUTH_APPLE_TEAM_ID`, `AUTH_APPLE_KEY_ID`, `AUTH_APPLE_PRIVATE_KEY` | yes (placeholder ok) | Sign in with Apple: Services ID, team, key ID, `.p8` contents. `node scripts/set-oauth-keys.mjs` |
+| `AUTH_GOOGLE_CLIENT_ID`, `AUTH_GOOGLE_CLIENT_SECRET` | yes (placeholder ok) | Google OAuth "Web application" client |
+| `PODDLE_ALLOWED_EMAILS` | for sign-up | Comma-separated emails that may make an account. Unset: nobody new. Existing accounts always sign in. |
+| `PODDLE_TEST_SIGNIN` | dev only | Exactly `1` enables test sign-in. Never set it on prod (it's refused on prod's addresses anyway). |
+| `PODDLE_API_TOKEN` | for scripts | Long random string for the admin path. |
 | `APNS_KEY_P8` | for push | Contents of the `.p8` auth key. PEM (newlines or literal `\n`) or the bare base64 body. |
 | `APNS_KEY_ID` | for push | The key's 10-character ID. |
 | `APNS_TEAM_ID` | for push | `4DTAZSZL6B` |
@@ -36,12 +43,34 @@ Set with `npx convex env set NAME value` on the deployment.
 
 Without the four required APNs vars, every push is a logged no-op.
 
+Convex Auth's components refuse to deploy unless every provider variable has a value, so before Apple and Google are set up run `node scripts/set-oauth-keys.mjs <dev|prod> --placeholders`: it sets the missing ones to `not-configured`, and only signing in with that provider fails.
+
+## Accounts and sign-in
+
+Convex Auth v2 (`@convex-dev/auth` 2.0.0-beta.0), set up like Walkies: `convex/convex.config.ts`, `convex/auth.ts`, `convex/users.ts`, `convex/http.ts`.
+
+| Function | Kind | Args | Returns / behaviour |
+|---|---|---|---|
+| `auth:startSignInWithApple`, `auth:startSignInWithGoogle` | mutation | `redirectTo` (`<site>/app/signed-in`) | `{ redirect, state }`. Open `redirect` in `ASWebAuthenticationSession`. The provider sends people to `<site>/oauth/<provider>/callback`, which ends on `<site>/app/signed-in?convexAuthCode=…`, which 302s to `poddle://signed-in?…` for the sheet to catch. `convexAuthError=access_denied` means they cancelled. |
+| `auth:completeSignInWithApple`, `auth:completeSignInWithGoogle` | mutation | `code`, `state` | `{ status: "complete", tokens: { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, userId } }` (times in ms). Someone not on the allowlist gets `ConvexError { code: "inviteOnly", message: "Poddle is invite-only for now." }`. |
+| `auth:refreshSession` | mutation | `refreshToken` | `{ kind: "rotated", tokens }` or `{ kind: "noSession" }` (signed out). Access tokens last a minute; refresh tokens rotate, so refresh one at a time. |
+| `auth:signOut` | mutation | `refreshToken` | `null` |
+| `auth:signInForTesting` | mutation | `email?` | Dev only (`PODDLE_TEST_SIGNIN=1`). Signs in as the user with that email, making a test user if there isn't one; without an email, a fresh test user. Same result shape as `complete…`. Refused with `{ code: "testSignInDisabled" }` everywhere else, including direct `auth:signInAnonymously` calls. |
+| `users:me` | query | – | `{ userId, name, email, picture } \| null` |
+
+- **One person, two providers:** Apple and Google with the same verified email land in the same user (`existingUser` in `users.ts`). Apple's "Hide my email" relay addresses are different emails, so they don't match (and aren't on the allowlist).
+- **Allowlist:** `PODDLE_ALLOWED_EMAILS`, enforced in one place (`convex/lib/allowlist.ts`, called only when a new user would be made). To open sign-up, make `maySignUp` return true.
+- **Return URLs to register** with Apple and Google: `https://striped-turtle-260.ap-southeast-2.convex.site/oauth/{apple,google}/callback` (dev) and `https://coordinated-dodo-120.ap-southeast-2.convex.site/oauth/{apple,google}/callback` (prod). Convex Auth builds them from `CONVEX_SITE_URL`.
+- **Custom domain:** if prod's `CONVEX_SITE_URL` is overridden to `https://poddle.mikecann.app`, the callbacks become `https://poddle.mikecann.app/oauth/{apple,google}/callback` (register those too, and add the domain to the Apple Services ID), JWTs are issued by and verified against that URL (`convex/auth.config.ts`), so existing sessions stop working and everyone signs in once more, and the app's `returnURL` must follow (it's derived from the `.convex.cloud` URL today, `LiveConfig.siteURL`). The website, which will sign in with the same Convex Auth, adds its own origin to `allowedRedirectOrigins` in `convex/auth.ts`.
+
 ## Documents
 
 These are the shapes returned by queries and by `sync:changes`. Every synced table has `updatedAt` (server ms).
 
+Every personal document below (episode state, queue item, settings, session, event, device, import batch, deletion) also has `userId`, always the caller's.
+
 ### Podcast (`podcasts`)
-`_id`, `feedUrl`, `title`, `author?`, `description?`, `artworkUrl?`, `link?`, `language?`, `appleId?: Int`, `overcastId?: Int`, `isPrivate: Bool`, `subscribed: Bool`, `subscribedAt?` (first subscribe; Overcast's added date on import), `unsubscribedAt?`, `subscriptionUpdatedAt` (LWW clock), `latestEpisodeAt?`, `episodeCount: Int`, `lastFetchedAt?`, `createdAt`, `updatedAt`.
+The shared show with the caller's subscription merged in. `_id`, `feedUrl`, `title`, `author?`, `description?`, `artworkUrl?`, `link?`, `language?`, `appleId?: Int`, `overcastId?: Int`, `isPrivate: Bool` (the caller's own switch, else the show's default), `subscribed: Bool`, `subscribedAt?` (first subscribe; Overcast's added date on import), `unsubscribedAt?`, `subscriptionUpdatedAt` (LWW clock, 0 if never), `latestEpisodeAt?`, `episodeCount: Int`, `lastFetchedAt?`, `createdAt`, `updatedAt` (the later of the show's and the subscription's). Stored as a shared `podcasts` row plus a personal `subscriptions` row per person who has the show in their library (subscribed or not).
 
 ### Episode (`episodes`)
 Feed data only, never user state. `_id`, `podcastId`, `guid?`, `enclosureUrl?`, `enclosureKey?` (for matching: no query, scheme or tracking-redirect prefixes), `enclosureType?`, `enclosureLength?: Int`, `title`, `summary?` (plain text, ≤280 chars), `link?`, `pubDate?`, `duration?` (seconds; absent if the feed doesn't say), `chaptersUrl?`, `chaptersType?`, `transcripts: [{ url, type, language?, rel? }]`, `artworkUrl?` (episode art; fall back to the show's), `season?`, `episodeNumber?`, `episodeType?` (`full`/`trailer`/`bonus`), `explicit?: Bool`, `isGhost: Bool` (only known from the Overcast import; no longer in the feed, may have no enclosure), `firstSeenAt`, `updatedAt`.
@@ -96,7 +125,7 @@ Tombstones for `sync:changes`. `_id`, `table` (currently `queueItems`), `docId` 
 
 ## Functions
 
-Every function below also takes `token`. "→" is the return type.
+Every function below acts for the signed-in caller (and also takes the optional `admin`). "→" is the return type.
 
 ### Library (`podcasts:*`)
 
@@ -108,7 +137,7 @@ Every function below also takes `token`. "→" is the return type.
 | `podcasts:episodes` | query | `podcastId`, `order?: "newestFirst" \| "oldestFirst"`, `paginationOpts` | `Paginated<EpisodeRow>` by `pubDate`. |
 | `podcasts:subscribe` | mutation | `feedUrl`, `at`, `title?`, `author?`, `artworkUrl?`, `appleId?: Int` | `Id<"podcasts">`. Creates the show if needed (URL normalised: `feed://` → `https://`, host lower-cased), subscribes, and fetches it straight away. On a show's **first** fetch only the newest episode gets the new-episode rule, so the Inbox isn't flooded. Pass title/artwork from search so the row looks right before the fetch lands. |
 | `podcasts:unsubscribe` | mutation | `podcastId`, `at` | `Bool` changed. Keeps history, stats and queue entries; clears its Inbox entries; stops polling. |
-| `podcasts:setPrivate` | mutation | `podcastId`, `isPrivate` | `null`. Feeds with credentials or token-ish query params start private. Private shows are left out of year-in-review lists. |
+| `podcasts:setPrivate` | mutation | `podcastId`, `isPrivate` | `null`. Your own switch. Feeds with credentials or token-ish query params start private. Private shows are left out of your year-in-review lists. |
 | `podcasts:markAllPlayed` | mutation | `podcastId`, `at`, `beforePubDate?` | `null`. Runs in background batches. Bulk marks don't count as completions in stats. |
 
 ### Discovery (`directory:*`, `feedActions:*`)
@@ -249,11 +278,11 @@ Re-running is safe: shows match by Overcast ID or feed URL, sessions and events 
 
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|
-| `devices:register` | mutation | `deviceId` (stable UUID in the Keychain), `name`, `platform` (`"iOS"`, `"macOS"`…), `apnsToken?` (hex), `apnsEnvironment?` | `Id<"devices">`. Upsert; call on launch and whenever the APNs token changes. Debug builds should send `sandbox`. |
+| `devices:register` | mutation | `deviceId` (stable UUID in the Keychain), `name`, `platform` (`"iOS"`, `"macOS"`…), `apnsToken?` (hex), `apnsEnvironment?` | `Id<"devices">`. Upsert for the caller; call on launch, after signing in and whenever the APNs token changes. A device (and its token) belongs to whoever registered it last: rows other people had for it stop getting pushes. Debug builds should send `sandbox`. |
 | `devices:list` | query | – | `[Device]` |
 | `apns:sendTestPush` | action | `message?` | `{ sent: Int, failed: Int, skipped? }` (`skipped`: `unconfigured`, `noDevices`) |
 
-New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: "default", "thread-id": <podcastId> }, episodeId, podcastId }`. Sent for genuinely new episodes (not a show's first fetch, not imports) on shows whose resolved `notifications` is on, to every device with a token. Dead tokens (410 / `BadDeviceToken`) are dropped.
+New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: "default", "thread-id": <podcastId> }, episodeId, podcastId }`. Sent for genuinely new episodes (not a show's first fetch, not imports) to each subscriber whose resolved `notifications` is on for that show, on that person's devices only. Dead tokens (410 / `BadDeviceToken`) are dropped.
 
 ### Sync (`sync:*`)
 
@@ -261,7 +290,11 @@ New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: 
 |---|---|---|---|
 | `sync:changes` | query | `table`, `since: ms`, `paginationOpts` | `{ page: [Document], isDone, continueCursor, maxUpdatedAt: ms \| null }` |
 
-`table` is one of `podcasts`, `episodes`, `episodeNotes`, `episodeStates`, `queueItems`, `podcastSettings`, `globalSettings`, `listeningSessions`, `libraryEvents`, `devices`, `importBatches`, `deletions`.
+`table` is one of `podcasts`, `episodes`, `episodeStates`, `queueItems`, `podcastSettings`, `globalSettings`, `listeningSessions`, `libraryEvents`, `devices`, `importBatches`, `deletions`. Only the caller's data comes back.
+
+- Personal tables are read off their `by_user_updatedAt` index.
+- Shared shows and episodes come through the caller's library: one `subscriptions` row per show they've subscribed to or have any state for (an episode state, queue item, setting or session makes one, unsubscribed). `podcasts` walks those rows and sends each show whose own or subscription `updatedAt` is in range. `episodes` walks them and, per show, reads `by_podcast_updatedAt` from `since`; a show that joined the library after `since` sends its whole back catalogue, so a new subscription to an old show still fills in. A show nobody in your library points at never reaches you. (Pages may come back short after filtering; keep paging until `isDone`.)
+- `episodeNotes` isn't synced (it never was used offline): `episodes:get` returns show notes.
 
 ## Offline and outbox contract
 
@@ -288,8 +321,14 @@ New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: 
 
 ## Behaviour notes for the app
 
-- **New episodes:** a show's resolved `newEpisodes` decides where new episodes go. `upNextTop` inserts **after** the first (playing) item rather than replacing it. Items older than the show's previous newest episode by more than 2 days (back-catalogue dumps) aren't auto-added, and at most 10 per fetch are.
+- **New episodes:** a feed is polled once for everyone. Each new episode is then applied to each subscriber with their own resolved `newEpisodes` for the show. Subscribing to a show someone else already has puts its newest episode in your Inbox (or Up Next) straight away, like a first fetch.
+- **Per show:** your resolved `newEpisodes` decides where new episodes go. `upNextTop` inserts **after** the first (playing) item rather than replacing it. Items older than the show's previous newest episode by more than 2 days (back-catalogue dumps) aren't auto-added, and at most 10 per fetch are.
 - **Polling:** a cron runs every 15 min. Each feed has its own `nextCheckAt`: 15 min if it published in the last week, 1 h within a month, 4 h within six months, else 12 h. Errors back off exponentially up to 24 h. Conditional GET is used, and an unchanged body is skipped.
 - **Feed identity:** GUID, then enclosure URL (query stripped), then title + pubDate. Feed refreshes only touch feed fields, never `episodeStates`.
 - **Duration** may be absent (`itunes:duration` missing, or a ghost). Read it from the file and display it locally.
-- **Daily housekeeping** (16:00 UTC): applies `autoArchiveUnplayedAfterDays` to Inbox items, drops tombstones older than 90 days and clears the directory cache.
+- **Daily housekeeping** (16:00 UTC): for each person, applies their `autoArchiveUnplayedAfterDays` to their Inbox and drops their tombstones older than 90 days; then clears the directory cache.
+- **Polling** stays on while anyone subscribes to a feed (`feedStates.active`).
+
+## Accounts migration
+
+`convex/migrations.ts` turned the single-user data into Mike's account (docs/runbooks/accounts-prod.md): `migrations:run` makes his user (`mike.cann@gmail.com`, verified) if needed, gives every personal row without an owner to him, and moves the old `subscribed`/`subscribedAt`/`unsubscribedAt`/`subscriptionUpdatedAt` fields off each shared show into a `subscriptions` row of his. Idempotent. `migrations:report` counts `total`, `unowned` and `legacy` rows per table; done means zeros in the last two. Until it has run on prod, `userId` is optional in the schema (`vOwner`).

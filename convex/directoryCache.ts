@@ -32,13 +32,13 @@ export const putCached = internalMutation({
   },
 });
 
-/** Which of these feed URLs are already in the library. */
+/** Which of these feed URLs are already in this person's library. */
 export const libraryMatches = internalQuery({
-  args: { feedUrls: v.array(v.string()) },
+  args: { userId: v.id("users"), feedUrls: v.array(v.string()) },
   returns: v.array(
     v.object({ feedUrl: v.string(), podcastId: v.id("podcasts"), subscribed: v.boolean() }),
   ),
-  handler: async (ctx, { feedUrls }) => {
+  handler: async (ctx, { userId, feedUrls }) => {
     const out = [];
     for (const raw of feedUrls) {
       const feedUrl = normalizeFeedUrl(raw);
@@ -46,7 +46,12 @@ export const libraryMatches = internalQuery({
         .query("podcasts")
         .withIndex("by_feedUrl", (q) => q.eq("feedUrl", feedUrl))
         .first();
-      if (p) out.push({ feedUrl: raw, podcastId: p._id, subscribed: p.subscribed });
+      if (!p) continue;
+      const sub = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user_podcast", (q) => q.eq("userId", userId).eq("podcastId", p._id))
+        .unique();
+      if (sub) out.push({ feedUrl: raw, podcastId: p._id, subscribed: sub.subscribed });
     }
     return out;
   },

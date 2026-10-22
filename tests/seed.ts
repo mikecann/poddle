@@ -3,18 +3,25 @@ import type { T } from "./helpers";
 
 export const BASE = Date.UTC(2025, 9, 15);
 
-/** A subscribed show with `n` plain episodes, newest last. Returns ids oldest first. */
+/** A show with `n` plain episodes, newest last, that `t`'s user subscribes to. Returns ids oldest first. */
 export async function seedShow(t: T, n: number, opts: { title?: string; duration?: number } = {}) {
+  const userId = await t.userId();
   return await t.run(async (ctx) => {
     const podcastId = await ctx.db.insert("podcasts", {
       feedUrl: `https://feeds.example.com/${opts.title ?? "show"}.xml`,
       title: opts.title ?? "Show",
       isPrivate: false,
+      episodeCount: n,
+      createdAt: BASE,
+      updatedAt: BASE,
+    });
+    await ctx.db.insert("subscriptions", {
+      userId,
+      podcastId,
       subscribed: true,
       subscribedAt: BASE,
       subscriptionUpdatedAt: BASE,
-      episodeCount: n,
-      createdAt: BASE,
+      addedAt: BASE,
       updatedAt: BASE,
     });
     const episodeIds: Id<"episodes">[] = [];

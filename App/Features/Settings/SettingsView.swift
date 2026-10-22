@@ -6,8 +6,9 @@ struct SettingsView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(AppModel.self) private var app
     @Environment(PushCoordinator.self) private var push
+    @Environment(Account.self) private var account: Account?
 
-    @State private var editingConnection = false
+    @State private var confirmingSignOut = false
 
     private var g: GlobalSettings { store.global }
 
@@ -142,26 +143,32 @@ struct SettingsView: View {
             }
         }
         .scrollContentBackground(.hidden)
-        .sheet(isPresented: $editingConnection) { ConnectionSheet() }
+        .confirmationDialog("Sign out of Poddle?", isPresented: $confirmingSignOut, titleVisibility: .visible) {
+            Button("Sign Out", role: .destructive) { Task { await account?.signOut() } }
+        } message: {
+            Text("Your library stays in your account. Downloads stay on this device.")
+        }
     }
 
-    /// Which deployment this is synced with, how it's doing, and a way to point it elsewhere.
+    /// Who's signed in, which deployment this is synced with, and how it's doing.
     @ViewBuilder private var connection: some View {
+        if let account, let profile = account.profile {
+            GroupLabel(text: "Account")
+            GroupCard {
+                Cell(title: profile.name ?? profile.email ?? "Signed in", subtitle: profile.name == nil ? nil : profile.email,
+                     icon: "person.crop.circle", iconTint: Palette.tomato) {
+                    TextButton(title: "Sign Out", bold: true) { confirmingSignOut = true }
+                }
+            }
+        }
         GroupLabel(text: "Sync")
         GroupCard {
             if app.isMock {
                 Cell(title: "Sample data", subtitle: "Launched with -PoddleMock. Nothing is synced.", icon: "shippingbox", iconTint: Palette.mustard) { EmptyView() }
             } else if let c = store.connection {
-                Button { editingConnection = true } label: {
-                    Cell(title: "Connection", subtitle: c.deploymentName, icon: "antenna.radiowaves.left.and.right", iconTint: c.connected ? Palette.fern : Palette.ink3) {
-                        HStack(spacing: 8) {
-                            Text(c.connected ? "Live" : "Offline").font(.text(14, .medium)).foregroundStyle(Palette.ink2)
-                            Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
-                        }
-                    }
-                    .contentShape(Rectangle())
+                Cell(title: "Connection", subtitle: c.deploymentName, icon: "antenna.radiowaves.left.and.right", iconTint: c.connected ? Palette.fern : Palette.ink3) {
+                    Text(c.connected ? "Live" : "Offline").font(.text(14, .medium)).foregroundStyle(Palette.ink2)
                 }
-                .buttonStyle(.plain)
                 if c.pending > 0 {
                     Cell(title: "Waiting to sync", subtitle: "Sent in order when the connection's back") {
                         Text("\(c.pending)").font(.text(15, .semibold)).monospacedDigit().foregroundStyle(Palette.ink2)
@@ -226,82 +233,5 @@ struct SettingsView: View {
                 .contentShape(Rectangle())
         }
         .menuStyle(.button).buttonStyle(.plain)
-    }
-}
-
-/// Paste a different deployment URL or API token. Saved to the Keychain; takes effect straight away.
-private struct ConnectionSheet: View {
-    @Environment(PoddleStore.self) private var store
-    @Environment(\.dismiss) private var dismiss
-    @State private var url = ""
-    @State private var token = ""
-    @State private var problem: String?
-
-    var body: some View {
-        ScrollView {
-            VStack(spacing: 0) {
-                TopBar {
-                    TextButton(title: "Cancel") { dismiss() }
-                } trailing: {
-                    TextButton(title: "Save", bold: true) { save() }
-                }
-                LargeTitle(title: "Connection", subtitle: "The Convex deployment Poddle syncs with. Each one keeps its own offline copy.")
-                    .padding(.top, 6)
-                GroupLabel(text: "Deployment URL").padding(.top, 8)
-                GroupCard {
-                    TextField("https://….convex.cloud", text: $url)
-                        .font(.mono(14)).autocorrectionDisabled()
-                        #if os(iOS)
-                        .textInputAutocapitalization(.never).keyboardType(.URL)
-                        #endif
-                        .padding(.horizontal, 16).frame(minHeight: 50)
-                }
-                GroupLabel(text: "API token")
-                GroupCard {
-                    SecureField("Leave empty to keep the current token", text: $token)
-                        .font(.mono(14))
-                        .padding(.horizontal, 16).frame(minHeight: 50)
-                }
-                if let problem {
-                    Text(problem).font(.text(13)).foregroundStyle(Palette.tomato).padding(.horizontal, 32).padding(.top, 8)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-                if LiveConfigStore.bundled() != nil {
-                    Button("Use this build's deployment") { reset() }
-                        .font(.text(15, .semibold)).foregroundStyle(Palette.tomato).padding(.top, 20)
-                }
-            }
-            .padding(.bottom, 30)
-        }
-        .background(Palette.paper)
-        .onAppear { url = store.connection?.deploymentURL.absoluteString ?? LiveConfigStore.resolve()?.deploymentURL.absoluteString ?? "" }
-    }
-
-    private func save() {
-        let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let u = URL(string: trimmed), u.scheme == "https", u.host() != nil else {
-            problem = "That doesn't look like a deployment URL."
-            return
-        }
-        let newToken = token.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard let finalToken = newToken.isEmpty ? LiveConfigStore.resolve()?.token : newToken, !finalToken.isEmpty else {
-            problem = "Paste the API token too."
-            return
-        }
-        let config = LiveConfig(deploymentURL: u, token: finalToken)
-        LiveConfigStore.saveManual(config)
-        apply(config)
-    }
-
-    private func reset() {
-        guard let config = LiveConfigStore.resetToBuild() else { return }
-        apply(config)
-    }
-
-    private func apply(_ config: LiveConfig) {
-        if let live = store.dataSource as? LiveStore {
-            Task { await live.reconfigure(deploymentURL: config.deploymentURL, token: config.token) }
-        }
-        dismiss()
     }
 }

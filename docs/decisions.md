@@ -56,5 +56,5 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 
 - **Backend: Convex,** on Mike's Personal team (`mikec`) in Sydney. It's the source of truth for the library, episodes, user state, queue, settings and listening sessions. It does all feed fetching and parsing, polling, the Overcast import, stats and year-in-review maths, and APNs push.
 - **App:** a thin client over Convex (the `convex-swift` client), with a local cache and a mutation outbox so it works offline. It also handles playback, downloads and rendering.
-- **Auth:** single user. A long random API token is set in the Convex env (`PODDLE_API_TOKEN`), stored in the app's Keychain, and checked by every public function.
+- **Auth:** Convex Auth v2 (Apple and Google), with sign-up limited to `PODDLE_ALLOWED_EMAILS`. Every public function acts as the signed-in person. `PODDLE_API_TOKEN` survives only as the admin token scripts use to act as a named user (`admin: { token, email }`). Callbacks stay on each deployment's own `convex.site` address: `CONVEX_SITE_URL` isn't overridden for the custom domain.
 - **Distribution:** Xcode installs to start with, then TestFlight.

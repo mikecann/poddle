@@ -2,13 +2,17 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { asUser, type UserMutationCtx } from "./lib/auth";
 import { upsertEpisode, vIncomingEpisode, vIngestMode } from "./lib/ingest";
+import { hasSubscribers, subscribersOf } from "./lib/library";
 import { addToQueue } from "./lib/queue";
 import type { NewEpisodeRule } from "./lib/settings";
 import { resolvedSettingsFor } from "./lib/settingsDb";
 import { setInbox, systemAt } from "./lib/state";
 
 // Feed bookkeeping and ingestion. The fetching itself happens in feedActions.ts.
+// Feeds are shared: each is polled once, and each new episode is then applied
+// to every subscriber with that person's own new-episode rule.
 
 const MINUTE = 60_000;
 const HOUR = 60 * MINUTE;
@@ -33,7 +37,7 @@ export async function feedStateFor(ctx: QueryCtx, podcastId: Id<"podcasts">) {
     .unique();
 }
 
-/** Make sure a podcast has fetch bookkeeping; `active` follows the subscription. */
+/** Make sure a podcast has fetch bookkeeping; `active` is whether anyone subscribes. */
 export async function ensureFeedState(ctx: MutationCtx, podcastId: Id<"podcasts">, active: boolean, checkNow: boolean) {
   const now = Date.now();
   const existing = await feedStateFor(ctx, podcastId);
@@ -65,7 +69,7 @@ export const claimFetch = internalMutation({
     const podcast = await ctx.db.get(podcastId);
     if (!podcast) return null;
     const now = Date.now();
-    const stateId = await ensureFeedState(ctx, podcastId, podcast.subscribed, false);
+    const stateId = await ensureFeedState(ctx, podcastId, await hasSubscribers(ctx, podcastId), false);
     const state = (await ctx.db.get(stateId))!;
     if (state.fetchingUntil !== undefined && state.fetchingUntil > now) return null;
     await ctx.db.patch(stateId, { fetchingUntil: now + FETCH_LEASE_MS });
@@ -95,7 +99,7 @@ export const recordFetch = internalMutation({
     const now = Date.now();
     const podcast = await ctx.db.get(a.podcastId);
     if (!podcast) return null;
-    const stateId = await ensureFeedState(ctx, a.podcastId, podcast.subscribed, false);
+    const stateId = await ensureFeedState(ctx, a.podcastId, await hasSubscribers(ctx, a.podcastId), false);
     const state = (await ctx.db.get(stateId))!;
     const ok = !a.error;
     const consecutiveErrors = ok ? 0 : state.consecutiveErrors + 1;
@@ -168,25 +172,40 @@ export const ingestEpisodes = internalMutation({
     const podcast = await ctx.db.get(a.podcastId);
     if (!podcast) return { created: 0, ruled: [] };
     const now = Date.now();
-    const settings = await resolvedSettingsFor(ctx, a.podcastId);
+    const subscribers = a.mode === "import" ? [] : await subscribersOf(ctx, a.podcastId);
     let created = 0;
     let latest = podcast.latestEpisodeAt;
-    const ruled: Id<"episodes">[] = [];
+    const qualifying: Doc<"episodes">[] = [];
 
     for (const [i, incoming] of a.episodes.entries()) {
       const { episode, created: isNew } = await upsertEpisode(ctx, a.podcastId, incoming, now);
       if (episode.pubDate !== undefined && (latest === undefined || episode.pubDate > latest)) latest = episode.pubDate;
       if (!isNew) continue;
       created++;
-      if (!podcast.subscribed || a.mode === "import") continue;
+      if (!subscribers.length) continue;
       const qualifies =
         a.mode === "initial"
           ? a.isFirstChunk && i === 0
-          : ruled.length < MAX_RULED_PER_CHUNK &&
+          : qualifying.length < MAX_RULED_PER_CHUNK &&
             (a.previousLatestAt === undefined ||
               episode.pubDate === undefined ||
               episode.pubDate >= a.previousLatestAt - BACKFILL_SLACK);
-      if (qualifies && (await applyNewEpisodeRule(ctx, episode, settings.newEpisodes, now))) ruled.push(episode._id);
+      if (qualifies) qualifying.push(episode);
+    }
+
+    // Each subscriber gets the new episodes their way, and alerts on their own devices.
+    const ruled = new Set<Id<"episodes">>();
+    for (const userId of subscribers) {
+      const userCtx = asUser(ctx, userId);
+      const settings = await resolvedSettingsFor(userCtx, a.podcastId);
+      for (const episode of qualifying) {
+        if (!(await applyNewEpisodeRule(userCtx, episode, settings.newEpisodes, now))) continue;
+        ruled.add(episode._id);
+        // Only genuinely new episodes notify, never the first fetch of a show.
+        if (a.mode === "normal" && settings.notifications) {
+          await ctx.scheduler.runAfter(0, internal.apns.sendNewEpisodeAlert, { episodeId: episode._id, userId });
+        }
+      }
     }
 
     if (created || latest !== podcast.latestEpisodeAt) {
@@ -196,13 +215,7 @@ export const ingestEpisodes = internalMutation({
         updatedAt: now,
       });
     }
-    // Only genuinely new episodes notify, never the first fetch of a show.
-    if (a.mode === "normal" && settings.notifications) {
-      for (const episodeId of ruled) {
-        await ctx.scheduler.runAfter(0, internal.apns.sendNewEpisodeAlert, { episodeId });
-      }
-    }
-    return { created, ruled };
+    return { created, ruled: [...ruled] };
   },
 });
 
@@ -211,7 +224,7 @@ export const ingestEpisodes = internalMutation({
  * because the first item is what's playing and shouldn't be bumped.
  */
 export async function applyNewEpisodeRule(
-  ctx: MutationCtx,
+  ctx: UserMutationCtx,
   episode: Doc<"episodes">,
   rule: NewEpisodeRule,
   now: number,
@@ -254,18 +267,20 @@ export const pollDueFeeds = internalMutation({
   },
 });
 
-/** Pull-to-refresh / app foreground: everything subscribed not checked in the last 2 min. */
+/** Pull-to-refresh / app foreground: everything this person subscribes to not checked in the last 2 min. */
 export const scheduleRefreshAll = internalMutation({
-  args: {},
+  args: { userId: v.id("users") },
   returns: v.number(),
-  handler: async (ctx) => {
+  handler: async (ctx, { userId }) => {
     const now = Date.now();
-    const active = await ctx.db
-      .query("feedStates")
-      .withIndex("by_active_nextCheckAt", (q) => q.eq("active", true))
+    const subs = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user_subscribed", (q) => q.eq("userId", userId).eq("subscribed", true))
       .collect();
     let n = 0;
-    for (const state of active) {
+    for (const sub of subs) {
+      const state = await feedStateFor(ctx, sub.podcastId);
+      if (!state) continue;
       if (state.lastCheckedAt && now - state.lastCheckedAt < 2 * MINUTE) continue;
       await ctx.db.patch(state._id, { nextCheckAt: now + 10 * MINUTE });
       await ctx.scheduler.runAfter((n % 10) * 300, internal.feedActions.fetchFeed, { podcastId: state.podcastId });

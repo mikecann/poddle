@@ -1,5 +1,5 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx } from "../_generated/server";
+import type { UserMutationCtx as MutationCtx } from "./auth";
 import {
   type Metrics,
   STARTED_MIN_CONTENT,
@@ -8,7 +8,7 @@ import {
   splitIntoHours,
 } from "./statsMath";
 
-// Stats rollups, kept in step with every listening-session write so stat queries
+// Stats rollups for the person in `ctx.userId`, kept in step with every listening-session write so stat queries
 // read a few hundred small docs instead of a year of sessions.
 
 export type RollupSession = Pick<
@@ -96,7 +96,7 @@ export async function applySessionToRollups(ctx: MutationCtx, s: RollupSession, 
 async function applyEpisodeTotals(ctx: MutationCtx, s: RollupSession, m: Metrics, sign: number): Promise<number> {
   const existing = await ctx.db
     .query("episodeTotals")
-    .withIndex("by_episode", (q) => q.eq("episodeId", s.episodeId))
+    .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", s.episodeId))
     .unique();
   const before = existing?.content ?? 0;
   const after = clean(before + sign * m.content);
@@ -106,7 +106,7 @@ async function applyEpisodeTotals(ctx: MutationCtx, s: RollupSession, m: Metrics
     sessions: (existing?.sessions ?? 0) + sign,
   };
   if (existing) await ctx.db.patch(existing._id, next);
-  else await ctx.db.insert("episodeTotals", { episodeId: s.episodeId, podcastId: s.podcastId, ...next });
+  else await ctx.db.insert("episodeTotals", { userId: ctx.userId, episodeId: s.episodeId, podcastId: s.podcastId, ...next });
   if (before < STARTED_MIN_CONTENT && after >= STARTED_MIN_CONTENT) return 1;
   if (before >= STARTED_MIN_CONTENT && after < STARTED_MIN_CONTENT) return -1;
   return 0;
@@ -117,7 +117,7 @@ const addArrays = (a: number[], b: number[] | undefined) => (b ? a.map((x, i) =>
 async function bumpDay(ctx: MutationCtx, day: string, acc: Acc) {
   const doc = await ctx.db
     .query("statsDays")
-    .withIndex("by_day", (q) => q.eq("day", day))
+    .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).eq("day", day))
     .unique();
   const base = doc ?? emptyDay(day);
   const next = {
@@ -125,38 +125,38 @@ async function bumpDay(ctx: MutationCtx, day: string, acc: Acc) {
     liveHours: addArrays(base.liveHours, acc.liveHours),
   };
   if (doc) await ctx.db.patch(doc._id, next);
-  else await ctx.db.insert("statsDays", { ...base, ...next });
+  else await ctx.db.insert("statsDays", { ...base, ...next, userId: ctx.userId });
 }
 
 async function bumpMonth(ctx: MutationCtx, month: string, acc: Acc) {
   const doc = await ctx.db
     .query("statsMonths")
-    .withIndex("by_month", (q) => q.eq("month", month))
+    .withIndex("by_user_month", (q) => q.eq("userId", ctx.userId).eq("month", month))
     .unique();
   const base = doc ?? emptyMonth(month);
   const next = { ...totals(base, acc), heatmap: addArrays(base.heatmap, acc.heatmap) };
   if (doc) await ctx.db.patch(doc._id, next);
-  else await ctx.db.insert("statsMonths", { ...base, ...next });
+  else await ctx.db.insert("statsMonths", { ...base, ...next, userId: ctx.userId });
 }
 
 async function bumpShowDay(ctx: MutationCtx, day: string, podcastId: Id<"podcasts">, acc: Acc) {
   const doc = await ctx.db
     .query("statsShowDays")
-    .withIndex("by_day_podcast", (q) => q.eq("day", day).eq("podcastId", podcastId))
+    .withIndex("by_user_day_podcast", (q) => q.eq("userId", ctx.userId).eq("day", day).eq("podcastId", podcastId))
     .unique();
   const next = showTotals(doc, acc);
   if (doc) await ctx.db.patch(doc._id, next);
-  else await ctx.db.insert("statsShowDays", { day, podcastId, ...next });
+  else await ctx.db.insert("statsShowDays", { userId: ctx.userId, day, podcastId, ...next });
 }
 
 async function bumpShowMonth(ctx: MutationCtx, month: string, podcastId: Id<"podcasts">, acc: Acc) {
   const doc = await ctx.db
     .query("statsShowMonths")
-    .withIndex("by_month_podcast", (q) => q.eq("month", month).eq("podcastId", podcastId))
+    .withIndex("by_user_month_podcast", (q) => q.eq("userId", ctx.userId).eq("month", month).eq("podcastId", podcastId))
     .unique();
   const next = showTotals(doc, acc);
   if (doc) await ctx.db.patch(doc._id, next);
-  else await ctx.db.insert("statsShowMonths", { month, podcastId, ...next });
+  else await ctx.db.insert("statsShowMonths", { userId: ctx.userId, month, podcastId, ...next });
 }
 
 type Totals = Pick<
@@ -209,16 +209,16 @@ const emptyMonth = (month: string) => ({ month, ...emptyTotals(), heatmap: new A
 export async function applyCompletion(ctx: MutationCtx, day: string, sign: 1 | -1): Promise<void> {
   const dayDoc = await ctx.db
     .query("statsDays")
-    .withIndex("by_day", (q) => q.eq("day", day))
+    .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).eq("day", day))
     .unique();
   if (dayDoc) await ctx.db.patch(dayDoc._id, { episodesCompleted: dayDoc.episodesCompleted + sign });
-  else await ctx.db.insert("statsDays", { ...emptyDay(day), episodesCompleted: sign });
+  else await ctx.db.insert("statsDays", { ...emptyDay(day), episodesCompleted: sign, userId: ctx.userId });
 
   const month = day.slice(0, 7);
   const monthDoc = await ctx.db
     .query("statsMonths")
-    .withIndex("by_month", (q) => q.eq("month", month))
+    .withIndex("by_user_month", (q) => q.eq("userId", ctx.userId).eq("month", month))
     .unique();
   if (monthDoc) await ctx.db.patch(monthDoc._id, { episodesCompleted: monthDoc.episodesCompleted + sign });
-  else await ctx.db.insert("statsMonths", { ...emptyMonth(month), episodesCompleted: sign });
+  else await ctx.db.insert("statsMonths", { ...emptyMonth(month), episodesCompleted: sign, userId: ctx.userId });
 }

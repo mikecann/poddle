@@ -2,8 +2,11 @@ import Foundation
 import ConvexMobile
 
 /// What `LiveStore` needs from Convex, as raw JSON. The real one wraps convex-swift; tests use a
-/// fake. Every call already carries the API token in `args`.
+/// fake. Calls are made as whoever `setAuth` was given (Convex Auth's access token).
 public protocol ConvexTransport: Sendable {
+    /// Who to call as. The client asks the source for a token when it connects, and again with
+    /// `forceRefresh` when the server refuses one. Nil: not signed in.
+    func setAuth(_ source: (any AuthTokenSource)?) async
     func query(_ name: String, _ args: [String: JSONValue]) async throws -> Data
     func mutation(_ name: String, _ args: [String: JSONValue]) async throws -> Data
     func action(_ name: String, _ args: [String: JSONValue]) async throws -> Data
@@ -17,7 +20,8 @@ public protocol ConvexTransport: Sendable {
 }
 
 public enum TransportError: Error, Sendable, Hashable, LocalizedError {
-    /// The token is wrong, or the deployment has none set (`unauthorized` / `unconfigured`).
+    /// Not signed in, or the session has run out (`unauthenticated`), or an admin token was
+    /// refused (`unauthorized` / `unconfigured`). Retried once a session is back.
     case unauthorized(String)
     /// The function threw. Retrying the same call won't help.
     case server(String)
@@ -46,6 +50,17 @@ public final class ConvexMobileTransport: ConvexTransport, @unchecked Sendable {
         client = MobileConvexClient(
             deploymentUrl: deploymentURL.absoluteString, clientId: "poddle-swift", webSocketStateSubscriber: socket
         )
+    }
+
+    public func setAuth(_ source: (any AuthTokenSource)?) async {
+        try? await client.setAuthCallback(provider: source.map(TokenBridge.init))
+    }
+
+    /// convex-swift's pull-style token callback, backed by `Account`.
+    private final class TokenBridge: AuthTokenProvider, @unchecked Sendable {
+        let source: any AuthTokenSource
+        init(_ source: any AuthTokenSource) { self.source = source }
+        func fetchToken(forceRefresh: Bool) async throws -> String? { await source.accessToken(forceRefresh: forceRefresh) }
     }
 
     private static func encode(_ args: [String: JSONValue]) -> [String: String] {
@@ -114,7 +129,7 @@ public final class ConvexMobileTransport: ConvexTransport, @unchecked Sendable {
             let value = try? JSONValue.decode(Data(data.utf8))
             let code = value?["code"]?.string
             let message = value?["message"]?.string ?? data
-            return code == "unauthorized" || code == "unconfigured" ? .unauthorized(message) : .server(message)
+            return ["unauthenticated", "unauthorized", "unconfigured"].contains(code ?? "") ? .unauthorized(message) : .server(message)
         case let .ServerError(msg): return .server(msg)
         case let .InternalError(msg): return .network(msg)
         }

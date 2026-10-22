@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
-import type { QueryCtx } from "./_generated/server";
-import { userQuery } from "./lib/auth";
+import { userQuery, type UserQueryCtx as QueryCtx } from "./lib/auth";
+import { showCache } from "./lib/library";
 import { podcastSummary } from "./lib/rows";
 import { resolveGlobalSettings } from "./lib/settings";
 import { globalSettingsDoc } from "./lib/settingsDb";
@@ -20,7 +20,7 @@ import {
 } from "./lib/statsMath";
 import { vPodcastSummary } from "./lib/validators";
 
-// Stats screens (spec §2.9) and the year in review. Reads the rollups kept by
+// Your stats screens (spec §2.9) and year in review. Reads the rollups kept by
 // lib/rollups.ts; only "top episodes" for a bounded period reads raw sessions.
 // All seconds are wall-clock unless named `content`.
 
@@ -98,11 +98,13 @@ async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay:
     period === "week"
       ? await ctx.db
           .query("statsShowDays")
-          .withIndex("by_day_podcast", (q) => q.gte("day", startDay).lte("day", endDay))
+          .withIndex("by_user_day_podcast", (q) => q.eq("userId", ctx.userId).gte("day", startDay).lte("day", endDay))
           .collect()
       : await ctx.db
           .query("statsShowMonths")
-          .withIndex("by_month_podcast", (q) => q.gte("month", startDay.slice(0, 7)).lte("month", endDay.slice(0, 7)))
+          .withIndex("by_user_month_podcast", (q) =>
+            q.eq("userId", ctx.userId).gte("month", startDay.slice(0, 7)).lte("month", endDay.slice(0, 7)),
+          )
           .collect();
   for (const r of rows) {
     const acc = byShow.get(r.podcastId) ?? { wall: 0, content: 0, sessions: 0 };
@@ -113,9 +115,10 @@ async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay:
   }
   const ranked = [...byShow.entries()].filter(([, a]) => a.wall > 0.5).sort((a, b) => b[1].wall - a[1].wall);
   const out = [];
+  const show = showCache(ctx);
   for (const [podcastId, acc] of ranked) {
     if (out.length >= limit) break;
-    const podcast = await ctx.db.get(podcastId);
+    const podcast = await show(podcastId);
     if (podcast) out.push({ podcast: podcastSummary(podcast), ...acc });
   }
   return out;
@@ -127,8 +130,8 @@ async function sessionsInRange(ctx: QueryCtx, startDay: string, endDay: string) 
   const pad = 14 * 3600_000;
   const sessions = await ctx.db
     .query("listeningSessions")
-    .withIndex("by_startedAt", (q) =>
-      q.gte("startedAt", dayToUtcMs(startDay) - pad).lt("startedAt", dayToUtcMs(addDays(endDay, 1)) + pad),
+    .withIndex("by_user_startedAt", (q) =>
+      q.eq("userId", ctx.userId).gte("startedAt", dayToUtcMs(startDay) - pad).lt("startedAt", dayToUtcMs(addDays(endDay, 1)) + pad),
     )
     .take(MAX_SESSIONS_READ);
   return sessions.filter((s) => {
@@ -140,7 +143,11 @@ async function sessionsInRange(ctx: QueryCtx, startDay: string, endDay: string) 
 async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endDay: string, limit: number) {
   let ranked: { episodeId: Id<"episodes">; wall: number; sessions: number }[];
   if (period === "all") {
-    const totals = await ctx.db.query("episodeTotals").withIndex("by_wall").order("desc").take(limit * 2);
+    const totals = await ctx.db
+      .query("episodeTotals")
+      .withIndex("by_user_wall", (q) => q.eq("userId", ctx.userId))
+      .order("desc")
+      .take(limit * 2);
     ranked = totals.map((t) => ({ episodeId: t.episodeId, wall: t.wall, sessions: t.sessions }));
   } else {
     const byEpisode = new Map<Id<"episodes">, { wall: number; sessions: number }>();
@@ -153,13 +160,14 @@ async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endD
     ranked = [...byEpisode.entries()].map(([episodeId, a]) => ({ episodeId, ...a }));
   }
   const rows = [];
+  const show = showCache(ctx);
   for (const r of ranked) {
     const episode = await ctx.db.get(r.episodeId);
-    const podcast = episode && (await ctx.db.get(episode.podcastId));
+    const podcast = episode && (await show(episode.podcastId));
     if (!episode || !podcast || r.wall <= 0.5) continue;
     const state = await ctx.db
       .query("episodeStates")
-      .withIndex("by_episode", (q) => q.eq("episodeId", r.episodeId))
+      .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", r.episodeId))
       .unique();
     rows.push({
       episodeId: episode._id,
@@ -179,7 +187,7 @@ async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endD
 async function currentStreakFrom(ctx: QueryCtx, today: string) {
   const recent = await ctx.db
     .query("statsDays")
-    .withIndex("by_day", (q) => q.lte("day", today))
+    .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).lte("day", today))
     .order("desc")
     .take(400);
   return currentStreak(recent, today);
@@ -190,11 +198,11 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
   const { startDay, endDay } = periodRange(period, anchorDay ?? today);
   const days = await ctx.db
     .query("statsDays")
-    .withIndex("by_day", (q) => q.gte("day", startDay).lte("day", endDay))
+    .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).gte("day", startDay).lte("day", endDay))
     .collect();
   const months = await ctx.db
     .query("statsMonths")
-    .withIndex("by_month", (q) => q.gte("month", startDay.slice(0, 7)).lte("month", endDay.slice(0, 7)))
+    .withIndex("by_user_month", (q) => q.eq("userId", ctx.userId).gte("month", startDay.slice(0, 7)).lte("month", endDay.slice(0, 7)))
     .collect();
   const t = sumTotals(period === "week" || period === "month" ? days : months);
 
@@ -271,7 +279,7 @@ export const forPodcast = userQuery({
   handler: async (ctx, { podcastId }) => {
     const months = await ctx.db
       .query("statsShowMonths")
-      .withIndex("by_podcast_month", (q) => q.eq("podcastId", podcastId))
+      .withIndex("by_user_podcast_month", (q) => q.eq("userId", ctx.userId).eq("podcastId", podcastId))
       .collect();
     return {
       wall: months.reduce((a, m) => a + m.wall, 0),
@@ -323,16 +331,17 @@ export const yearInReview = userQuery({
     const keep = (p: { isPrivate: boolean }) => includePrivate || !p.isPrivate;
 
     const yearSessions = await sessionsInRange(ctx, s.startDay, s.endDay);
+    const show = showCache(ctx);
     const ref = async (sess: Doc<"listeningSessions"> | undefined) => {
       if (!sess) return null;
       const episode = await ctx.db.get(sess.episodeId);
-      const podcast = episode && (await ctx.db.get(episode.podcastId));
+      const podcast = episode && (await show(episode.podcastId));
       if (!episode || !podcast) return null;
       return { episodeId: episode._id, title: episode.title, podcast: podcastSummary(podcast), at: sess.startedAt };
     };
     const firstVisible = async (list: Doc<"listeningSessions">[]) => {
       for (const sess of list) {
-        const p = await ctx.db.get(sess.podcastId);
+        const p = await show(sess.podcastId);
         if (p && keep(p)) return sess;
       }
       return undefined;
@@ -340,11 +349,20 @@ export const yearInReview = userQuery({
 
     const start = dayToUtcMs(s.startDay) - 14 * 3600_000;
     const end = dayToUtcMs(addDays(s.endDay, 1)) + 14 * 3600_000;
-    const added = await ctx.db
-      .query("podcasts")
-      .withIndex("by_subscribedAt", (q) => q.gte("subscribedAt", start).lt("subscribedAt", end))
+    const addedSubs = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_user_subscribedAt", (q) => q.eq("userId", ctx.userId).gte("subscribedAt", start).lt("subscribedAt", end))
       .collect();
-    const lastImport = await ctx.db.query("importBatches").withIndex("by_startedAt").order("desc").first();
+    const added = [];
+    for (const sub of addedSubs) {
+      const p = await show(sub.podcastId);
+      if (p) added.push(p);
+    }
+    const lastImport = await ctx.db
+      .query("importBatches")
+      .withIndex("by_user_startedAt", (q) => q.eq("userId", ctx.userId))
+      .order("desc")
+      .first();
 
     return {
       year,

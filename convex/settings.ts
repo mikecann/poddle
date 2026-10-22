@@ -8,9 +8,10 @@ import {
   resolveShowSettings,
   showSettingFields,
 } from "./lib/settings";
+import { ensureLibraryRow } from "./lib/library";
 import { globalSettingsDoc, overridesOf, podcastSettingsDoc } from "./lib/settingsDb";
 
-// Global defaults plus per-show overrides (spec §2.5). Writes are
+// Your global defaults plus your per-show overrides (spec §2.5). Writes are
 // last-writer-wins per field on the client time `at`.
 
 const vResolvedShow = v.object({ ...showSettingFields, inherited: v.array(v.string()) });
@@ -65,7 +66,7 @@ export const updateGlobal = userMutation({
     const { values, times, applied } = lwwPatch(patch, existing?.fieldTimes ?? {}, at);
     const now = Date.now();
     if (existing) await ctx.db.patch(existing._id, { ...values, fieldTimes: times, updatedAt: now });
-    else await ctx.db.insert("globalSettings", { ...stripUndefined(values), fieldTimes: times, updatedAt: now });
+    else await ctx.db.insert("globalSettings", { userId: ctx.userId, ...stripUndefined(values), fieldTimes: times, updatedAt: now });
     return applied;
   },
 });
@@ -79,7 +80,10 @@ export const updatePodcast = userMutation({
     const { values, times, applied } = lwwPatch(patch, existing?.fieldTimes ?? {}, at);
     const now = Date.now();
     if (existing) await ctx.db.patch(existing._id, { ...values, fieldTimes: times, updatedAt: now });
-    else await ctx.db.insert("podcastSettings", { podcastId, ...stripUndefined(values), fieldTimes: times, updatedAt: now });
+    else {
+      await ensureLibraryRow(ctx, podcastId);
+      await ctx.db.insert("podcastSettings", { userId: ctx.userId, podcastId, ...stripUndefined(values), fieldTimes: times, updatedAt: now });
+    }
     return applied;
   },
 });

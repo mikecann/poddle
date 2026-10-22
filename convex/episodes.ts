@@ -17,7 +17,7 @@ export const inbox = userQuery({
   handler: async (ctx) => {
     const states = await ctx.db
       .query("episodeStates")
-      .withIndex("by_inbox", (q) => q.eq("inInbox", true))
+      .withIndex("by_user_inbox", (q) => q.eq("userId", ctx.userId).eq("inInbox", true))
       .order("desc")
       .take(INBOX_LIMIT);
     const episodes = [];
@@ -36,7 +36,7 @@ export const starred = userQuery({
   handler: async (ctx) => {
     const states = await ctx.db
       .query("episodeStates")
-      .withIndex("by_starred", (q) => q.eq("starred", true))
+      .withIndex("by_user_starred", (q) => q.eq("userId", ctx.userId).eq("starred", true))
       .order("desc")
       .take(500);
     const episodes = [];
@@ -63,7 +63,7 @@ export const get = userQuery({
       .unique();
     const queued = await ctx.db
       .query("queueItems")
-      .withIndex("by_episode", (q) => q.eq("episodeId", episodeId))
+      .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", episodeId))
       .unique();
     return { row, showNotesHtml: notes?.html, inQueue: queued !== null };
   },
@@ -159,7 +159,7 @@ export const archiveAllOlder = userMutation({
     const pivot = await requireEpisode(ctx, episodeId);
     const inInbox = await ctx.db
       .query("episodeStates")
-      .withIndex("by_podcast_inbox", (q) => q.eq("podcastId", pivot.podcastId).eq("inInbox", true))
+      .withIndex("by_user_podcast_inbox", (q) => q.eq("userId", ctx.userId).eq("podcastId", pivot.podcastId).eq("inInbox", true))
       .collect();
     let n = 0;
     for (const s of inInbox) {

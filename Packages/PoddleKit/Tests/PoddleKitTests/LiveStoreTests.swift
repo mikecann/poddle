@@ -4,10 +4,17 @@ import Testing
 
 private let deployment = URL(string: "https://qualified-hedgehog-912.convex.cloud")!
 
+/// Hands out a fixed access token, like a signed-in `Account`.
+final class FixedToken: AuthTokenSource, @unchecked Sendable {
+    let token: String
+    init(_ token: String) { self.token = token }
+    func accessToken(forceRefresh: Bool) async -> String? { token }
+}
+
 private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingClock = TickingClock()) -> LiveStore {
     LiveStore(
-        deploymentURL: deployment, token: "test-token", deviceId: "device-1",
-        transport: { _ in fake }, disk: { _ in disk }, timing: .fast, now: { clock.now() }
+        deploymentURL: deployment, deviceId: "device-1", userId: "user-mike", auth: FixedToken("mike-token"),
+        transport: { _ in fake }, disk: { _, _ in disk }, timing: .fast, now: { clock.now() }
     )
 }
 
@@ -42,7 +49,8 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         #expect(await eventually { await second.pendingEntries.isEmpty })
         #expect(fake.mutations.map(\.name) == ["episodes:setStarredState", "queue:add", "episodes:setPlayedState"])
         #expect(fake.mutations.map { $0.args["at"] } == queued.map { .number($0.at) })
-        #expect(fake.mutations.allSatisfy { $0.args["token"] == "test-token" })
+        #expect(fake.mutations.allSatisfy { $0.args["token"] == nil })
+        #expect(await (fake.auth as? FixedToken)?.token == "mike-token")
         #expect(fake.mutations[1].args["position"] == "bottom")
         #expect(disk.loadOutbox().pending.isEmpty)
         await second.stop()
@@ -342,6 +350,64 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         let episodeQueries = fake.queries.filter { $0.args["table"] == "episodes" }
         #expect(episodeQueries.first?.args["since"] == 0)
         #expect(episodeQueries.last?.args["since"] == 250)
-        #expect(episodeQueries.allSatisfy { $0.args["token"] == "test-token" })
+        #expect(episodeQueries.allSatisfy { $0.args["token"] == nil })
+    }
+}
+
+
+@Suite struct AccountSwitchTests {
+    /// One folder per person under a temp deployment folder, like `LiveDisk.forUser`.
+    private func perUser(_ root: URL) -> @Sendable (URL, String) -> LiveDisk {
+        { _, user in LiveDisk(directory: root.appending(path: user)) }
+    }
+
+    @Test func eachPersonHasTheirOwnCacheAndOutbox() async throws {
+        let fake = FakeTransport()
+        fake.online = false
+        let root = FileManager.default.temporaryDirectory.appending(path: "poddle-switch-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: root) }
+        let store = LiveStore(
+            deploymentURL: deployment, deviceId: "device-1", userId: "mike", auth: FixedToken("m"),
+            transport: { _ in fake }, disk: perUser(root), timing: .fast, now: { TickingClock().now() }
+        )
+        let stream = await store.snapshots()
+        var it = stream.makeAsyncIterator()
+        _ = await it.next()
+        try await store.send(.setStarred(episodeId: "ep1", true))
+        #expect(await store.pendingEntries.count == 1)
+
+        // Mike signs out: nothing to see, and nothing can be queued.
+        await store.switchAccount(userId: nil, auth: nil)
+        #expect(await store.pendingEntries.isEmpty)
+        try await store.send(.setStarred(episodeId: "ep2", true))
+        #expect(await store.pendingEntries.isEmpty)
+
+        // Ana signs in: she starts empty, never sees Mike's queued action.
+        await store.switchAccount(userId: "ana", auth: FixedToken("a"))
+        #expect(await store.pendingEntries.isEmpty)
+        #expect(await store.cachedState.snapshot.state("ep1").isStarred == false)
+        try await store.send(.enqueue(episodeId: "ep3", position: .last))
+
+        // Mike again: his queued star is still waiting, and replays once online, as him.
+        await store.switchAccount(userId: "mike", auth: FixedToken("m"))
+        #expect(await store.pendingEntries.map(\.mutation) == [.setStarred(episodeId: "ep1", true)])
+        fake.online = true
+        #expect(await eventually { await store.pendingEntries.isEmpty })
+        #expect(fake.mutations.map(\.name) == ["episodes:setStarredState"])
+        #expect(await (fake.auth as? FixedToken)?.token == "m")
+        #expect(LiveDisk(directory: root.appending(path: "ana")).loadOutbox().pending.count == 1)
+        await store.stop()
+    }
+
+    @Test func signedOutStartsNothing() async {
+        let fake = FakeTransport()
+        let store = LiveStore(
+            deploymentURL: deployment, deviceId: "device-1", userId: nil, auth: nil,
+            transport: { _ in fake }, disk: { _, _ in tempDisk() }, timing: .fast
+        )
+        _ = await store.snapshots()
+        await store.catchUp()
+        #expect(fake.queries.isEmpty)
+        #expect(LiveStore.cachedSnapshot(disk: nil) == LibrarySnapshot())
     }
 }

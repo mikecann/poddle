@@ -30,6 +30,22 @@ import type { DataModel } from "./dataModel.js";
 type Env = {
   readonly CONVEX_CLOUD_URL: string;
   readonly CONVEX_SITE_URL: string;
+  readonly APNS_ENV: string | undefined;
+  readonly APNS_KEY_ID: string | undefined;
+  readonly APNS_KEY_P8: string | undefined;
+  readonly APNS_TEAM_ID: string | undefined;
+  readonly APNS_TOPIC: string | undefined;
+  readonly AUTH_APPLE_CLIENT_ID: string;
+  readonly AUTH_APPLE_KEY_ID: string;
+  readonly AUTH_APPLE_PRIVATE_KEY: string;
+  readonly AUTH_APPLE_TEAM_ID: string;
+  readonly AUTH_GOOGLE_CLIENT_ID: string;
+  readonly AUTH_GOOGLE_CLIENT_SECRET: string;
+  readonly AUTH_JWKS: string;
+  readonly AUTH_PRIVATE_KEY: string;
+  readonly PODDLE_ALLOWED_EMAILS: string | undefined;
+  readonly PODDLE_API_TOKEN: string | undefined;
+  readonly PODDLE_TEST_SIGNIN: string | undefined;
 };
 
 /**

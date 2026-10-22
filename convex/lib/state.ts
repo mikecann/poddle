@@ -1,11 +1,13 @@
 import type { Doc, Id } from "../_generated/dataModel";
-import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { QueryCtx } from "../_generated/server";
+import type { UserMutationCtx as MutationCtx, UserQueryCtx } from "./auth";
+import { ensureLibraryRow } from "./library";
 import { removeFromQueue } from "./queue";
 import { applyCompletion } from "./rollups";
 import { resolveGlobalSettings } from "./settings";
 import { localDay, zoneOffsetMinutes } from "./statsMath";
 
-// Per-episode user state. Each field is last-writer-wins on a client timestamp;
+// Per-episode state for the person in `ctx.userId`. Each field is last-writer-wins on a client timestamp;
 // ties go to the write the server sees last.
 
 /**
@@ -16,17 +18,19 @@ import { localDay, zoneOffsetMinutes } from "./statsMath";
 export const SYSTEM_CLOCK_SLACK_MS = 10 * 60_000;
 export const systemAt = (now = Date.now()) => now - SYSTEM_CLOCK_SLACK_MS;
 
-export async function stateFor(ctx: QueryCtx, episodeId: Id<"episodes">) {
+export async function stateFor(ctx: UserQueryCtx, episodeId: Id<"episodes">) {
   return await ctx.db
     .query("episodeStates")
-    .withIndex("by_episode", (q) => q.eq("episodeId", episodeId))
+    .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", episodeId))
     .unique();
 }
 
 export async function getOrCreateState(ctx: MutationCtx, episode: Doc<"episodes">): Promise<Doc<"episodeStates">> {
   const existing = await stateFor(ctx, episode._id);
   if (existing) return existing;
+  await ensureLibraryRow(ctx, episode.podcastId);
   const id = await ctx.db.insert("episodeStates", {
+    userId: ctx.userId,
     episodeId: episode._id,
     podcastId: episode.podcastId,
     position: 0,
@@ -50,8 +54,11 @@ export async function requireEpisode(ctx: QueryCtx, episodeId: Id<"episodes">) {
   return episode;
 }
 
-export async function userUtcOffset(ctx: QueryCtx, at: number): Promise<number> {
-  const g = await ctx.db.query("globalSettings").first();
+export async function userUtcOffset(ctx: UserQueryCtx, at: number): Promise<number> {
+  const g = await ctx.db
+    .query("globalSettings")
+    .withIndex("by_user_updatedAt", (q) => q.eq("userId", ctx.userId))
+    .first();
   return zoneOffsetMinutes(resolveGlobalSettings(g).timeZone, at);
 }
 
@@ -64,10 +71,10 @@ export async function logEvent(
 ) {
   const existing = await ctx.db
     .query("libraryEvents")
-    .withIndex("by_eventId", (q) => q.eq("eventId", eventId))
+    .withIndex("by_user_eventId", (q) => q.eq("userId", ctx.userId).eq("eventId", eventId))
     .unique();
   if (existing) return existing._id;
-  return await ctx.db.insert("libraryEvents", { eventId, type, at, ...refs, updatedAt: Date.now() });
+  return await ctx.db.insert("libraryEvents", { userId: ctx.userId, eventId, type, at, ...refs, updatedAt: Date.now() });
 }
 
 export async function setPosition(
