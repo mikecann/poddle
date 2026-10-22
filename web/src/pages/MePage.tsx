@@ -4,7 +4,7 @@ import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Artwork } from "../components/Artwork";
 import { LockIcon } from "../components/Icons";
-import { Layout, Loading } from "../components/Layout";
+import { EmptyListening, Layout, Loading } from "../components/Layout";
 import { SignIn } from "../components/SignIn";
 import { duration, listened, relativeDate } from "../lib/format";
 import { episodePath, showPath } from "../lib/links";
@@ -65,7 +65,7 @@ function Dashboard() {
         <section>
           <h2>Up Next {upNext && upNext.length > 0 && <em>{upNext.length}</em>}</h2>
           {upNext === undefined ? <Loading /> : upNext.length === 0 ? (
-            <p className="muted">Nothing queued.</p>
+            <EmptyListening>Nothing to listen to. Add an episode in the app.</EmptyListening>
           ) : (
             <ul className="list">
               {upNext.map(({ row }, i) => <EpisodeRowView key={row.episode._id} row={row} playing={i === 0} />)}
@@ -92,7 +92,7 @@ function Dashboard() {
       <section>
         <h2>Your shows {shows && shows.length > 0 && <em>{shows.length}</em>}</h2>
         {shows === undefined ? <Loading /> : shows.length === 0 ? (
-          <p className="muted">No shows yet. Subscribe to some in the app.</p>
+          <EmptyListening>No shows yet. Subscribe to some in the app.</EmptyListening>
         ) : (
           <ul className="shows">
             {shows.map((p) => {

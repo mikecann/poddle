@@ -119,14 +119,8 @@ struct UpNextView: View {
 
     @ViewBuilder private func footer(_ items: [EpisodeItem]) -> some View {
         if items.isEmpty {
-            VStack(spacing: 10) {
-                Image(systemName: "square.stack").font(.system(size: 34)).foregroundStyle(Palette.ink3)
-                Text("Nothing queued").font(.rounded(20, .bold)).foregroundStyle(Palette.ink)
-                Text("New episodes from your shows land here. Swipe right on any episode in a show to add it.")
-                    .font(.text(14)).foregroundStyle(Palette.ink2).multilineTextAlignment(.center)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(40)
+            BrandPlaceholder(pose: .empty, title: "Nothing to listen to",
+                             message: "New episodes from your shows land here. Swipe right on any episode in a show to add it.")
         } else {
             Text("That's the lot.")
                 .font(.text(13, .medium)).foregroundStyle(Palette.ink3)

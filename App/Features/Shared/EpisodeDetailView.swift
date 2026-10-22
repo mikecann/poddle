@@ -91,7 +91,7 @@ struct EpisodeDetailView: View {
             }
             .task(id: episodeId) { await store.loadShowNotes(episodeId) }
         } else {
-            ContentUnavailableView("Episode not found", systemImage: "questionmark.circle")
+            BrandPlaceholder(title: "Episode not found", message: "It may no longer be available, or it may be from a private feed.")
         }
     }
 }

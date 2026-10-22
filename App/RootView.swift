@@ -205,32 +205,15 @@ extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
 }
 #endif
 
-/// The Poddle mark: tomato tile with a cream arch, gold needle and a dotted base.
+/// A regular image set mirrors the app icon for in-app brand moments.
 struct AppMark: View {
     var size: CGFloat
     var body: some View {
-        ZStack {
-            RoundedRectangle(cornerRadius: size * 0.25, style: .continuous)
-                .fill(LinearGradient(colors: [Color(hex: 0xE7653D), Color(hex: 0xC9461F)], startPoint: .topLeading, endPoint: .bottomTrailing))
-            Canvas { ctx, sz in
-                let u = sz.width / 60
-                var arch = Path()
-                arch.move(to: CGPoint(x: 13.5 * u, y: 38 * u))
-                arch.addLine(to: CGPoint(x: 13.5 * u, y: 30 * u))
-                arch.addArc(center: CGPoint(x: 30 * u, y: 30 * u), radius: 16.5 * u, startAngle: .degrees(180), endAngle: .degrees(0), clockwise: false)
-                arch.addLine(to: CGPoint(x: 46.5 * u, y: 38 * u))
-                ctx.stroke(arch, with: .color(Color(hex: 0xF7ECDC)), style: StrokeStyle(lineWidth: 3.2 * u, lineCap: .round))
-                var needle = ctx
-                needle.translateBy(x: 30 * u, y: 38 * u)
-                needle.rotate(by: .degrees(28))
-                needle.fill(Path(roundedRect: CGRect(x: -1.6 * u, y: -20 * u, width: 3.2 * u, height: 20 * u), cornerRadius: 1.6 * u), with: .color(Color(hex: 0xF2C14E)))
-                var x: CGFloat = 12
-                while x < 48 {
-                    ctx.fill(Path(roundedRect: CGRect(x: x * u, y: 42 * u, width: 3 * u, height: 6 * u), cornerRadius: 1.2 * u), with: .color(Color(hex: 0xF7ECDC)))
-                    x += 6
-                }
-            }
-        }
-        .frame(width: size, height: size)
+        Image("BrandIcon")
+            .resizable()
+            .scaledToFit()
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: size * 0.25, style: .continuous))
+            .accessibilityHidden(true)
     }
 }

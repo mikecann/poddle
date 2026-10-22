@@ -8,6 +8,17 @@ Mike's own podcast player for iPhone, iPad and Mac, built to replace Overcast. S
 - `designs/c-earful-warm.html`: the chosen look (open it in a browser)
 - `docs/api.md`: the backend API the app is written against, including the offline/outbox contract
 
+## Brand
+
+Poddle's headphones poodle is direction A from `docs/decisions.md`, in the warm paper and tomato look.
+
+- `designs/branding/final/src/`: approved board, light/dark icon art and six transparent mascot originals, kept unchanged.
+- `designs/branding/final/`: light, dark and grayscale tinted icons (1024×1024), trimmed mascots (up to 800px), and the default link preview (1200×630).
+- `App/Assets.xcassets/`: iOS icon appearances, macOS icon sizes, `BrandIcon` and namespaced `Mascot/listening`, `sleeping`, `waving`, `empty`, `searching`, `confused` image sets. `App/DesignSystem/Brand.swift` provides the views and rounded heavy wordmark.
+- `web/public/`: PNG favicons (16/32), Apple touch icon (180), manifest icons (192/512), mascots and `og-default.png`. The self-hosted Fredoka wordmark font and its SIL Open Font License are in `fonts/`.
+
+Regenerate the processed PNGs with `swift scripts/prepare-brand.swift` from the repo root. The website and asset catalog keep their own copies of these files.
+
 ## Launch arguments
 
 With none, the app runs on live data (`LiveStore` over Convex: the dev deployment in Debug, prod in Release) and plays through the real engine (`EnginePlayer`). Pass these in the scheme's Arguments, or after `xcrun simctl launch <device> com.mikecann.poddle`. They're read in `App/PoddleApp.swift` (and `AppModel.applyLaunchScreen`).

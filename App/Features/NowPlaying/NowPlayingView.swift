@@ -529,7 +529,13 @@ private struct SleepMenu: View {
             }
         } label: {
             TimelineView(.periodic(from: .now, by: 1)) { _ in
-                UtilityLabel(title: "Sleep", detail: detail, icon: player.sleepTimer == .off ? "moon" : "moon.zzz.fill", on: player.sleepTimer != .off)
+                VStack(spacing: 1) {
+                    Mascot(pose: .sleeping, size: 38)
+                    Text("Sleep").font(.text(11, .semibold)).foregroundStyle(NP.fg)
+                    Text(detail).font(.text(10.5, .semibold)).foregroundStyle(NP.fg2)
+                }
+                .frame(maxWidth: .infinity)
+                .accessibilityElement(children: .combine)
             }
         }
         .menuStyle(.button)

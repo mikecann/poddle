@@ -172,6 +172,19 @@ describe("share pages over HTTP", () => {
     expect(html).toContain(`<meta property="og:type" content="music.album">`);
   });
 
+  test("pages without artwork use the branded preview at the site's origin", async () => {
+    const t = setup();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const { podcastId, episodeIds } = await seedShow(t, 1);
+    process.env.PODDLE_SITE_URL = "https://poddle.mikecann.app";
+    for (const path of [`/e/${episodeIds[0]}`, `/s/${podcastId}`, "/e/missing"]) {
+      const html = await (await t.raw.fetch(path)).text();
+      expect(html).toContain(`<meta property="og:image" content="https://poddle.mikecann.app/og-default.png">`);
+      expect(html).toContain(`<meta name="twitter:image" content="https://poddle.mikecann.app/og-default.png">`);
+      expect(html).toContain(`<meta name="twitter:card" content="summary_large_image">`);
+    }
+  });
+
   test("a private feed's episode page is a 404 that gives nothing away", async () => {
     const t = setup();
     vi.spyOn(console, "error").mockImplementation(() => {});

@@ -148,6 +148,7 @@ struct SettingsView: View {
                     Text(app.isMock ? "Version 0.1 · sample data" : "Version 0.1 · synced with Convex").font(.text(12.5)).foregroundStyle(Palette.ink2)
                 }
                 .padding(.top, 30).padding(.bottom, 30)
+                ListeningBrandFooter()
             }
         }
         .scrollContentBackground(.hidden)

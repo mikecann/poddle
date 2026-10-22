@@ -10,9 +10,8 @@ export function HomePage() {
   return (
     <Layout>
       <section className="home">
-        <img className="homeicon" src="/icon.png" alt="" width={96} height={96} />
-        <span className="eyebrow">A podcast player</span>
-        <h1>Poddle</h1>
+        <img className="home-mascot" src="/mascots/waving.png" alt="" width={176} height={200} />
+        <h1 className="wordmark">Poddle</h1>
         <p className="lede">
           Poddle is my own little podcast player for iPhone, iPad and Mac. I made it to replace Overcast, so it has
           one Up Next queue, Smart Speed and Voice Boost, speeds per show, and stats on how much I actually listen

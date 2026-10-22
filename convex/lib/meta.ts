@@ -46,7 +46,7 @@ export function metaFor(page: SharePage, origin: string): PageMeta {
         title: e.title,
         description: clip(e.summary ?? `An episode of ${e.podcast.title}.`),
         url: `${origin}/e/${e._id}`,
-        image: e.artworkUrl ?? e.podcast.artworkUrl,
+        image: e.artworkUrl ?? e.podcast.artworkUrl ?? `${origin}/og-default.png`,
         type: "music.song",
       };
     }
@@ -56,7 +56,7 @@ export function metaFor(page: SharePage, origin: string): PageMeta {
         title: s.title,
         description: clip(s.description ?? (s.author ? `A podcast by ${s.author}.` : "A podcast.")),
         url: `${origin}/s/${s._id}`,
-        image: s.artworkUrl,
+        image: s.artworkUrl ?? `${origin}/og-default.png`,
         type: "music.album",
       };
     }
@@ -64,6 +64,7 @@ export function metaFor(page: SharePage, origin: string): PageMeta {
       return {
         title: page.what === "episode" ? "Episode not found" : "Show not found",
         description: DEFAULT_DESCRIPTION,
+        image: `${origin}/og-default.png`,
         url: origin,
         type: "website",
         noindex: true,
@@ -88,7 +89,7 @@ export function metaTags(meta: PageMeta, siteTitleSuffix: string | null): string
     tag("property", "og:url", meta.url),
     tag("property", "og:image", meta.image),
     tag("property", "og:image:alt", meta.image ? meta.title : undefined),
-    tag("name", "twitter:card", "summary"),
+    tag("name", "twitter:card", meta.image?.endsWith("/og-default.png") ? "summary_large_image" : "summary"),
     tag("name", "twitter:title", meta.title),
     tag("name", "twitter:description", meta.description),
     tag("name", "twitter:image", meta.image),

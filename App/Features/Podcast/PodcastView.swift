@@ -15,7 +15,7 @@ struct PodcastView: View {
         if let podcast = store.podcast(podcastId) {
             content(podcast)
         } else {
-            ContentUnavailableView("Show not found", systemImage: "questionmark.square.dashed")
+            BrandPlaceholder(title: "Show not found", message: "It may no longer be available, or it may be from a private feed.")
         }
     }
 

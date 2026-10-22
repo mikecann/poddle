@@ -9,7 +9,7 @@ export function Layout({ children, wide = false }: { children: ReactNode; wide?:
       <header className="topbar">
         <Link to="/" className="brand" aria-label="Poddle home">
           <img src="/icon.png" alt="" width={34} height={34} />
-          <b>Poddle</b>
+          <b className="wordmark">Poddle</b>
         </Link>
         <Link to="/me" className="toplink">{isAuthenticated ? "Your listening" : "Sign in"}</Link>
       </header>
@@ -28,7 +28,7 @@ export function Loading() {
 export function NotFound({ what }: { what: "episode" | "show" | "page" }) {
   return (
     <div className="empty">
-      <div className="emptyicon" aria-hidden>?</div>
+      <img className="empty-mascot" src="/mascots/confused.png" alt="" width={134} height={180} />
       <h1>{what === "episode" ? "Episode not found" : what === "show" ? "Show not found" : "Nothing here"}</h1>
       <p>
         {what === "page"
@@ -36,6 +36,15 @@ export function NotFound({ what }: { what: "episode" | "show" | "page" }) {
           : `This ${what} doesn't exist, or it's from a private feed, which never gets a public page.`}
       </p>
       <Link className="btn" to="/">Go to Poddle</Link>
+    </div>
+  );
+}
+
+export function EmptyListening({ children }: { children: ReactNode }) {
+  return (
+    <div className="empty-listening">
+      <img src="/mascots/empty.png" alt="" width={180} height={108} loading="lazy" />
+      <p className="muted">{children}</p>
     </div>
   );
 }

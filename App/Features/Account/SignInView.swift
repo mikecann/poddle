@@ -18,13 +18,8 @@ struct SignInView: View {
             VStack(spacing: 28) {
                 Spacer(minLength: 40)
                 VStack(spacing: 14) {
-                    Image(systemName: "waveform.circle.fill")
-                        .font(.system(size: 76, weight: .semibold))
-                        .foregroundStyle(Palette.creamWhite, Fills.tomato)
-                        .shadow(color: Palette.shadow.opacity(0.25), radius: 10, y: 6)
-                    Text("Poddle")
-                        .font(.serif(44, .bold))
-                        .foregroundStyle(Palette.ink)
+                    Mascot(pose: .waving, size: 180)
+                    PoddleWordmark()
                     Text("Your shows, your Up Next and your listening stats, on every device you sign in on.")
                         .font(.text(16))
                         .foregroundStyle(Palette.ink2)
@@ -46,7 +41,10 @@ struct SignInView: View {
                     #endif
 
                     if let errorMessage {
-                        Label(errorMessage, systemImage: "exclamationmark.triangle.fill")
+                        HStack(spacing: 10) {
+                            Mascot(pose: .confused, size: 52)
+                            Text(errorMessage)
+                        }
                             .font(.text(14, .medium))
                             .foregroundStyle(Palette.tomato)
                             .multilineTextAlignment(.leading)

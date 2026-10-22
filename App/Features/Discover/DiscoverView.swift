@@ -8,6 +8,7 @@ struct DiscoverView: View {
     @State private var query = ""
     @State private var response: SearchResponse?
     @State private var searching = false
+    @State private var searchError: String?
     @State private var clipboard = ClipboardState.none
     @State private var manualURL = ""
     @State private var showManual = false
@@ -82,18 +83,30 @@ struct DiscoverView: View {
 
     private func runSearch() async {
         let term = query.trimmingCharacters(in: .whitespaces)
+        searchError = nil
         guard !term.isEmpty else { response = nil; return }
         try? await Task.sleep(for: .milliseconds(400)) // debounce, Apple allows ~20 calls a minute
         guard !Task.isCancelled else { return }
         searching = true
         defer { searching = false }
-        if let r = try? await store.search(term), !Task.isCancelled {
+        do {
+            let r = try await store.search(term)
+            guard !Task.isCancelled else { return }
             withAnimation(.snappy) { response = r }
+        } catch {
+            if !Task.isCancelled { searchError = "Please try again, or paste a show's feed URL above." }
         }
     }
 
     @ViewBuilder private var results: some View {
-        if let response, !query.isEmpty {
+        if searching {
+            BrandPlaceholder(pose: .searching, title: "Searching…", message: "Looking through Apple Podcasts.")
+            ProgressView().frame(maxWidth: .infinity).padding(.bottom, 20)
+        } else if let searchError {
+            BrandPlaceholder(title: "Couldn't search", message: searchError)
+            PoddleButton(title: "Try again", kind: .quiet) { Task { await runSearch() } }
+                .frame(maxWidth: .infinity)
+        } else if let response, !query.isEmpty {
             HStack(alignment: .firstTextBaseline) {
                 Text("Apple Podcasts").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
                 Spacer()
@@ -101,8 +114,8 @@ struct DiscoverView: View {
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 6)
             if response.results.isEmpty {
-                Text("Nothing for \"\(query)\". Try a show's name, or paste its feed URL above.")
-                    .font(.text(14)).foregroundStyle(Palette.ink2).padding(.horizontal, 20).padding(.top, 10)
+                BrandPlaceholder(pose: .searching, title: "No shows found",
+                                 message: "Nothing for \"\(query)\". Try a show's name, or paste its feed URL above.")
             }
             ForEach(Array(response.results.enumerated()), id: \.element.id) { i, r in
                 resultRow(r)
@@ -110,6 +123,8 @@ struct DiscoverView: View {
             }
             Color.clear.frame(height: 20)
         } else {
+            Mascot(pose: .searching, size: 150)
+                .frame(maxWidth: .infinity).padding(.top, 20)
             VStack(alignment: .leading, spacing: 12) {
                 Text("Try").font(.rounded(20, .heavy)).foregroundStyle(Palette.ink)
                 FlowChips(items: ["ai", "web dev", "history", "apple", "design", "comedy", "security", "business"]) { query = $0 }
