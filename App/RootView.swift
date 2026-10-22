@@ -45,7 +45,6 @@ struct RootView: View {
 /// positions and navigation survive switching.
 private struct PhoneRoot: View {
     @Environment(AppModel.self) private var app
-    @Environment(PoddleStore.self) private var store
     @Environment(\.player) private var player
 
     var body: some View {
@@ -60,21 +59,22 @@ private struct PhoneRoot: View {
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             VStack(spacing: 8) {
+                UndoToastView().padding(.horizontal, 8)
                 MobileAllowanceChip()
                 MiniPlayer().padding(.horizontal, 8)
-                PoddleTabBar(selection: $app.tab, inboxCount: store.inbox.count)
+                PoddleTabBar(selection: $app.tab)
             }
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: player.item?.id)
+            .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.undo.toast?.id)
         }
         .overlay { GrainOverlay().ignoresSafeArea() }
         .background(PaperBackground())
     }
 }
 
-/// iPad and Mac: a sidebar with the same five sections, mini player under the detail.
+/// iPad and Mac: a sidebar with the same four sections, mini player under the detail.
 private struct SidebarRoot: View {
     @Environment(AppModel.self) private var app
-    @Environment(PoddleStore.self) private var store
 
     var body: some View {
         @Bindable var app = app
@@ -83,7 +83,6 @@ private struct SidebarRoot: View {
                 Section {
                     ForEach(Tab.allCases) { tab in
                         Label(tab.title, systemImage: tab.systemImage)
-                            .badge(tab == .inbox ? store.inbox.count : 0)
                             .tag(tab)
                     }
                 } header: {
@@ -105,9 +104,11 @@ private struct SidebarRoot: View {
                 .id(app.tab)
                 .safeAreaInset(edge: .bottom, spacing: 0) {
                     VStack(spacing: 8) {
+                        UndoToastView()
                         MobileAllowanceChip()
                         MiniPlayer()
                     }
+                        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.undo.toast?.id)
                         .frame(maxWidth: 560)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 10)
@@ -129,7 +130,6 @@ struct TabRoot: View {
             Group {
                 switch tab {
                 case .upNext: UpNextView()
-                case .inbox: InboxView()
                 case .library: LibraryView()
                 case .discover: DiscoverView()
                 case .stats: StatsView()
@@ -158,9 +158,8 @@ struct SheetHost: View {
     var route: SheetRoute
     var body: some View {
         switch route {
-        case let .speed(podcastId): SpeedSheet(podcastId: podcastId)
         case let .showSettings(podcastId): ShowSettingsSheet(podcastId: podcastId)
-        case .queueAndChapters: QueueChaptersSheet()
+        case .queue: QueueSheet()
         case let .episode(id):
             NavigationStack { EpisodeDetailView(episodeId: id, inSheet: true).hidesSystemNavBar() }
                 .poddleSheet(detents: [.large])

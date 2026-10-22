@@ -57,7 +57,7 @@ struct MiniPlayer: View {
             .offset(x: drag.width * 0.25, y: min(0, drag.height) * 0.3)
             .contentShape(RoundedRectangle(cornerRadius: 20))
             .onTapGesture { app.showNowPlaying = true }
-            .onLongPressGesture { app.sheet = .queueAndChapters }
+            .onLongPressGesture { app.sheet = .queue }
             .gesture(
                 DragGesture(minimumDistance: 14)
                     .onChanged { drag = $0.translation }
@@ -83,7 +83,6 @@ struct MiniPlayer: View {
 /// Paper tab bar with a hairline on top. Tomato for the selected tab.
 struct PoddleTabBar: View {
     @Binding var selection: Tab
-    var inboxCount: Int
 
     var body: some View {
         HStack(spacing: 0) {
@@ -96,15 +95,6 @@ struct PoddleTabBar: View {
                         Image(systemName: tab.systemImage)
                             .font(.system(size: 22, weight: .regular))
                             .frame(height: 27)
-                            .overlay(alignment: .topTrailing) {
-                                if tab == .inbox && inboxCount > 0 {
-                                    Text("\(inboxCount)")
-                                        .font(.rounded(11, .heavy)).foregroundStyle(Palette.creamWhite)
-                                        .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
-                                        .background(Palette.tomato, in: Capsule())
-                                        .offset(x: 10, y: -4)
-                                }
-                            }
                         Text(tab.title).font(.text(10, .semibold))
                     }
                     .foregroundStyle(on ? Palette.tomato : Palette.ink3)

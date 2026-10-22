@@ -1,12 +1,10 @@
 import SwiftUI
 import PoddleKit
 
-/// Row content shared by Up Next and the Inbox: artwork, show line, title and the time/speed line.
+/// An Up Next row: artwork, show line, title and the time/speed line.
 struct EpisodeRow: View {
     @Environment(PoddleStore.self) private var store
-    enum Style { case queue, inbox }
     var item: EpisodeItem
-    var style: Style
     var showGrip = false
     var onArtworkTap: (() -> Void)? = nil
 
@@ -59,10 +57,6 @@ struct EpisodeRow: View {
 
     @ViewBuilder private var metaLine: some View {
         HStack(spacing: 7) {
-            if style == .inbox {
-                Text(Format.relativeDate(item.episode.pubDate)).foregroundStyle(Palette.ink2)
-                Text("·").foregroundStyle(Palette.ink3)
-            }
             if item.isInProgress {
                 ProgressBar(value: item.progress)
                 Text(Format.duration(item.wallRemaining) + " left").fontWeight(.semibold).foregroundStyle(Palette.ink)
@@ -71,15 +65,13 @@ struct EpisodeRow: View {
             }
             Text("at \(Format.speed(item.speed.value))").foregroundStyle(Palette.ink2)
             DownloadGlyph(item: item)
-            if style == .queue {
-                if item.isWaitingForWifi {
-                    Text("Waiting for Wi-Fi").foregroundStyle(Palette.ink3)
-                } else if item.isDownloading {
-                    DownloadPercent(progress: store.downloadProgress(item.id), fallback: item.download?.progress ?? 0)
-                        .foregroundStyle(Palette.ink3)
-                } else if !item.isDownloaded {
-                    Text("Not downloaded").foregroundStyle(Palette.ink3)
-                }
+            if item.isWaitingForWifi {
+                Text("Waiting for Wi-Fi").foregroundStyle(Palette.ink3)
+            } else if item.isDownloading {
+                DownloadPercent(progress: store.downloadProgress(item.id), fallback: item.download?.progress ?? 0)
+                    .foregroundStyle(Palette.ink3)
+            } else if !item.isDownloaded {
+                Text("Not downloaded").foregroundStyle(Palette.ink3)
             }
         }
         .font(.text(12.5, .medium))
@@ -105,7 +97,8 @@ extension View {
     }
 }
 
-/// Everything you can do to an episode, used by context menus and swipes.
+/// Everything you can do to an episode, used by context menus and swipes. Destructive actions
+/// show the Undo toast (decisions.md).
 struct EpisodeActions {
     var store: PoddleStore
     var player: any PoddlePlayer
@@ -125,6 +118,68 @@ struct EpisodeActions {
         if player.currentEpisodeId == nil { store.moveToTop(id) } else { store.playNext(id) }
     }
 
+    // MARK: Destructive, with Undo
+
+    func archive(_ item: EpisodeItem) {
+        let point = store.restorePoint([item.id])
+        store.archive(item.id)
+        app.undo.show("Archived", item.episode.title) { store.restore(point) }
+    }
+
+    /// Undo puts it back in the same place in the queue.
+    func removeFromUpNext(_ item: EpisodeItem) {
+        let point = store.restorePoint([item.id])
+        store.removeFromQueue(item.id)
+        app.undo.show("Removed", item.episode.title) { store.restore(point) }
+    }
+
+    /// Undo restores the played flag, the position and the place in Up Next.
+    func markPlayed(_ item: EpisodeItem) {
+        let point = store.restorePoint([item.id])
+        store.markPlayed(item.id)
+        app.undo.show("Played", item.episode.title) { store.restore(point) }
+    }
+
+    /// The file is only deleted once the toast has gone, so undo costs nothing.
+    func removeDownload(_ item: EpisodeItem) {
+        let id = item.id
+        let verb = item.isDownloaded ? "Removed download" : "Cancelled download"
+        store.removeDownloadLater(id)
+        app.undo.show(verb, item.episode.title) {
+            store.cancelDownloadRemoval(id)
+        } commit: {
+            store.commitDownloadRemoval(id)
+        }
+    }
+
+    func markOlderPlayed(_ item: EpisodeItem) {
+        let point = store.restorePoint(podcastId: item.podcast.id)
+        store.markOlderPlayed(item.id)
+        app.undo.show("Marked older played", item.podcast.title) { store.restore(point) }
+    }
+
+    func markAllPlayed(_ podcast: Podcast) {
+        let point = store.restorePoint(podcastId: podcast.id)
+        store.markAllPlayed(podcast.id)
+        app.undo.show("Marked all played", podcast.title) { store.restore(point) }
+    }
+
+    func unsubscribe(_ podcast: Podcast) {
+        let point = store.restorePoint(podcastId: podcast.id)
+        store.unsubscribe(podcast.id)
+        app.undo.show("Unsubscribed", podcast.title) {
+            store.resubscribe(podcast.id)
+            store.restore(point)
+        }
+    }
+
+    func clearQueue(keeping: String?) {
+        let point = store.queueRestorePoint()
+        let count = store.queue.count { $0.id != keeping }
+        store.clearQueue(keeping: keeping)
+        app.undo.show("Cleared", count == 1 ? "1 episode" : "\(count) episodes") { store.restore(point) }
+    }
+
     @ViewBuilder
     func menu(for item: EpisodeItem, context: MenuContext) -> some View {
         let id = item.id
@@ -133,18 +188,19 @@ struct EpisodeActions {
         case .upNext:
             Button { moveToTopOfUpNext(id) } label: { Label("Move to top", systemImage: "arrow.up.to.line") }
             Button { store.moveToBottom(id) } label: { Label("Move to bottom", systemImage: "arrow.down.to.line") }
-        case .inbox, .podcast, .detail:
+            Button { removeFromUpNext(item) } label: { Label("Remove from Up Next", systemImage: "minus.circle") }
+        case .podcast, .detail:
             if !item.isQueued {
                 Button { store.playNext(id) } label: { Label("Queue next", systemImage: "text.line.first.and.arrowtriangle.forward") }
                 Button { store.queueLast(id) } label: { Label("Queue last", systemImage: "text.line.last.and.arrowtriangle.forward") }
             } else {
-                Button { store.removeFromQueue(id) } label: { Label("Remove from Up Next", systemImage: "minus.circle") }
+                Button { removeFromUpNext(item) } label: { Label("Remove from Up Next", systemImage: "minus.circle") }
             }
         }
         if item.isDownloaded {
-            Button { store.removeDownload(id) } label: { Label("Remove download", systemImage: "xmark.circle") }
+            Button { removeDownload(item) } label: { Label("Remove download", systemImage: "xmark.circle") }
         } else if item.isDownloading {
-            Button { store.removeDownload(id) } label: { Label("Cancel download", systemImage: "xmark.circle") }
+            Button { removeDownload(item) } label: { Label("Cancel download", systemImage: "xmark.circle") }
         } else {
             Button { download(id) } label: { Label("Download", systemImage: "arrow.down.circle") }
         }
@@ -154,10 +210,10 @@ struct EpisodeActions {
         if item.state.played {
             Button { store.markUnplayed(id) } label: { Label("Mark unplayed", systemImage: "circle") }
         } else {
-            Button { store.markPlayed(id) } label: { Label("Mark played", systemImage: "checkmark.circle") }
-        }
-        if context == .inbox {
-            Button { store.archive(id) } label: { Label("Archive", systemImage: "archivebox") }
+            Button { markPlayed(item) } label: { Label("Mark played", systemImage: "checkmark.circle") }
+            if !item.state.archived {
+                Button { archive(item) } label: { Label("Archive", systemImage: "archivebox") }
+            }
         }
         ShareLink(item: URL(string: item.episode.enclosureURL) ?? URL(string: "https://poddle.app")!, subject: Text(item.episode.title)) {
             Label("Share", systemImage: "square.and.arrow.up")
@@ -165,17 +221,13 @@ struct EpisodeActions {
         if context != .podcast {
             Button { app.goToShow(item.podcast.id) } label: { Label("Go to show", systemImage: "rectangle.stack") }
         }
-        if context == .inbox {
-            Divider()
-            Button { store.archiveOlder(id) } label: { Label("Archive all older from this show", systemImage: "archivebox.circle") }
-        }
         if context == .podcast {
             Divider()
-            Button { store.markOlderPlayed(id) } label: { Label("Mark all older as played", systemImage: "checkmark.circle.badge.questionmark") }
+            Button { markOlderPlayed(item) } label: { Label("Mark all older as played", systemImage: "checkmark.circle.badge.questionmark") }
         }
     }
 
-    enum MenuContext { case upNext, inbox, podcast, detail }
+    enum MenuContext { case upNext, podcast, detail }
 }
 
 /// Show notes, as the long-press preview and the episode page.

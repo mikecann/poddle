@@ -7,7 +7,7 @@ poddle/
   Poddle.xcodeproj        Xcode project using synchronized folders (objectVersion 77), so adding files never touches the pbxproj
   App/                    SwiftUI app sources, one multiplatform target (iOS + macOS)
     DesignSystem/         Poddle's tokens and components, taken from designs/c-earful-warm.html
-    Features/             UpNext, Inbox, Library, Podcast, Discover, Stats, YearInReview, NowPlaying, Settings, Import
+    Features/             UpNext, Library, Podcast, Discover, Stats, YearInReview, NowPlaying, Settings, Import, Undo
     Preview/              mock data for previews and the mock data source
   Packages/
     PoddleKit/            Swift package: models, the API layer over convex-swift, local cache + outbox, settings resolution, formatting

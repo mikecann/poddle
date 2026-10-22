@@ -15,7 +15,13 @@ public final class PoddleStore {
     /// The background downloader. Nil in previews and tests, which fake downloads instead.
     public var downloader: DownloadManager?
     /// Every download. Maps all of them, so rows should use `download(for:)`.
-    public var downloads: [String: Download] { downloader?.downloads ?? fakeDownloads }
+    public var downloads: [String: Download] {
+        let all = downloader?.downloads ?? fakeDownloads
+        return pendingDownloadRemovals.isEmpty ? all : all.filter { !pendingDownloadRemovals.contains($0.key) }
+    }
+    /// Downloads the user removed while the Undo toast is up. They look gone, but the file is only
+    /// deleted once the toast expires (`commitDownloadRemoval`).
+    public internal(set) var pendingDownloadRemovals: Set<String> = []
     /// Live progress for fake downloads, like `DownloadManager.progress(for:)`.
     @ObservationIgnored private var fakeProgress: [String: DownloadProgress] = [:]
     public private(set) var chapterCache: [String: [Chapter]] = [:]
@@ -108,6 +114,7 @@ public final class PoddleStore {
 
     /// One episode's download, as rows show it.
     public func download(for episodeId: String) -> Download? {
+        if pendingDownloadRemovals.contains(episodeId) { return nil }
         if let downloader { return downloader.download(for: episodeId) }
         return fakeDownloads[episodeId]
     }

@@ -21,6 +21,8 @@ struct LibraryView: View {
         }
     }
 
+    private var actions: EpisodeActions { EpisodeActions(store: store, player: player, app: app) }
+
     private var shows: [Podcast] {
         let base = showPast ? store.pastShows : store.library
         switch sort {
@@ -71,7 +73,7 @@ struct LibraryView: View {
         }
         .animation(.snappy, value: layout)
         .confirmationDialog("Unsubscribe from \(unsubscribing?.title ?? "")?", isPresented: Binding(get: { unsubscribing != nil }, set: { if !$0 { unsubscribing = nil } }), titleVisibility: .visible) {
-            Button("Unsubscribe", role: .destructive) { if let p = unsubscribing { withAnimation { store.unsubscribe(p.id) } } }
+            Button("Unsubscribe", role: .destructive) { if let p = unsubscribing { withAnimation { actions.unsubscribe(p) } } }
         } message: {
             Text("Your history stays, under Past shows.")
         }
@@ -185,7 +187,7 @@ struct LibraryView: View {
             Button { player.play(latest.id) } label: { Label("Play latest", systemImage: "play") }
             Button { store.queueLast(latest.id) } label: { Label("Queue latest", systemImage: "text.line.last.and.arrowtriangle.forward") }
         }
-        Button { store.markAllPlayed(p.id) } label: { Label("Mark all played", systemImage: "checkmark.circle") }
+        Button { actions.markAllPlayed(p) } label: { Label("Mark all played", systemImage: "checkmark.circle") }
         if p.subscribed {
             Button(role: .destructive) { unsubscribing = p } label: { Label("Unsubscribe", systemImage: "minus.circle") }
         } else {

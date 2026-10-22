@@ -3,7 +3,7 @@
 # screenshot of each to designs/build-shots/. Compare them with designs/shots/c-p*.jpg.
 #
 #   scripts/screenshots.sh                 # all screens, light
-#   scripts/screenshots.sh upNext speed    # just these
+#   scripts/screenshots.sh upNext npSettings    # just these
 #   SKIP_BUILD=1 scripts/screenshots.sh    # reuse the last build
 #   APPEARANCE=dark scripts/screenshots.sh # warm dark mode (saved with a -dark suffix)
 #   DEVICE="iPad Pro 13-inch (M5)" scripts/screenshots.sh
@@ -21,7 +21,7 @@ BUNDLE=com.mikecann.poddle
 APPEARANCE=${APPEARANCE:-light}
 WAIT=${WAIT:-3}
 
-ALL=(upNext nowPlaying speed podcast showSettings discover importDone stats yearInReview inbox library libraryList settings import episode chapters)
+ALL=(upNext nowPlaying npNotes npSettings queue undoArchive podcast showSettings discover importDone stats yearInReview library libraryList settings import episode)
 SCREENS=("$@")
 [ ${#SCREENS[@]} -eq 0 ] && SCREENS=("${ALL[@]}")
 

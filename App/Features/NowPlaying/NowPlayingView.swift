@@ -1,7 +1,9 @@
 import SwiftUI
 import PoddleKit
 
-/// Warm dark Now Playing. Swipe down anywhere to drop back to the mini player.
+/// Warm dark Now Playing, three pages like Overcast (decisions.md): show notes and chapters on the
+/// left, the player in the middle, playback settings on the right. Swipe sideways to change page,
+/// swipe down on the player or the header to drop back to the mini player.
 struct NowPlayingView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(\.player) private var player
@@ -23,24 +25,66 @@ struct NowPlayingView: View {
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .overlay(alignment: .bottom) {
+            UndoToastView().padding(.horizontal, 16).padding(.bottom, 8)
+                .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.undo.toast?.id)
+        }
         .background { NowPlayingBackground() }
         .offset(y: dragY)
-        .gesture(
-            DragGesture(minimumDistance: 20)
-                .onChanged { v in if v.translation.height > 0 && abs(v.translation.height) > abs(v.translation.width) { dragY = v.translation.height } }
-                .onEnded { v in
-                    if v.translation.height > 140 || v.predictedEndTranslation.height > 400 { dismiss() }
-                    withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragY = 0 }
-                }
-        )
         .environment(\.colorScheme, .dark)
         .sheet(item: $app.nowPlayingSheet) { SheetHost(route: $0).environment(\.colorScheme, PoddleApp.forcedScheme ?? .light) }
         .presentationBackground(.clear)
+        .onDisappear { app.nowPlayingPage = .player }
+    }
+
+    /// Swipe down to close. Only acts on mostly vertical drags, so it never fights the pages.
+    private var dismissDrag: some Gesture {
+        DragGesture(minimumDistance: 20)
+            .onChanged { v in if v.translation.height > 0 && abs(v.translation.height) > abs(v.translation.width) * 1.5 { dragY = v.translation.height } }
+            .onEnded { v in
+                if dragY > 0, v.translation.height > 140 || v.predictedEndTranslation.height > 400 { dismiss() }
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { dragY = 0 }
+            }
     }
 
     @ViewBuilder private func content(_ item: EpisodeItem) -> some View {
-        let upNext = store.upNext(excluding: item.id)
+        @Bindable var app = app
         VStack(spacing: 0) {
+            header(item)
+                .contentShape(Rectangle())
+                .gesture(dismissDrag)
+            PageDots(selection: $app.nowPlayingPage)
+            pages(item)
+        }
+        .frame(maxWidth: 520)
+        .frame(maxWidth: .infinity)
+    }
+
+    @ViewBuilder private func pages(_ item: EpisodeItem) -> some View {
+        @Bindable var app = app
+        #if os(iOS)
+        TabView(selection: $app.nowPlayingPage) {
+            NotesPage(item: item).tag(NowPlayingPage.notes)
+            PlayerPage(item: item).simultaneousGesture(dismissDrag).tag(NowPlayingPage.player)
+            PlaybackSettingsPage(podcastId: item.podcast.id).tag(NowPlayingPage.settings)
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        #else
+        Group {
+            switch app.nowPlayingPage {
+            case .notes: NotesPage(item: item)
+            case .player: PlayerPage(item: item)
+            case .settings: PlaybackSettingsPage(podcastId: item.podcast.id)
+            }
+        }
+        .frame(maxHeight: .infinity)
+        .transition(.opacity)
+        #endif
+    }
+
+    private func header(_ item: EpisodeItem) -> some View {
+        let upNext = store.upNext(excluding: item.id)
+        return VStack(spacing: 0) {
             Capsule().fill(NP.fg3).frame(width: 36, height: 5).padding(.top, 6)
             HStack {
                 Button { dismiss() } label: {
@@ -49,80 +93,56 @@ struct NowPlayingView: View {
                 .accessibilityLabel("Close")
                 Spacer()
                 VStack(spacing: 1) {
-                    Text("Playing from Up Next").font(.rounded(10.5, .bold)).tracking(1.26).textCase(.uppercase).foregroundStyle(NP.fg2)
+                    Text(title).font(.rounded(10.5, .bold)).tracking(1.26).textCase(.uppercase).foregroundStyle(NP.fg2)
                     Text(upNext.isEmpty ? "Last one" : "\(upNext.count) more · \(Format.duration(store.wallTime(upNext)))")
                         .font(.text(13, .semibold))
                 }
+                .contentTransition(.opacity)
+                .animation(.easeOut(duration: 0.15), value: app.nowPlayingPage)
                 Spacer()
                 moreMenu(item)
             }
             .foregroundStyle(NP.fg)
             .padding(.horizontal, 8)
             .frame(height: 44)
-
-            Spacer(minLength: 4)
-            ArtworkGestures(item: item)
-            chapterPill.padding(.top, 18)
-
-            HStack(alignment: .bottom) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.episode.title).font(.rounded(22, .bold)).tracking(-0.22).lineLimit(2)
-                        .foregroundStyle(NP.fg)
-                    Button { app.goToShow(item.podcast.id) } label: {
-                        Text(item.podcast.title).font(.text(16, .medium)).foregroundStyle(Palette.mustard)
-                    }
-                    .buttonStyle(.plain)
-                }
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 12)
-
-            Scrubber().padding(.horizontal, 24).padding(.top, 16)
-            Transport().padding(.top, 10)
-            TuningStrip(podcastId: item.podcast.id).padding(.horizontal, 16).padding(.top, 14)
-            UtilityRow(item: item).padding(.horizontal, 10).padding(.top, 14)
-            Spacer(minLength: 8)
         }
-        .frame(maxWidth: 520)
-        .frame(maxWidth: .infinity)
     }
 
-    @ViewBuilder private var chapterPill: some View {
-        if let chapter = player.currentChapter, let i = player.currentChapterIndex {
-            Button { app.nowPlayingSheet = .queueAndChapters } label: {
-                HStack(spacing: 6) {
-                    Image(systemName: "list.bullet").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.mustard)
-                    Text("Ch \(i + 1) of \(player.chapters.count)").foregroundStyle(NP.fg)
-                    Text("· \(chapter.title)").foregroundStyle(NP.fg2).fontWeight(.medium).lineLimit(1)
-                }
-                .font(.text(12.5, .semibold))
-                .padding(.leading, 8).padding(.trailing, 12)
-                .frame(height: 28)
-                .background(NP.util, in: Capsule())
-                .contentTransition(.opacity)
-            }
-            .buttonStyle(.pressable)
-            .padding(.horizontal, 24)
-        } else {
-            Color.clear.frame(height: 28)
+    private var title: String {
+        switch app.nowPlayingPage {
+        case .notes: "Show notes"
+        case .player: "Playing from Up Next"
+        case .settings: "Playback settings"
         }
     }
 
     private func moreMenu(_ item: EpisodeItem) -> some View {
         Menu {
             Button { store.toggleStar(item.id) } label: { Label(item.isStarred ? "Unstar" : "Star", systemImage: "star") }
-            Button { app.nowPlayingSheet = .showSettings(podcastId: item.podcast.id) } label: { Label("Show settings", systemImage: "slider.horizontal.3") }
+            Button { app.nowPlayingSheet = .queue } label: { Label("Up Next", systemImage: "list.bullet.indent") }
+            Button { app.nowPlayingSheet = .showSettings(podcastId: item.podcast.id) } label: { Label("All show settings", systemImage: "slider.horizontal.3") }
             Button { app.goToShow(item.podcast.id) } label: { Label("Go to show", systemImage: "rectangle.stack") }
             ShareLink(item: URL(string: item.episode.enclosureURL)!) { Label("Share episode", systemImage: "square.and.arrow.up") }
             Divider()
-            Button { player.playNextInQueue(); store.markPlayed(item.id) } label: { Label("Mark played and skip", systemImage: "checkmark.circle") }
+            Button { markPlayedAndSkip(item) } label: { Label("Mark played and skip", systemImage: "checkmark.circle") }
         } label: {
             Image(systemName: "ellipsis").font(.system(size: 20, weight: .bold)).frame(width: 44, height: 44)
         }
         .menuStyle(.button)
         .buttonStyle(.plain)
         .accessibilityLabel("More")
+    }
+
+    /// Undo brings it back: unplayed, at its old position, playing again.
+    private func markPlayedAndSkip(_ item: EpisodeItem) {
+        let point = store.restorePoint([item.id])
+        let id = item.id
+        player.playNextInQueue()
+        store.markPlayed(id)
+        app.undo.show("Played", item.episode.title) { [store, player] in
+            store.restore(point)
+            player.play(id)
+        }
     }
 }
 
@@ -144,11 +164,101 @@ struct NowPlayingBackground: View {
     }
 }
 
-/// Artwork: tap to play/pause, double-tap a half to skip, swipe sideways for chapters.
-private struct ArtworkGestures: View {
+/// Three dots under the header. Tap one to jump to that page.
+private struct PageDots: View {
+    @Binding var selection: NowPlayingPage
+
+    var body: some View {
+        HStack(spacing: 7) {
+            ForEach(NowPlayingPage.allCases, id: \.self) { page in
+                let on = page == selection
+                Capsule()
+                    .fill(on ? NP.fg : NP.fg3)
+                    .frame(width: on ? 18 : 7, height: 7)
+                    .frame(height: 22)
+                    .contentShape(Rectangle())
+                    .onTapGesture { withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) { selection = page } }
+                    .accessibilityElement()
+                    .accessibilityLabel(page.label)
+                    .accessibilityAddTraits(on ? [.isButton, .isSelected] : .isButton)
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selection)
+        .sensoryFeedback(.selection, trigger: selection)
+    }
+}
+
+extension NowPlayingPage {
+    var label: String {
+        switch self {
+        case .notes: "Show notes"
+        case .player: "Player"
+        case .settings: "Playback settings"
+        }
+    }
+}
+
+/// The middle page: artwork, title, scrubber, transport, then speed, sleep, AirPlay and Up Next.
+private struct PlayerPage: View {
     var item: EpisodeItem
     @Environment(\.player) private var player
-    @State private var swipeX: CGFloat = 0
+    @Environment(AppModel.self) private var app
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 4)
+            ArtworkTaps(item: item)
+            chapterPill.padding(.top, 18)
+
+            HStack(alignment: .bottom) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item.episode.title).font(.rounded(22, .bold)).tracking(-0.22).lineLimit(2)
+                        .foregroundStyle(NP.fg)
+                    Button { app.goToShow(item.podcast.id) } label: {
+                        Text(item.podcast.title).font(.text(16, .medium)).foregroundStyle(Palette.mustard)
+                    }
+                    .buttonStyle(.plain)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 24)
+            .padding(.top, 12)
+
+            Scrubber().padding(.horizontal, 24).padding(.top, 16)
+            Transport().padding(.top, 10)
+            UtilityRow(item: item).padding(.horizontal, 10).padding(.top, 18)
+            Spacer(minLength: 8)
+        }
+    }
+
+    @ViewBuilder private var chapterPill: some View {
+        if let chapter = player.currentChapter, let i = player.currentChapterIndex {
+            Button { withAnimation { app.nowPlayingPage = .notes } } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "list.bullet").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.mustard)
+                    Text("Ch \(i + 1) of \(player.chapters.count)").foregroundStyle(NP.fg)
+                    Text("· \(chapter.title)").foregroundStyle(NP.fg2).fontWeight(.medium).lineLimit(1)
+                }
+                .font(.text(12.5, .semibold))
+                .padding(.leading, 8).padding(.trailing, 12)
+                .frame(height: 28)
+                .background(NP.util, in: Capsule())
+                .contentTransition(.opacity)
+            }
+            .buttonStyle(.pressable)
+            .padding(.horizontal, 24)
+        } else {
+            Color.clear.frame(height: 28)
+        }
+    }
+}
+
+/// Artwork: tap to play or pause, double-tap a half to skip back or forward. No drag gestures at
+/// all (decisions.md): sideways swipes belong to the pages, and nothing here archives, deletes,
+/// skips an episode or marks it played.
+private struct ArtworkTaps: View {
+    var item: EpisodeItem
+    @Environment(\.player) private var player
     @State private var bumped = 0
     @State private var flash: Edge?
 
@@ -159,29 +269,18 @@ private struct ArtworkGestures: View {
             .shadow(color: .black.opacity(0.25), radius: 8, y: 8)
             .scaleEffect(player.isPlaying ? 1 : 0.9)
             .animation(.spring(response: 0.45, dampingFraction: 0.7), value: player.isPlaying)
-            .offset(x: swipeX)
             .overlay {
                 HStack(spacing: 0) {
                     tapZone(.leading)
                     tapZone(.trailing)
                 }
             }
-            .gesture(
-                DragGesture(minimumDistance: 20)
-                    .onChanged { v in if abs(v.translation.width) > abs(v.translation.height) { swipeX = v.translation.width * 0.4 } }
-                    .onEnded { v in
-                        if v.translation.width < -70 { player.nextChapter(); bumped += 1 }
-                        else if v.translation.width > 70 { player.previousChapter(); bumped += 1 }
-                        withAnimation(.spring(response: 0.35, dampingFraction: 0.7)) { swipeX = 0 }
-                    }
-            )
             .sensoryFeedback(.impact(weight: .medium), trigger: bumped)
             .accessibilityElement()
             .accessibilityLabel("\(item.podcast.title) artwork")
-            .accessibilityHint("Tap to play or pause. Swipe for chapters.")
+            .accessibilityHint("Tap to play or pause.")
             .accessibilityAction { player.togglePlayPause() }
     }
-
     private func tapZone(_ edge: Edge) -> some View {
         Color.clear
             .contentShape(Rectangle())
@@ -336,127 +435,8 @@ private struct Transport: View {
     }
 }
 
-/// The speed control: a tuning strip. Flick it sideways to nudge in 0.05× clicks, tap for the
-/// full sheet. The gold pin says this speed is the show's own; the faint "default" mark shows
-/// where you'd normally sit.
-private struct TuningStrip: View {
-    var podcastId: String
-    @Environment(PoddleStore.self) private var store
-    @Environment(AppModel.self) private var app
-    @State private var dragStart: Double?
-    @State private var preview: Double?
-
-    private let stepWidth: CGFloat = 8 // points per 0.05×
-    private let needleX: CGFloat = 100
-
-    var body: some View {
-        let resolved = store.resolved(podcastId).speed
-        let speed = preview ?? resolved.value
-        let showName = store.podcast(podcastId).map { shortName($0.title) } ?? "This show"
-        HStack(spacing: 0) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(Format.speed(speed))
-                    .font(.rounded(26, .heavy)).tracking(-0.5).monospacedDigit()
-                    .contentTransition(.numericText(value: speed))
-                    .foregroundStyle(NP.fg)
-                HStack(spacing: 3) {
-                    if resolved.isOverride { PinGlyph().frame(width: 11, height: 11) } else { Image(systemName: "globe").font(.system(size: 10, weight: .bold)) }
-                    Text(resolved.isOverride ? "\(showName) only" : "Your default")
-                }
-                .font(.rounded(11, .bold))
-                .foregroundStyle(resolved.isOverride ? Palette.mustard : NP.fg2)
-                .lineLimit(1)
-            }
-            .frame(width: 118, alignment: .leading)
-            .padding(.leading, 16)
-
-            GeometryReader { geo in
-                ZStack(alignment: .topLeading) {
-                    scale(speed: speed, width: geo.size.width)
-                    if resolved.isOverride {
-                        defaultMark.offset(x: needleX + CGFloat((store.global.speed - speed) / 0.05) * stepWidth - 22, y: 7)
-                    }
-                    needle.offset(x: needleX - 1.5, y: 8)
-                }
-                .frame(width: geo.size.width, height: geo.size.height, alignment: .topLeading)
-                .clipped()
-                .mask(LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: .black, location: 0.18), .init(color: .black, location: 0.82), .init(color: .clear, location: 1)], startPoint: .leading, endPoint: .trailing))
-            }
-            .padding(.trailing, 8)
-        }
-        .frame(height: 64)
-        .background {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .fill(NP.wellBg.shadow(.inner(color: .black.opacity(0.35), radius: 3, y: 2)))
-        }
-        .contentShape(Rectangle())
-        .onTapGesture { app.nowPlayingSheet = .speed(podcastId: podcastId) }
-        .gesture(
-            DragGesture(minimumDistance: 6)
-                .onChanged { v in
-                    let start = dragStart ?? resolved.value
-                    dragStart = start
-                    preview = Speed.snap(start - Double(v.translation.width / stepWidth) * 0.05)
-                }
-                .onEnded { _ in
-                    if let p = preview { store.setSpeed(p, scope: store.defaultSpeedScope(for: podcastId)) }
-                    preview = nil
-                    dragStart = nil
-                }
-        )
-        .sensoryFeedback(.selection, trigger: Speed.detent(speed))
-        .accessibilityElement()
-        .accessibilityLabel("Playback speed")
-        .accessibilityValue(Format.speed(speed))
-        .accessibilityAdjustableAction { dir in
-            store.setSpeed(resolved.value + (dir == .increment ? 0.05 : -0.05), scope: store.defaultSpeedScope(for: podcastId))
-        }
-        .accessibilityAction(named: "Speed options") { app.nowPlayingSheet = .speed(podcastId: podcastId) }
-    }
-
-    private func shortName(_ title: String) -> String {
-        let first = title.split(separator: " ").first.map(String.init) ?? title
-        return first.count <= 3 ? title : first
-    }
-
-    private func scale(speed: Double, width: CGFloat) -> some View {
-        Canvas { ctx, size in
-            let originX = needleX - CGFloat((speed - 0.5) / 0.05) * stepWidth
-            for i in 0...50 {
-                let x = originX + CGFloat(i) * stepWidth
-                guard x > -20 && x < size.width + 20 else { continue }
-                let major = i % 2 == 0
-                let h: CGFloat = major ? 15 : 8
-                let rect = CGRect(x: x - (major ? 0.75 : 0.5), y: size.height - 18 - h, width: major ? 1.5 : 1, height: h)
-                ctx.fill(Path(rect), with: .color(major ? NP.fg2 : NP.fg3))
-                if i % 4 == 2 {
-                    let value = 0.5 + Double(i) * 0.05
-                    let text = Text(Format.speedNumber(value)).font(.rounded(10, .semibold)).foregroundStyle(NP.fg2)
-                    ctx.draw(text, at: CGPoint(x: x, y: size.height - 8))
-                }
-            }
-        }
-    }
-
-    private var needle: some View {
-        VStack(spacing: 0) {
-            RoundedRectangle(cornerRadius: 3).fill(Palette.tomato).frame(width: 10, height: 6)
-            RoundedRectangle(cornerRadius: 2).fill(Palette.tomato).frame(width: 3, height: 36).padding(.top, -2)
-        }
-        .offset(x: -3.5)
-        .shadow(color: Palette.tomato.opacity(0.6), radius: 4)
-    }
-
-    private var defaultMark: some View {
-        VStack(spacing: 2) {
-            Text("DEFAULT").font(.rounded(8.5, .bold)).tracking(0.5)
-            Image(systemName: "arrowtriangle.down.fill").font(.system(size: 6))
-        }
-        .foregroundStyle(NP.fg2)
-        .frame(width: 44)
-    }
-}
-
+/// Speed, sleep timer, AirPlay and the queue. Smart Speed, Voice Boost and the rest live on the
+/// settings page; tapping the speed goes there.
 private struct UtilityRow: View {
     var item: EpisodeItem
     @Environment(PoddleStore.self) private var store
@@ -465,40 +445,35 @@ private struct UtilityRow: View {
 
     var body: some View {
         let resolved = store.resolved(item.podcast.id)
+        let custom = store.customizesPlayback(item.podcast.id)
         HStack(alignment: .top, spacing: 0) {
-            util("Smart", detail: resolved.smartSpeed.value ? "\(Format.saved(player.smartSaved)) saved" : "Off",
-                 icon: "waveform.path", on: resolved.smartSpeed.value) {
-                toggle(\.smartSpeed, current: resolved.smartSpeed)
+            Button { withAnimation { app.nowPlayingPage = .settings } } label: {
+                VStack(spacing: 5) {
+                    Text(Format.speed(resolved.speed.value))
+                        .font(.rounded(15, .heavy)).monospacedDigit().tracking(-0.3)
+                        .foregroundStyle(custom ? Palette.mustard : NP.fg)
+                        .contentTransition(.numericText(value: resolved.speed.value))
+                        .frame(width: 52, height: 44)
+                        .background(custom ? Palette.mustard.opacity(0.2) : NP.util, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    VStack(spacing: 0) {
+                        Text("Speed").fontWeight(.bold)
+                        Text(resolved.smartSpeed.value ? "\(Format.saved(player.smartSaved)) saved" : custom ? "This show" : "Default")
+                            .lineLimit(1)
+                    }
+                    .font(.text(10.5, .semibold))
+                    .foregroundStyle(NP.fg2)
+                }
+                .frame(maxWidth: .infinity)
             }
-            util("Boost", detail: resolved.voiceBoost.value ? "On" : "Off", icon: "speaker.wave.2", on: resolved.voiceBoost.value) {
-                toggle(\.voiceBoost, current: resolved.voiceBoost)
-            }
+            .buttonStyle(.pressable)
+            .accessibilityLabel("Speed \(Format.speed(resolved.speed.value)). Playback settings")
             SleepMenu()
             AirPlayUtil()
-            util("Queue", detail: "& chapters", icon: "list.bullet.indent", on: false) { app.nowPlayingSheet = .queueAndChapters }
-        }
-    }
-
-    /// Flips the setting where it lives: the show's override if it has one, otherwise the default.
-    private func toggle(_ key: WritableKeyPath<PodcastSettings, Bool?>, current: Resolved<Bool>) {
-        if current.isOverride {
-            store.updateSettings(item.podcast.id) { $0[keyPath: key] = !current.value }
-        } else {
-            store.updateGlobal { g in
-                switch key {
-                case \PodcastSettings.smartSpeed: g.smartSpeed.toggle()
-                default: g.voiceBoost.toggle()
-                }
+            Button { app.nowPlayingSheet = .queue } label: {
+                UtilityLabel(title: "Up Next", detail: "\(store.upNext(excluding: item.id).count) more", icon: "list.bullet.indent", on: false)
             }
+            .buttonStyle(.pressable)
         }
-    }
-
-    private func util(_ title: String, detail: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            UtilityLabel(title: title, detail: detail, icon: icon, on: on)
-        }
-        .buttonStyle(.pressable)
-        .sensoryFeedback(.selection, trigger: on)
     }
 }
 

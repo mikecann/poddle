@@ -2,13 +2,12 @@ import SwiftUI
 import PoddleKit
 
 enum Tab: String, CaseIterable, Identifiable, Hashable {
-    case upNext, inbox, library, discover, stats
+    case upNext, library, discover, stats
     var id: String { rawValue }
 
     var title: String {
         switch self {
         case .upNext: "Up Next"
-        case .inbox: "Inbox"
         case .library: "Library"
         case .discover: "Discover"
         case .stats: "Stats"
@@ -18,7 +17,6 @@ enum Tab: String, CaseIterable, Identifiable, Hashable {
     var systemImage: String {
         switch self {
         case .upNext: "square.stack"
-        case .inbox: "tray"
         case .library: "square.grid.2x2"
         case .discover: "safari"
         case .stats: "chart.bar"
@@ -33,17 +31,20 @@ enum Route: Hashable {
     case importOvercast
 }
 
+/// Now Playing's three pages (decisions.md), left to right.
+enum NowPlayingPage: Hashable, CaseIterable {
+    case notes, player, settings
+}
+
 enum SheetRoute: Identifiable, Hashable {
-    case speed(podcastId: String)
     case showSettings(podcastId: String)
-    case queueAndChapters
+    case queue
     case episode(String)
 
     var id: String {
         switch self {
-        case let .speed(p): "speed-\(p)"
         case let .showSettings(p): "settings-\(p)"
-        case .queueAndChapters: "queue"
+        case .queue: "queue"
         case let .episode(e): "episode-\(e)"
         }
     }
@@ -59,6 +60,9 @@ final class AppModel {
     /// Sheets shown on top of Now Playing (it's its own presentation).
     var nowPlayingSheet: SheetRoute?
     var showNowPlaying = false
+    var nowPlayingPage: NowPlayingPage = .player
+    /// The Undo toast for destructive actions.
+    let undo = UndoCenter()
     var showYearInReview = false
     /// Pre-filled search for screenshots.
     var discoverQuery = ""
@@ -90,10 +94,9 @@ final class AppModel {
     func applyLaunchScreen(_ name: String, player: any PoddlePlayer, store: PoddleStore) {
         // The sample data's IDs, or real ones when screenshotting live data (`-PoddleLive YES`).
         let show = { (mockId: String) in store.podcast(mockId) != nil ? mockId : store.library.first?.id ?? mockId }
-        let episode = store.episode("ep_syntax_912") != nil ? "ep_syntax_912" : store.inbox.first?.id ?? store.queue.first?.id ?? ""
+        let episode = store.episode("ep_syntax_912") != nil ? "ep_syntax_912" : store.queue.first?.id ?? ""
         switch name {
         case "upNext": tab = .upNext
-        case "inbox": tab = .inbox
         case "library": tab = .library
         case "libraryList": tab = .library; UserDefaults.standard.set("list", forKey: "libraryLayout")
         case "podcast": tab = .library; paths[.library] = [.podcast(show("pod_syntax"))]
@@ -101,7 +104,7 @@ final class AppModel {
             tab = .library
             paths[.library] = [.podcast(show("pod_conan"))]
             sheet = .showSettings(podcastId: show("pod_conan"))
-        case "episode": tab = .inbox; paths[.inbox] = [.episode(episode)]
+        case "episode": tab = .upNext; paths[.upNext] = [.episode(episode)]
         case "settings": tab = .library; paths[.library] = [.settings]
         case "import", "importDone":
             tab = .library
@@ -114,8 +117,23 @@ final class AppModel {
         case "stats": tab = .stats
         case "yearInReview": tab = .stats; showYearInReview = true
         case "nowPlaying": showNowPlaying = true
-        case "speed": showNowPlaying = true; nowPlayingSheet = .speed(podcastId: player.item?.podcast.id ?? "")
-        case "chapters": showNowPlaying = true; nowPlayingSheet = .queueAndChapters
+        case "speed", "npSettings": showNowPlaying = true; nowPlayingPage = .settings
+        case "npNotes", "chapters": showNowPlaying = true; nowPlayingPage = .notes
+        case "queue": showNowPlaying = true; nowPlayingSheet = .queue
+        // Undo checks: archive or remove the second Up Next item through the real actions, and
+        // optionally press Undo a moment later.
+        case "undoArchive", "undoArchiveUndone", "undoRemove", "undoRemoveUndone":
+            tab = .upNext
+            let target = store.upNext(excluding: player.currentEpisodeId).dropFirst().first
+            Task {
+                try? await Task.sleep(for: .seconds(1.5))
+                guard let target else { return }
+                let actions = EpisodeActions(store: store, player: player, app: self)
+                if name.hasPrefix("undoArchive") { actions.archive(target) } else { actions.removeFromUpNext(target) }
+                guard name.hasSuffix("Undone") else { return }
+                try? await Task.sleep(for: .seconds(1.5))
+                undo.undo()
+            }
         default: break
         }
     }

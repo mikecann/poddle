@@ -99,7 +99,15 @@ struct SettingsView: View {
 
                 GroupLabel(text: "New episodes")
                 GroupCard {
-                    picker("Where they go", \.autoAdd, AutoAdd.allCases, \.label)
+                    Menu {
+                        Picker("Where they go", selection: Binding(get: { g.autoAdd.shown }, set: { v in store.updateGlobal { $0.autoAdd = v } })) {
+                            ForEach(AutoAdd.choices, id: \.self) { Text($0.choiceLabel).tag($0) }
+                        }
+                    } label: {
+                        Cell(title: "Where they go") { MenuValue(text: g.autoAdd.choiceLabel, isOverride: false) }
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.button).buttonStyle(.plain)
                     toggle("Notifications", \.notifications)
                     if push.notAskedYet || push.isDenied {
                         Button { push.requestAuthorizationIfNeeded() } label: {

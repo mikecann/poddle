@@ -79,7 +79,7 @@ struct PodcastView: View {
 
             ForEach(Array(episodes.enumerated()), id: \.element.id) { index, item in
                 PodcastEpisodeRow(item: item) {
-                    if item.isQueued { store.removeFromQueue(item.id) } else { store.queueLast(item.id) }
+                    if item.isQueued { actions.removeFromUpNext(item) } else { store.queueLast(item.id) }
                 }
                 .overlay(alignment: .top) { if index > 0 { RowDivider(leading: 20) } }
                 .swipeRow(
@@ -89,7 +89,7 @@ struct PodcastView: View {
                     ),
                     trailing: item.state.played
                         ? SwipeEdge(short: SwipeAction(title: "Unplayed", systemImage: "circle", fill: Fills.actionInk) { store.markUnplayed(item.id) })
-                        : SwipeEdge(short: .played { store.markPlayed(item.id) }.keepingRow)
+                        : SwipeEdge(short: .played { actions.markPlayed(item) }.keepingRow)
                 )
                 .onTapGesture { app.push(.episode(item.id)) }
                 .contextMenu {
@@ -106,7 +106,7 @@ struct PodcastView: View {
         .task(id: podcastId) { await store.observePodcast(podcastId) }
         .sensoryFeedback(.success, trigger: copied)
         .confirmationDialog("Unsubscribe from \(podcast.title)?", isPresented: $confirmUnsubscribe, titleVisibility: .visible) {
-            Button("Unsubscribe", role: .destructive) { store.unsubscribe(podcastId) }
+            Button("Unsubscribe", role: .destructive) { actions.unsubscribe(podcast) }
         } message: {
             Text("Your history stays, under Past shows in the Library.")
         }
@@ -173,7 +173,7 @@ struct PodcastView: View {
         let s = store.settings(for: podcastId)
         var parts: [String] = []
         if let speed = s.speed { parts.append(Format.speed(speed)) }
-        if let add = s.autoAdd { parts.append(add == .upNextBottom ? "Bottom of queue" : add.label) }
+        if let add = s.autoAdd { parts.append(add.choiceLabel) }
         let rest = [s.smartSpeed != nil, s.voiceBoost != nil, s.skipIntro != nil, s.skipOutro != nil, s.keepLatest != nil,
                     s.notifications != nil, s.autoDownload != nil, s.episodeOrder != nil, s.autoArchive != nil].filter { $0 }.count
         if parts.isEmpty && rest == 0 { return "Using defaults" }
@@ -182,12 +182,13 @@ struct PodcastView: View {
     }
 
     @ViewBuilder private func headerMenu(_ podcast: Podcast) -> some View {
+        let actions = EpisodeActions(store: store, player: player, app: app)
         Button { app.sheet = .showSettings(podcastId: podcastId) } label: { Label("Settings", systemImage: "slider.horizontal.3") }
         if !podcast.isPrivate {
             ShareLink(item: URL(string: podcast.feedURL)!) { Label("Share feed", systemImage: "square.and.arrow.up") }
         }
         Button { Clipboard.copy(podcast.feedURL); copied += 1 } label: { Label("Copy feed URL", systemImage: "doc.on.doc") }
-        Button { store.markAllPlayed(podcastId) } label: { Label("Mark all played", systemImage: "checkmark.circle") }
+        Button { actions.markAllPlayed(podcast) } label: { Label("Mark all played", systemImage: "checkmark.circle") }
         if podcast.subscribed {
             Button(role: .destructive) { confirmUnsubscribe = true } label: { Label("Unsubscribe", systemImage: "minus.circle") }
         }

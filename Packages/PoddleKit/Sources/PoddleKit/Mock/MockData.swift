@@ -5,6 +5,16 @@ import Foundation
 public enum MockData {
     public static let playingEpisodeId = "ep_dwarkesh_rl"
     public static let playingPosition: Double = 41 * 60 + 8
+    /// Full notes for the playing episode, with links and timestamps, like a real feed's.
+    static let playingShowNotes = """
+        <p>How the labs are scaling <strong>reinforcement learning</strong>, why evals keep breaking, and what it means for 2027.</p>\
+        <p>Sponsored by <a href="https://example.com/sponsor">Sponsor Co</a>. Transcript at https://www.dwarkesh.com/p/rl-scaling.</p>\
+        <h3>Timestamps</h3>\
+        <ul><li>(00:00:00) Intro</li><li>(00:04:12) Why RL is back</li><li>(00:18:40) Evals keep breaking</li>\
+        <li>(00:41:08) Compute and the 2027 question</li><li>(01:12:30) What happens to software jobs</li>\
+        <li>(01:38:55) Lightning round</li></ul>\
+        <p><em>Thanks to everyone who sent in questions &amp; corrections.</em></p>
+        """
 
     struct Ep {
         var id: String
@@ -195,7 +205,7 @@ public enum MockData {
                     id: e.id, podcastId: p.id, guid: "guid-\(slug)",
                     enclosureURL: "https://cdn.example.com/\(slug).mp3", enclosureLength: e.minutes * 60 * 16_000,
                     title: e.title, pubDate: pub, duration: (e.minutes * 60).rounded(),
-                    showNotesHTML: e.notes.isEmpty ? "<p>\(e.title).</p>" : "<p>\(e.notes)</p>",
+                    showNotesHTML: e.id == playingEpisodeId ? playingShowNotes : e.notes.isEmpty ? "<p>\(e.title).</p>" : "<p>\(e.notes)</p>",
                     chaptersURL: e.id == playingEpisodeId || e.id == "ep_atp_649" ? "https://cdn.example.com/\(slug).json" : nil
                 )
                 states[e.id] = EpisodeState(

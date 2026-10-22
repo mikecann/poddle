@@ -33,11 +33,11 @@ struct UpNextView: View {
                 .moveDisabled(true)
 
             ForEach(Array(shown.enumerated()), id: \.element.id) { index, item in
-                EpisodeRow(item: item, style: .queue, showGrip: true)
+                EpisodeRow(item: item, showGrip: true)
                     .overlay(alignment: .top) { if index > 0 { RowDivider() } }
                     .swipeRow(
                         leading: SwipeEdge(short: .top { actions.moveToTopOfUpNext(item.id) }),
-                        trailing: SwipeEdge(short: .remove { store.removeFromQueue(item.id) }, long: .played { store.markPlayed(item.id) })
+                        trailing: SwipeEdge(short: .remove { actions.removeFromUpNext(item) }, long: .played { actions.markPlayed(item) })
                     )
                     .onTapGesture { actions.playNow(item.id) }
                     .contextMenu {
@@ -66,10 +66,10 @@ struct UpNextView: View {
         #endif
         .confirmationDialog("Clear Up Next?", isPresented: $confirmClear, titleVisibility: .visible) {
             Button("Clear \(items.count) episodes", role: .destructive) {
-                withAnimation { store.clearQueue(keeping: player.currentEpisodeId) }
+                withAnimation { actions.clearQueue(keeping: player.currentEpisodeId) }
             }
         } message: {
-            Text("Whatever's playing stays. Everything else goes back to where it came from.")
+            Text("Whatever's playing stays. You can undo this for a few seconds.")
         }
     }
 
@@ -122,14 +122,13 @@ struct UpNextView: View {
             VStack(spacing: 10) {
                 Image(systemName: "square.stack").font(.system(size: 34)).foregroundStyle(Palette.ink3)
                 Text("Nothing queued").font(.rounded(20, .bold)).foregroundStyle(Palette.ink)
-                Text("Swipe right on anything in your Inbox to line it up here.")
+                Text("New episodes from your shows land here. Swipe right on any episode in a show to add it.")
                     .font(.text(14)).foregroundStyle(Palette.ink2).multilineTextAlignment(.center)
             }
             .frame(maxWidth: .infinity)
             .padding(40)
         } else {
-            let inbox = store.inbox.count
-            Text(inbox > 0 ? "That's the lot. \(inbox) new in your Inbox." : "That's the lot.")
+            Text("That's the lot.")
                 .font(.text(13, .medium)).foregroundStyle(Palette.ink3)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)

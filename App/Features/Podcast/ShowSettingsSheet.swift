@@ -6,6 +6,7 @@ import PoddleKit
 struct ShowSettingsSheet: View {
     var podcastId: String
     @Environment(PoddleStore.self) private var store
+    @Environment(AppModel.self) private var app
     @Environment(\.dismiss) private var dismiss
 
     private var s: PodcastSettings { store.settings(for: podcastId) }
@@ -50,14 +51,14 @@ struct ShowSettingsSheet: View {
 
                 GroupLabel(text: "New episodes")
                 PoddleSegmented(
-                    options: [(AutoAdd.inbox, "Inbox"), (.upNextTop, "Top"), (.upNextBottom, "Bottom"), (.dontAdd, "Don't add")],
-                    selection: Binding(get: { r.autoAdd.value }, set: { v in update { $0.autoAdd = v == g.autoAdd ? nil : v } }),
+                    options: AutoAdd.choices.map { ($0, $0.choiceLabel) },
+                    selection: Binding(get: { r.autoAdd.value.shown }, set: { v in update { $0.autoAdd = v == g.autoAdd.shown ? nil : v } }),
                     height: 40, fontSize: 13
                 )
                 .padding(6)
                 .card(cornerRadius: 16)
                 .padding(.horizontal, 16)
-                Text(r.isPriority ? "A priority show: new episodes skip the Inbox." : "New episodes wait in the Inbox for you.")
+                Text(r.autoAdd.value.shown.explanation)
                     .font(.text(12.5)).foregroundStyle(Palette.ink2)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.horizontal, 32).padding(.top, 8)
@@ -82,7 +83,11 @@ struct ShowSettingsSheet: View {
 
                 if s.hasOverrides {
                     Button {
+                        let previous = s
                         withAnimation { store.updateSettings(podcastId) { $0 = PodcastSettings(podcastId: $0.podcastId) } }
+                        app.undo.show("Reset", store.podcast(podcastId)?.title ?? "show settings") {
+                            store.updateSettings(podcastId) { $0 = previous }
+                        }
                     } label: {
                         Text("Reset everything to my defaults").font(.text(15, .semibold)).foregroundStyle(Palette.tomato)
                             .frame(maxWidth: .infinity).frame(height: 48)
@@ -239,5 +244,29 @@ private struct SpeedSliderRow: View {
         .sensoryFeedback(.selection, trigger: Speed.detent(shown))
         .opacity(isCustom ? 1 : 0.55)
         .disabled(!isCustom)
+    }
+}
+
+extension AutoAdd {
+    /// The new-episode choices the app offers (decisions.md). There's no Inbox any more.
+    static let choices: [AutoAdd] = [.upNextBottom, .upNextTop, .dontAdd]
+
+    /// A stored `inbox` shows as "Up Next bottom", which is what the backend turns it into.
+    var shown: AutoAdd { self == .inbox ? .upNextBottom : self }
+
+    var choiceLabel: String {
+        switch shown {
+        case .upNextTop: "Up Next top"
+        case .dontAdd: "Don't add"
+        default: "Up Next bottom"
+        }
+    }
+
+    var explanation: String {
+        switch shown {
+        case .upNextTop: "A priority show: new episodes jump to the top of Up Next."
+        case .dontAdd: "New episodes stay on the show's page until you add them."
+        default: "New episodes join the bottom of Up Next."
+        }
     }
 }

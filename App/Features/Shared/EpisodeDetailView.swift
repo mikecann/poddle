@@ -59,7 +59,9 @@ struct EpisodeDetailView: View {
                             app.showNowPlaying = true
                         }
                         if item.isQueued {
-                            PoddleButton(title: "In Up Next", systemImage: "checkmark") { store.removeFromQueue(item.id) }
+                            PoddleButton(title: "In Up Next", systemImage: "checkmark") {
+                                EpisodeActions(store: store, player: player, app: app).removeFromUpNext(item)
+                            }
                         } else {
                             PoddleButton(title: "Queue", systemImage: "plus") { store.queueLast(item.id) }
                         }
