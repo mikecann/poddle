@@ -6,7 +6,11 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 
 - **Name:** Poddle. Bundle ID `com.mikecann.poddle`. Apple team `4DTAZSZL6B` (paid account).
 - **Brand (22 Oct):** Poddle sounds like "poodle", so the brand is a cute, fluffy cartoon poodle. Mike chose **A, "Headphones Poodle"** (`designs/branding/round1/concept-a.jpg`): a round cream poodle with cloud curls, a thick deep-ink outline, closed happy eyes, blush cheeks and tomato-red headphones. Flat sticker style, a tomato-to-orange gradient icon and a chunky rounded wordmark. The other four directions are kept beside it for reference. Final assets live in `designs/branding/final/`.
-- **Look:** direction C, "Earful", warm and tactile: `designs/c-earful-warm.html`. Swap the name Earful for Poddle everywhere. Directions A and B are only kept for reference.
+- **Look, v2 (Mike, 22 Oct): "Cloud Fluff" plus the companion.** This replaces the radio-style "Earful" look. The mock is `designs/explore-poodle/fluff.jpg`.
+  - **Feel:** soft and pillowy, from the poodle's cloud curls. Cards and the mini player have gently scalloped curl edges, buttons are puffy with soft shadows, and the progress bar is a line of curls that fills in as you listen. Now Playing has a blush background.
+  - **Colour and type:** warm cream, apricot and blush, with tomato red as the one strong accent. Rounded type.
+  - **The companion:** a small animated Poddle (the mascot) follows you round the app doing different things. Mike liked the poodle peeking over the mini player in `designs/explore-poodle/sticker.jpg`. The animation is light (bobbing, swaying, reactions), respects Reduce Motion, and can be turned off in Profile.
+- **Look, v1 (superseded):** direction C, "Earful", warm and tactile: `designs/c-earful-warm.html`. Swap the name Earful for Poddle everywhere. Directions A and B are only kept for reference.
 - **Platforms:** native SwiftUI. iPhone first, iPad and Mac to follow from the same multiplatform target. Minimum **iOS 18.0** (Mike's phone is an iPhone XS Max on iOS 18.7, which can't run iOS 26 or later) and **macOS 26.0**. Newer APIs go behind `if #available`. His iPad is on iPadOS 26.6. No Watch or CarPlay for now.
 - **Import:** Overcast "All data" OPML, with history. Apple Podcasts only by searching the directory.
   - Assumed speed for imported history: **2.0×** (Mike's usual Overcast speed).
