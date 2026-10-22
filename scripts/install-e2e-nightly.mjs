@@ -22,8 +22,8 @@ const config = path.join(root, "nightly.json");
 writeFileSync(config, JSON.stringify({
   root, repo: process.env.E2E_REMOTE_REPO ?? path.join(home, "dev/me/poddle"),
   simName: process.env.E2E_SIM_NAME ?? "Poddle E2E",
-  simRuntime: process.env.E2E_SIM_RUNTIME ?? "18.1",
-  simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
+  simRuntime: process.env.E2E_SIM_RUNTIME ?? "27.0",
+  simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
   developerDir: process.env.E2E_DEVELOPER_DIR ?? path.join(home, "Applications/Xcode-27.1.app/Contents/Developer"),
 }, null, 2) + "\n");
 const escape = (s) => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");

@@ -26,7 +26,7 @@ const source = process.env.E2E_SOURCE_PACKAGES ?? "/tmp/poddle-dd-check/SourcePa
 console.log(`[e2e remote] ${sha}, ${suite}, on ${host}`);
 console.log(`  Fetch origin, verify commit is pushed, create an isolated worktree, npm ci${suite === "web" ? "" : ", verify and sync pinned Swift packages"}.`);
 console.log(`  Take ~/.blender-queue.lock (shared with render-box); run npm run test:e2e${suite === "both" ? "" : `:${suite}`} ${args.map(quote).join(" ")}`);
-console.log(`  Xcode ${process.env.E2E_DEVELOPER_DIR ?? "~/Applications/Xcode-27.1.app"}, iOS runtime ${process.env.E2E_SIM_RUNTIME ?? "18.1"}, device ${process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-16"}.`);
+console.log(`  Xcode ${process.env.E2E_DEVELOPER_DIR ?? "~/Applications/Xcode-27.1.app"}, iOS runtime ${process.env.E2E_SIM_RUNTIME ?? "27.0"}, device ${process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro"}.`);
 console.log(`  Download scenario results, failure screenshots, accessibility dumps and reports to ${results}`);
 if (dryRun) process.exit(0);
 
@@ -47,8 +47,8 @@ const config = {
   sha, suite, args, runId: id, root: remoteRoot, repo: process.env.E2E_REMOTE_REPO ?? `${home}/dev/me/poddle`,
   source: suite === "web" ? null : `${upload}/SourcePackages`,
   simName: process.env.E2E_SIM_NAME ?? "Poddle E2E",
-  simRuntime: process.env.E2E_SIM_RUNTIME ?? "18.1",
-  simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
+  simRuntime: process.env.E2E_SIM_RUNTIME ?? "27.0",
+  simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
   developerDir: process.env.E2E_DEVELOPER_DIR ?? `${home}/Applications/Xcode-27.1.app/Contents/Developer`,
 };
 ssh(`mkdir -p ${quote(upload)}`);

@@ -26,8 +26,8 @@ const output = path.join(root, "results", sha, config.runId);
 mkdirSync(output, { recursive: true });
 const startedAt = new Date().toISOString();
 const env = {
-  ...process.env, E2E_SIM_RUNTIME: config.simRuntime ?? "18.1",
-  E2E_SIM_DEVICE_TYPE: config.simType ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
+  ...process.env, E2E_SIM_RUNTIME: config.simRuntime ?? "27.0",
+  E2E_SIM_DEVICE_TYPE: config.simType ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
   PLAYWRIGHT_SKIP_BROWSER_GC: "1",
   PLAYWRIGHT_BROWSERS_PATH: path.join(root, "browsers"),
   PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(checkout, "e2e/.runtime/web-results.json"),
