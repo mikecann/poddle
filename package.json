@@ -3,6 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "chef guard",
+    "chef:local-env": "node scripts/chef-local-env.mjs",
     "dev": "convex dev",
     "dev:local": "CONVEX_AGENT_MODE=anonymous convex dev",
     "codegen": "convex codegen",
@@ -18,6 +20,8 @@
   },
   "dependencies": {
     "@convex-dev/auth": "^2.0.0-beta.0",
+    "@convex-dev/chef-cloud": "file:vendor/convex-dev-chef-cloud-0.0.1.tgz",
+    "@convex-dev/feedback": "file:vendor/convex-dev-feedback-0.0.1.tgz",
     "@convex-dev/static-hosting": "^0.2.1",
     "convex": "^1.47.0",
     "convex-helpers": "^0.1.128",

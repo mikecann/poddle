@@ -6,6 +6,7 @@ export default defineConfig({
     // The website's tests that need a DOM say so with `@vitest-environment jsdom`.
     environment: "node",
     include: ["tests/**/*.test.ts", "web/src/**/*.test.ts"],
-    server: { deps: { inline: ["convex-test"] } },
+    // Chef's test helpers use import.meta.glob, so they go through Vite too.
+    server: { deps: { inline: ["convex-test", "@convex-dev/feedback", "@convex-dev/chef-cloud"] } },
   },
 });
