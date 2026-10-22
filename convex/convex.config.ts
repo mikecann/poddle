@@ -29,6 +29,8 @@ const app = defineApp({
     AUTH_GOOGLE_CLIENT_SECRET: v.string(),
     // Comma-separated emails allowed to make an account (lib/allowlist.ts).
     PODDLE_ALLOWED_EMAILS: v.optional(v.string()),
+    // Exactly "1" opens sign-up to anyone with a verified Apple or Google email (lib/allowlist.ts).
+    PODDLE_OPEN_SIGNUP: v.optional(v.string()),
     // Unset on production. Only an explicit "1" enables test sign-in (auth.ts).
     PODDLE_TEST_SIGNIN: v.optional(v.string()),
     // Admin path for scripts (lib/auth.ts) and APNs, read with process.env.

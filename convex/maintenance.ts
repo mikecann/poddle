@@ -19,7 +19,7 @@ export const daily = internalMutation({
     let tombstones = 0;
 
     for (const user of await rawCtx.db.query("users").collect()) {
-      if (user.mergedInto) continue;
+      if (user.mergedInto || user.deletedAt !== undefined) continue;
       const ctx = asUser(rawCtx, user._id);
 
       // Per-show "auto-archive unplayed after N days" (0 = never), with this person's settings.

@@ -45,6 +45,7 @@ type Env = {
   readonly AUTH_PRIVATE_KEY: string;
   readonly PODDLE_ALLOWED_EMAILS: string | undefined;
   readonly PODDLE_API_TOKEN: string | undefined;
+  readonly PODDLE_OPEN_SIGNUP: string | undefined;
   readonly PODDLE_SITE_URL: string | undefined;
   readonly PODDLE_TEST_SIGNIN: string | undefined;
 };

@@ -16,6 +16,10 @@ export function Layout({ children, wide = false }: { children: ReactNode; wide?:
       <main className={wide ? "page wide" : "page"}>{children}</main>
       <footer className="footer">
         <span>Poddle, a podcast player for iPhone, iPad and Mac.</span>
+        <nav aria-label="About Poddle">
+          <Link to="/support">Support</Link>
+          <Link to="/privacy">Privacy</Link>
+        </nav>
       </footer>
     </>
   );

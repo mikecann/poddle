@@ -19,6 +19,13 @@ final class ArtworkThumbnails: @unchecked Sendable {
         try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
     }
 
+    /// Forgets every thumbnail, in memory and on disk (deleting the account).
+    func removeAll() {
+        memory.removeAllObjects()
+        try? FileManager.default.removeItem(at: directory)
+        try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    }
+
     /// Sizes round up to steps of 64 px, so nearby sizes share a thumbnail.
     static func pixels(for points: CGFloat, scale: CGFloat) -> Int {
         max(64, Int((points * scale / 64).rounded(.up)) * 64)

@@ -8,7 +8,9 @@
  * @module
  */
 
+import type * as accountDeletion from "../accountDeletion.js";
 import type * as apns from "../apns.js";
+import type * as appleRevoke from "../appleRevoke.js";
 import type * as auth from "../auth.js";
 import type * as chef from "../chef.js";
 import type * as crons from "../crons.js";
@@ -59,7 +61,9 @@ import type {
 } from "convex/server";
 
 declare const fullApi: ApiFromModules<{
+  accountDeletion: typeof accountDeletion;
   apns: typeof apns;
+  appleRevoke: typeof appleRevoke;
   auth: typeof auth;
   chef: typeof chef;
   crons: typeof crons;

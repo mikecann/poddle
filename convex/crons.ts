@@ -8,4 +8,7 @@ crons.interval("poll due feeds", { minutes: 15 }, internal.feeds.pollDueFeeds, {
 
 crons.daily("housekeeping", { hourUTC: 16, minuteUTC: 0 }, internal.maintenance.daily, {});
 
+// Account deletions run as a chain of steps; this restarts any chain that stopped.
+crons.interval("resume account deletions", { hours: 1 }, internal.accountDeletion.resumeStalled, {});
+
 export default crons;

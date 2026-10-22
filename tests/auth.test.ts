@@ -2,7 +2,7 @@ import { registerCore } from "@convex-dev/auth/test";
 import { registerAnonymousProvider } from "@convex-dev/auth/components/anonymous/test";
 import { afterEach, beforeAll, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
-import { allowedEmails } from "../convex/lib/allowlist";
+import { allowedEmails, maySignUp, signUpIsOpen } from "../convex/lib/allowlist";
 import { testSignInRefusal } from "../convex/lib/testSignIn";
 import { MIKE, setup } from "./helpers";
 import { seedShow } from "./seed";
@@ -73,6 +73,40 @@ describe("allowlist", () => {
   test("nobody new gets in when the variable is unset", async () => {
     const t = setupAuth({ PODDLE_ALLOWED_EMAILS: undefined });
     await expect(t.raw.mutation(internal.users.createUserGoogle, { provider: google(MIKE) })).rejects.toThrow(/invite-only/);
+  });
+  test("open sign-up is on only when PODDLE_OPEN_SIGNUP is exactly 1", () => {
+    for (const flag of [undefined, "", "0", "true", "yes", " 1"]) expect(signUpIsOpen({ PODDLE_OPEN_SIGNUP: flag })).toBe(false);
+    expect(signUpIsOpen({ PODDLE_OPEN_SIGNUP: "1" })).toBe(true);
+    const open = { PODDLE_OPEN_SIGNUP: "1" };
+    expect(maySignUp("stranger@example.com", true, open)).toBe(true);
+    // Still a verified email, from Apple or Google.
+    expect(maySignUp("stranger@example.com", false, open)).toBe(false);
+    expect(maySignUp(undefined, true, open)).toBe(false);
+    expect(maySignUp("  ", true, open)).toBe(false);
+    expect(maySignUp("stranger@example.com", true, {})).toBe(false);
+    expect(maySignUp("Friend@Example.com", true, { PODDLE_ALLOWED_EMAILS: "friend@example.com" })).toBe(true);
+  });
+
+  test("with open sign-up, anyone with a verified email makes an account", async () => {
+    const t = setupAuth({ PODDLE_OPEN_SIGNUP: "1", PODDLE_ALLOWED_EMAILS: undefined });
+    expect(await t.raw.query(api.users.signUpOpen, {})).toBe(true);
+    const viaGoogle = await t.raw.mutation(internal.users.createUserGoogle, { provider: google("stranger@example.com") });
+    expect((await t.run((ctx) => ctx.db.get(viaGoogle)))?.email).toBe("stranger@example.com");
+    const viaApple = await t.raw.mutation(internal.users.createUserApple, { provider: apple("someone@privaterelay.appleid.com") });
+    expect((await t.run((ctx) => ctx.db.get(viaApple)))?.email).toBe("someone@privaterelay.appleid.com");
+    // Unverified or missing emails still don't.
+    await expect(t.raw.mutation(internal.users.createUserGoogle, { provider: google("nope@example.com", false) })).rejects.toThrow(
+      /invite-only/,
+    );
+    await expect(t.raw.mutation(internal.users.createUserApple, { provider: apple(undefined) })).rejects.toThrow(/invite-only/);
+  });
+
+  test("with it off, people not on the list get the invite-only message", async () => {
+    const t = setupAuth({ PODDLE_OPEN_SIGNUP: "0" });
+    expect(await t.raw.query(api.users.signUpOpen, {})).toBe(false);
+    await expect(t.raw.mutation(internal.users.createUserGoogle, { provider: google("stranger@example.com") })).rejects.toThrow(
+      "Poddle is invite-only for now.",
+    );
   });
 });
 

@@ -53,7 +53,7 @@ struct SignInView: View {
                 }
                 .disabled(working != nil)
 
-                Text("Poddle is invite-only for now. Signing in with Apple and Google using the same email gets you the same account.")
+                Text("Signing in with Apple and Google using the same email gets you the same account.")
                     .font(.text(13))
                     .foregroundStyle(Palette.ink3)
                     .multilineTextAlignment(.center)

@@ -251,6 +251,24 @@ public final class DownloadManager {
         startQueued()
     }
 
+    /// Cancels every download and deletes every downloaded file (deleting the account).
+    public func removeAll() {
+        for (_, task) in tasks {
+            cancelled.insert(task.taskIdentifier)
+            task.cancel()
+        }
+        tasks = [:]
+        for record in records.values {
+            if let name = record.fileName { try? FileManager.default.removeItem(at: directory.appending(path: name)) }
+        }
+        try? FileManager.default.removeItem(at: directory.appending(path: ".resume"))
+        try? FileManager.default.createDirectory(at: directory.appending(path: ".resume"), withIntermediateDirectories: true)
+        records = [:]
+        progressById = [:]
+        lastProgressUpdate = [:]
+        saveRecords()
+    }
+
     public func setLoudness(_ lufs: Double, for episodeId: String) {
         guard records[episodeId] != nil else { return }
         records[episodeId]?.loudness = lufs

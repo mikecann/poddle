@@ -15,6 +15,10 @@ struct SettingsView: View {
     @Environment(Account.self) private var account: Account?
 
     @State private var confirmingSignOut = false
+    @State private var confirmingDelete = false
+    @State private var confirmingDeleteAgain = false
+    @State private var deleting = false
+    @State private var deleteError: String?
 
     private var g: GlobalSettings { store.global }
 
@@ -170,10 +174,12 @@ struct SettingsView: View {
                 }
                 #endif
 
+                deleteAccountSection
+
                 VStack(spacing: 6) {
                     AppMark(size: 44)
                     Text("Poddle").font(.rounded(17, .heavy)).foregroundStyle(Palette.ink)
-                    Text(app.isMock ? "Version 0.1 · sample data" : "Version 0.1 · synced with Convex").font(.text(12.5)).foregroundStyle(Palette.ink2)
+                    Text("Version \(Self.version) · \(app.isMock ? "sample data" : "synced with Convex")").font(.text(12.5)).foregroundStyle(Palette.ink2)
                 }
                 .padding(.top, 30).padding(.bottom, 30)
                 ListeningBrandFooter()
@@ -184,6 +190,58 @@ struct SettingsView: View {
             Button("Sign Out", role: .destructive) { Task { await account?.signOut() } }
         } message: {
             Text("Your library stays in your account. Downloads stay on this device.")
+        }
+        .confirmationDialog("Delete your Poddle account?", isPresented: $confirmingDelete, titleVisibility: .visible) {
+            Button("Delete Account", role: .destructive) { confirmingDeleteAgain = true }
+        } message: {
+            Text("This deletes your library, Up Next, listening history, stats and settings, and removes the episodes downloaded on this device. You can't undo it.")
+        }
+        .alert("Are you sure?", isPresented: $confirmingDeleteAgain) {
+            Button("Delete Everything", role: .destructive) { deleteAccount() }
+            Button("Keep My Account", role: .cancel) {}
+        } message: {
+            Text("Everything goes for good, and you'll be signed out on all your devices.")
+        }
+        .alert("Couldn't delete your account", isPresented: Binding(get: { deleteError != nil }, set: { if !$0 { deleteError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(deleteError ?? "")
+        }
+    }
+
+    /// Account deletion (App Store Guideline 5.1.1(v)). Signed in only.
+    @ViewBuilder private var deleteAccountSection: some View {
+        if let account, account.isSignedIn {
+            GroupLabel(text: "Your data")
+            GroupCard {
+                Button { confirmingDelete = true } label: {
+                    Cell(title: deleting ? "Deleting your account…" : "Delete account",
+                         subtitle: "Your library, history, stats and settings", icon: "trash", iconTint: Palette.tomato) {
+                        if deleting { ProgressView() }
+                    }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .disabled(deleting)
+                .accessibilityHint("Deletes your Poddle account and everything in it")
+            }
+        }
+    }
+
+    /// Deletes the account on the server and signs out. `PoddleApp.accountChanged` then wipes
+    /// this person's cache, outbox and downloads once the store has let go of them.
+    private func deleteAccount() {
+        guard let account, let userId = account.userId else { return }
+        deleting = true
+        app.wipeAfterSignOut = userId
+        Task {
+            do {
+                try await account.deleteAccount()
+            } catch {
+                app.wipeAfterSignOut = nil
+                deleteError = error.localizedDescription
+            }
+            deleting = false
         }
     }
 
@@ -230,6 +288,10 @@ struct SettingsView: View {
                 Cell(title: "Connecting…") { ProgressView() }
             }
         }
+    }
+
+    private static var version: String {
+        Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
     }
 
     private func retryFailed() {

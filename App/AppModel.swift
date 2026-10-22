@@ -78,6 +78,9 @@ final class AppModel {
     var linkStarts: [String: Double] = [:]
     /// A shared link that went nowhere (a private feed's, or a deleted episode).
     var linkNotFound = false
+    /// Whose cache, outbox and downloads to wipe from this device once the store has switched
+    /// away from them (they just deleted their account; `PoddleApp.accountChanged`).
+    var wipeAfterSignOut: String?
 
     func path(_ tab: Tab) -> Binding<[Route]> {
         Binding { self.paths[tab] ?? [] } set: { self.paths[tab] = $0 }

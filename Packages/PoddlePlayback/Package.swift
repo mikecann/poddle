@@ -11,7 +11,8 @@ let package = Package(
         .executable(name: "poddle-render", targets: ["poddle-render"]),
     ],
     targets: [
-        .target(name: "PoddlePlayback"),
+        // The App Store privacy manifest for what this package uses (system uptime).
+        .target(name: "PoddlePlayback", resources: [.copy("PrivacyInfo.xcprivacy")]),
         .executableTarget(name: "poddle-render", dependencies: ["PoddlePlayback"]),
         .testTarget(name: "PoddlePlaybackTests", dependencies: ["PoddlePlayback"]),
     ],

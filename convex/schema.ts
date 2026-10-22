@@ -92,7 +92,34 @@ export default defineSchema({
     mergedInto: v.optional(v.id("users")),
     /** Made by the dev-only test sign-in. */
     isTest: v.optional(v.boolean()),
-  }).index("by_email", ["email"]),
+    /**
+     * Set when the person deleted their account (`users:deleteAccount`). The row
+     * stays as a tombstone with no name, email or photo, because Convex Auth keeps
+     * its provider account pointing at this id: signing in again with the same
+     * Apple or Google account brings it back, empty (users.ts).
+     */
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_email", ["email"])
+    .index("by_mergedInto", ["mergedInto"]),
+
+  /**
+   * One per account deletion. The work is batched through the scheduler; this
+   * records how far it got, so it picks up where it left off (accountDeletion.ts).
+   */
+  accountDeletions: defineTable({
+    userId: v.id("users"),
+    requestedAt: v.number(),
+    /** The table being emptied now (`accountDeletion.STAGES`). */
+    stage: v.string(),
+    /** Full passes over every stage; another pass runs if rows turned up behind it. */
+    passes: v.number(),
+    deletedRows: v.number(),
+    lastStepAt: v.number(),
+    finishedAt: v.optional(v.number()),
+  })
+    .index("by_user", ["userId"])
+    .index("by_finishedAt_lastStepAt", ["finishedAt", "lastStepAt"]),
 
   /** Test sign-in hands the email it wants to `users:createUserAnonymous` through here (dev only). */
   testSignIns: defineTable({ email: v.string() }),

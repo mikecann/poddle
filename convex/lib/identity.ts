@@ -4,7 +4,8 @@ import type { QueryCtx } from "../_generated/server";
 
 /**
  * Who's signed in: the user their session belongs to, or the one that user was
- * merged into. Use this rather than getAuthUserId everywhere.
+ * merged into. Use this rather than getAuthUserId everywhere. A deleted account
+ * counts as signed out, so every session it had stops working straight away.
  */
 export async function currentUserId(ctx: QueryCtx): Promise<Id<"users"> | null> {
   const userId = await getAuthUserId(ctx);
@@ -12,7 +13,9 @@ export async function currentUserId(ctx: QueryCtx): Promise<Id<"users"> | null> 
   const id = ctx.db.normalizeId("users", userId);
   const user = id && (await ctx.db.get(id));
   if (!user) return null;
-  return user.mergedInto ?? user._id;
+  const owner = user.mergedInto ? await ctx.db.get(user.mergedInto) : user;
+  if (!owner || owner.deletedAt !== undefined) return null;
+  return owner._id;
 }
 
 export async function userByEmail(ctx: QueryCtx, email: string) {

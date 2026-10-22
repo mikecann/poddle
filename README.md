@@ -21,7 +21,7 @@ Regenerate the processed PNGs with `swift scripts/prepare-brand.swift` from the 
 
 ## Launch arguments
 
-With none, the app runs on live data (`LiveStore` over Convex: the dev deployment in Debug, prod in Release) and plays through the real engine (`EnginePlayer`). Pass these in the scheme's Arguments, or after `xcrun simctl launch <device> com.mikecann.poddle`. They're read in `App/PoddleApp.swift` (and `AppModel.applyLaunchScreen`).
+With none, the app runs on live data (`LiveStore` over Convex: the dev deployment in Debug, prod in Release) and plays through the real engine (`EnginePlayer`). Pass these in the scheme's Arguments, or after `xcrun simctl launch <device> com.mikecann.poddle`. They're read in `App/PoddleApp.swift` (and `AppModel.applyLaunchScreen`), and only in Debug builds: the Release (App Store) build ignores them all.
 
 | Argument | What it does |
 |---|---|
@@ -81,7 +81,7 @@ Deploy the backend first (`npx convex dev --once` on dev), since the site's `/e`
 
 ## Accounts and sign-in
 
-Everyone signs in with Apple or Google (Convex Auth v2, set up like Walkies). Each person has their own library, queue, settings, stats and devices; shows and episodes are shared. Sign-up is limited to `PODDLE_ALLOWED_EMAILS`. The API reference is in `docs/api.md`, "Accounts and sign-in".
+Everyone signs in with Apple or Google (Convex Auth v2, set up like Walkies). Each person has their own library, queue, settings, stats and devices; shows and episodes are shared. Sign-up is limited to `PODDLE_ALLOWED_EMAILS` unless `PODDLE_OPEN_SIGNUP=1`, which lets anyone with a verified Apple or Google email in. People can delete their account in the app (Profile) or on `/me`. Releasing to the App Store: `docs/runbooks/appstore-release.md`. The API reference is in `docs/api.md`, "Accounts and sign-in".
 
 ### Setting up Apple and Google sign-in
 

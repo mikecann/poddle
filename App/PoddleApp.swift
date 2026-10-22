@@ -22,6 +22,7 @@ struct PoddleApp: App {
     /// Launch arguments are documented in the README ("Launch arguments").
     init() {
         let defaults = UserDefaults.standard
+        #if DEBUG
         let screen = defaults.string(forKey: "PoddleScreen")
         // Sample data only when asked for: `-PoddleMock YES`, `-PoddleRealAudio YES`, or a screenshot run
         // without `-PoddleLive YES`. Otherwise it's LiveStore.
@@ -30,6 +31,15 @@ struct PoddleApp: App {
         // Fake playback and downloads on screenshot runs, unless `-PoddleMockPlayer NO`; `-PoddleMockPlayer YES`
         // forces it on any launch. Otherwise the real engine plays.
         let fakePlayback = defaults.object(forKey: "PoddleMockPlayer") != nil ? defaults.bool(forKey: "PoddleMockPlayer") : screen != nil
+        let autoplay = fakePlayback ? mock && defaults.string(forKey: "PoddlePaused") == nil : defaults.bool(forKey: "PoddleAutoplay")
+        #else
+        // Release (the App Store build): no sample data, screenshot or test hooks, just the real thing.
+        let screen: String? = nil
+        let realAudio = false
+        let mock = false
+        let fakePlayback = false
+        let autoplay = false
+        #endif
 
         let store: PoddleStore
         var account: Account?
@@ -56,7 +66,7 @@ struct PoddleApp: App {
             player.load(head.id)
         }
         if let screen { app.applyLaunchScreen(screen, player: player, store: store) }
-        if fakePlayback ? mock && defaults.string(forKey: "PoddlePaused") == nil : defaults.bool(forKey: "PoddleAutoplay") {
+        if autoplay {
             player.resume()
         }
         #if DEBUG
@@ -104,6 +114,13 @@ struct PoddleApp: App {
         let disk = userId.map { LiveDisk.forUser($0, deployment: account.config.deploymentURL) }
         if let disk { LiveDisk.adoptPreAccountFiles(deployment: account.config.deploymentURL, into: disk) }
         await live.switchAccount(userId: userId, auth: userId == nil ? nil : account)
+        // They deleted their account: nothing of theirs stays on this device.
+        if let gone = app.wipeAfterSignOut {
+            app.wipeAfterSignOut = nil
+            LiveDisk.forUser(gone, deployment: account.config.deploymentURL).erase()
+            AppServices.current?.downloads?.removeAll()
+            ArtworkThumbnails.shared.removeAll()
+        }
         store.resetForAccountChange(seed: LiveStore.cachedSnapshot(disk: disk))
         app.paths = [:]
         app.tab = .upNext
@@ -177,11 +194,15 @@ struct PoddleApp: App {
 
     /// `-PoddleAppearance dark|light` for screenshots.
     static var forcedScheme: ColorScheme? {
+        #if DEBUG
         switch UserDefaults.standard.string(forKey: "PoddleAppearance") {
         case "dark": .dark
         case "light": .light
         default: nil
         }
+        #else
+        nil
+        #endif
     }
 }
 

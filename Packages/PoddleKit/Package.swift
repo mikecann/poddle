@@ -11,7 +11,12 @@ let package = Package(
         .package(url: "https://github.com/get-convex/convex-swift", from: "0.8.1"),
     ],
     targets: [
-        .target(name: "PoddleKit", dependencies: [.product(name: "ConvexMobile", package: "convex-swift")]),
+        .target(
+            name: "PoddleKit",
+            dependencies: [.product(name: "ConvexMobile", package: "convex-swift")],
+            // The App Store privacy manifest for what this package uses (UserDefaults).
+            resources: [.copy("PrivacyInfo.xcprivacy")]
+        ),
         .testTarget(name: "PoddleKitTests", dependencies: ["PoddleKit"]),
     ],
     swiftLanguageModes: [.v6]

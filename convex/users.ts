@@ -2,8 +2,9 @@ import { ConvexError, v } from "convex/values";
 import { vAppleProfile } from "@convex-dev/auth/methods/apple/server";
 import { vGoogleProfile } from "@convex-dev/auth/methods/google/server";
 import type { Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, query, type MutationCtx } from "./_generated/server";
-import { assertMaySignUp } from "./lib/allowlist";
+import { internalMutation, internalQuery, mutation, query, type MutationCtx } from "./_generated/server";
+import { deletionInProgress, startDeletion } from "./accountDeletion";
+import { assertMaySignUp, signUpIsOpen } from "./lib/allowlist";
 import { resolveCaller, vAdmin } from "./lib/auth";
 import { currentUserId, userByEmail } from "./lib/identity";
 import { testSignInRefusal } from "./lib/testSignIn";
@@ -43,6 +44,7 @@ async function findOrCreate(ctx: MutationCtx, details: Details, extra: { picture
  * Apple only sends the name the first time, so an empty one never wipes a saved one.
  */
 async function saveDetails(ctx: MutationCtx, userId: Id<"users">, details: Details) {
+  await reviveIfDeleted(ctx, userId, details);
   const user = await ctx.db.get(userId);
   if (user === null) return;
   await ctx.db.patch(userId, {
@@ -50,6 +52,30 @@ async function saveDetails(ctx: MutationCtx, userId: Id<"users">, details: Detai
     email: details.email?.trim().toLowerCase() ?? user.email,
     emailVerified: details.email === undefined ? user.emailVerified : details.emailVerified,
   });
+}
+
+/**
+ * Someone who deleted their account is signing in again with the same Apple or
+ * Google account. Convex Auth still points that account at their old (emptied)
+ * user, so it comes back as a fresh, empty account, as long as they could sign
+ * up today and the old data has finished going.
+ */
+async function reviveIfDeleted(ctx: MutationCtx, userId: Id<"users">, details: Details) {
+  const user = await ctx.db.get(userId);
+  if (user === null) throw new ConvexError({ code: "unknownUser", message: "That account doesn't exist any more." });
+  const owner = user.mergedInto ? await ctx.db.get(user.mergedInto) : user;
+  const deleted = [...new Set([user, owner])].filter((u) => u != null && u.deletedAt !== undefined) as NonNullable<typeof user>[];
+  if (deleted.length === 0) return;
+  for (const u of deleted) {
+    if (await deletionInProgress(ctx, u._id)) {
+      throw new ConvexError({
+        code: "accountDeleting",
+        message: "Your old account is still being deleted. Give it a few minutes and try again.",
+      });
+    }
+  }
+  assertMaySignUp(details.email, details.emailVerified);
+  for (const u of deleted) await ctx.db.patch(u._id, { deletedAt: undefined });
 }
 
 export { currentUserId };
@@ -128,6 +154,43 @@ export const me = query({
     const user = await ctx.db.get(userId);
     if (user === null) return null;
     return { userId, name: user.name ?? null, email: user.email ?? null, picture: user.picture ?? null };
+  },
+});
+
+/** Whether anyone with a verified Apple or Google email can make an account (PODDLE_OPEN_SIGNUP). */
+export const signUpOpen = query({
+  args: {},
+  returns: v.boolean(),
+  handler: async () => signUpIsOpen(),
+});
+
+/**
+ * Deletes the signed-in person's account (App Store Guideline 5.1.1(v)). They're
+ * signed out straight away: the user row loses its name, email and photo and
+ * becomes a tombstone that every session treats as signed out. Their library,
+ * queue, history, stats, settings, devices, imports and Chef requests are then
+ * deleted in the background (accountDeletion.ts). The app also calls
+ * auth:signOut to end its own session. Not on the admin path: only the person
+ * themselves, signed in, can do this.
+ */
+export const deleteAccount = mutation({
+  args: {},
+  returns: v.object({ deletionId: v.id("accountDeletions") }),
+  handler: async (ctx) => {
+    const userId = await currentUserId(ctx);
+    if (userId === null) throw new ConvexError({ code: "unauthenticated", message: "Sign in first" });
+    const now = Date.now();
+    const scrub = { deletedAt: now, name: undefined, email: undefined, emailVerified: undefined, picture: undefined };
+    await ctx.db.patch(userId, scrub);
+    // Older user rows folded into this one (the same person through another provider).
+    const merged = await ctx.db
+      .query("users")
+      .withIndex("by_mergedInto", (q) => q.eq("mergedInto", userId))
+      .collect();
+    for (const m of merged) await ctx.db.patch(m._id, scrub);
+    // Convex Auth v2 keeps no Apple tokens to revoke (appleRevoke.ts says what's missing).
+    const deletionId = await startDeletion(ctx, userId);
+    return { deletionId };
   },
 });
 

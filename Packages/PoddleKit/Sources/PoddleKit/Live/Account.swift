@@ -180,13 +180,15 @@ public final class Account: AuthTokenSource {
         try await finish(result)
     }
 
+    #if DEBUG
     /// Dev only (`PODDLE_TEST_SIGNIN=1` on the deployment): sign in as `email`, or as a fresh test
-    /// user without one. The server refuses it everywhere else.
+    /// user without one. The server refuses it everywhere else, and Release builds don't have it.
     public func signInForTesting(email: String?) async throws {
         var args: [String: JSONValue] = [:]
         if let email, !email.isEmpty { args["email"] = .string(email) }
         try await finish(try await http.call("mutation", "auth:signInForTesting", args, token: nil))
     }
+    #endif
 
     private func finish(_ result: JSONValue) async throws {
         guard result["status"]?.string == "complete", let tokens = result["tokens"],
@@ -254,6 +256,19 @@ public final class Account: AuthTokenSource {
         if let refreshToken {
             _ = try? await http.call("mutation", "auth:signOut", ["refreshToken": .string(refreshToken)], token: nil)
         }
+    }
+
+    /// Deletes this person's Poddle account on the server (`users:deleteAccount`), then signs out
+    /// here. The server signs them out everywhere straight away and removes their data in the
+    /// background. Throws, still signed in, if the server couldn't be reached or said no. Wiping
+    /// what's on this device is the app's job once the store has let go of it.
+    public func deleteAccount() async throws {
+        guard isSignedIn else { return }
+        guard let token = await token() else {
+            throw AccountError.failed("Couldn't reach Poddle. Check your connection and try again.")
+        }
+        _ = try await http.call("mutation", "users:deleteAccount", [:], token: token)
+        await signOut()
     }
 
     private func save(_ next: AuthSession) {

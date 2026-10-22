@@ -1,9 +1,11 @@
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth, useQuery } from "convex/react";
+import { useState } from "react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Artwork } from "../components/Artwork";
 import { ChefAdminPanel } from "../components/ChefAdminPanel";
+import { DeleteAccount } from "../components/DeleteAccount";
 import { LockIcon } from "../components/Icons";
 import { EmptyListening, Layout, Loading } from "../components/Layout";
 import { SignIn } from "../components/SignIn";
@@ -19,6 +21,7 @@ type Row = FunctionReturnType<typeof api.queue.upNext>[number]["row"];
 
 export function MePage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const [leaving, setLeaving] = useState(false);
   useTitle("Your listening · Poddle");
   if (isLoading) return <Layout><Loading /></Layout>;
   if (!isAuthenticated) {
@@ -33,7 +36,13 @@ export function MePage() {
       </Layout>
     );
   }
-  return <Layout wide><Dashboard /><ChefAdminPanel /></Layout>;
+  return (
+    <Layout wide>
+      {!leaving && <Dashboard />}
+      {!leaving && <ChefAdminPanel />}
+      <DeleteAccount onLeaving={setLeaving} />
+    </Layout>
+  );
 }
 
 function Dashboard() {

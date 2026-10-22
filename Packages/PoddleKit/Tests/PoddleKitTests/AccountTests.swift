@@ -12,6 +12,9 @@ final class FakeAuthServer: ConvexHTTPCalling, @unchecked Sendable {
     var expiresIn: Double = 60_000
     var revoked = false
     var offline = false
+    var refuseDelete = false
+    private var _deleteToken: String?
+    var deleteToken: String? { lock.withLock { _deleteToken } }
 
     func tokens(_ n: Int) -> JSONValue {
         ["accessToken": .string("access-\(n)"), "accessTokenExpiresAt": .number(Date().timeIntervalSince1970 * 1000 + expiresIn),
@@ -32,6 +35,10 @@ final class FakeAuthServer: ConvexHTTPCalling, @unchecked Sendable {
             if revoked { return ["kind": "noSession"] }
             let n = lock.withLock { _refreshes += 1; return _refreshes }
             return ["kind": "rotated", "tokens": tokens(n)]
+        case "users:deleteAccount":
+            if refuseDelete { throw AccountError.failed("Sign in first") }
+            lock.withLock { _deleteToken = token }
+            return ["deletionId": "d1"]
         case "auth:startSignInWithGoogle":
             return ["redirect": "https://accounts.google.com/o/oauth2/auth?x=1", "state": "st"]
         case "auth:completeSignInWithGoogle":
@@ -122,5 +129,31 @@ private let config = LiveConfig(deploymentURL: URL(string: "https://striped-turt
         #expect(!account.isSignedIn)
         #expect(store.load() == nil)
         #expect(server.calls.last == "auth:signOut")
+    }
+
+    @Test func deleteAccountAsksTheServerThenSignsOut() async throws {
+        let server = FakeAuthServer()
+        let store = MemorySessionStore()
+        let account = Account(config: config, store: store, http: server)
+        try await account.signInForTesting(email: nil)
+        try await account.deleteAccount()
+        #expect(server.deleteToken == "access-0")
+        #expect(!account.isSignedIn)
+        #expect(store.load() == nil)
+        #expect(Array(server.calls.suffix(2)) == ["users:deleteAccount", "auth:signOut"])
+    }
+
+    @Test func aFailedDeleteLeavesYouSignedIn() async throws {
+        let server = FakeAuthServer()
+        let account = Account(config: config, store: MemorySessionStore(), http: server)
+        try await account.signInForTesting(email: nil)
+        server.refuseDelete = true
+        await #expect(throws: AccountError.self) { try await account.deleteAccount() }
+        #expect(account.isSignedIn)
+        server.refuseDelete = false
+        server.offline = true
+        await #expect(throws: AccountError.self) { try await account.deleteAccount() }
+        #expect(account.isSignedIn)
+        #expect(!server.calls.contains("auth:signOut"))
     }
 }

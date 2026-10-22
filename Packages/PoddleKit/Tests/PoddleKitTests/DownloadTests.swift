@@ -209,6 +209,22 @@ private let sydney: Calendar = {
         #expect(!FileManager.default.fileExists(atPath: local.path(percentEncoded: false)))
     }
 
+    @Test func removeAllDeletesEveryFile() async throws {
+        let net = ManualNetworkMonitor(.wifi)
+        let manager = makeManager(net)
+        let src = try sampleFile()
+        _ = manager.request("ep1", url: src)
+        _ = manager.request("ep2", url: src)
+        await waitFor { manager.records["ep1"]?.state == .done && manager.records["ep2"]?.state == .done }
+        let files = [try #require(manager.localFile(for: "ep1")), try #require(manager.localFile(for: "ep2"))]
+        manager.removeAll()
+        #expect(manager.records.isEmpty)
+        #expect(manager.storageUsed == 0)
+        for f in files { #expect(!FileManager.default.fileExists(atPath: f.path(percentEncoded: false))) }
+        // And it stays that way after a relaunch.
+        #expect(makeManager(net).records.isEmpty)
+    }
+
     @Test func mobileTapPromptsAndAllowanceChipCountsDown() async throws {
         let net = ManualNetworkMonitor(.mobile)
         var clock = t0
