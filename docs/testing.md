@@ -87,7 +87,7 @@ Local commands for focused checks:
 
 The iOS runner accepts `E2E_SIM_RUNTIME` (version such as `18.1` or full runtime identifier), `E2E_SIM_DEVICE_TYPE` (CoreSimulator device-type identifier), `E2E_SIM_NAME` (default `Poddle E2E`), and `E2E_SOURCE_PACKAGES` (resolved SPM cache, built with `-disableAutomaticPackageResolution`). Locally the default remains the newest available runtime supporting an iPhone 17 Pro. Remotely the defaults are **iOS 18.1 / iPhone 16**, covering Mike's supported iOS 18 baseline. Existing simulators are matched by name, device type and runtime.
 
-Remote overrides: `E2E_REMOTE_HOST` (or `--host`), `E2E_REMOTE_ROOT`, `E2E_REMOTE_REPO`, `E2E_REMOTE_NODE` (absolute remote Node executable), and the simulator variables above. Local `E2E_SOURCE_PACKAGES` defaults to `/tmp/poddle-dd-check/SourcePackages`; remote Node defaults to `~/.nvm/versions/node/v24.12.0/bin/node`. The controller validates both cached checkout revisions and clean tracked files against `Packages/PoddleKit/Package.resolved`, including ChefKit's project pin, before copying. The worker validates against the selected commit again and seeds Xcode's workspace lock from the tracked package lock. No access to the private ChefKit repo is needed on tinker-desk. If pins change, resolve them on the MacBook and sync a matching cache with the next remote run before relying on nightly.
+Remote overrides: `E2E_REMOTE_HOST` (or `--host`), `E2E_REMOTE_ROOT`, `E2E_REMOTE_REPO`, `E2E_REMOTE_NODE` (absolute remote Node executable), `E2E_DEVELOPER_DIR` (remote Xcode, default `~/Applications/Xcode-27.1.app/Contents/Developer`), and the simulator variables above. Local `E2E_SOURCE_PACKAGES` defaults to `/tmp/poddle-dd-check/SourcePackages`; remote Node defaults to `~/.nvm/versions/node/v24.12.0/bin/node`. The controller validates both cached checkout revisions and clean tracked files against `Packages/PoddleKit/Package.resolved`, including ChefKit's project pin, before copying. The worker validates against the selected commit again and seeds Xcode's workspace lock from the tracked package lock. No access to the private ChefKit repo is needed on tinker-desk. If pins change, resolve them on the MacBook and sync a matching cache with the next remote run before relying on nightly.
 
 The ports are 3410 (backend), 3411 (site) and 3412 (fixtures); set `E2E_CONVEX_PORT`, `E2E_SITE_PORT` and `E2E_FIXTURE_PORT` to move them for local runs. Only one run at a time per set of ports.
 
@@ -101,8 +101,14 @@ The deploy key pushes a small results commit to the **orphan `e2e-nightly` branc
 
 ### One-off tinker-desk setup
 
-1. Mike must run **`sudo xcodebuild -runFirstLaunch`** in Terminal on tinker-desk. Its simulator components were older than the selected Xcode build and `xcodebuild -checkFirstLaunchStatus` reported that authorisation was required. Until this completes, simulator builds and tests can refuse their destination. Verify with `xcodebuild -checkFirstLaunchStatus` and `xcrun simctl list runtimes`.
-2. PoddlePlayback uses Swift tools 6.3, compatible with Xcode 26.6 on tinker-desk (Swift 6.3.3); its previous 6.4 manifest requirement blocked package resolution before the simulator check. Install/keep the iOS 18.1 runtime in Xcode Settings > Components, and Node 24 via nvm (`~/.nvm/versions/node/v24.12.0`). Noninteractive SSH has no Node PATH, so use its absolute path or export its bin directory. `lockf`, `caffeinate`, git and rsync ship with macOS.
+1. Poddle needs Xcode 27 (Swift 6.4). tinker-desk's `/Applications/Xcode.app` is 26.6, whose compiler crashes on the app, so the runner uses a copy of this Mac's Xcode at **`~/Applications/Xcode-27.1.app`**, through `DEVELOPER_DIR` (override with `E2E_DEVELOPER_DIR`). The default `xcode-select` is left alone. After copying an Xcode there, Mike runs once, in Terminal on the MacBook:
+
+   ```sh
+   ssh -t tinker-desk "sudo env DEVELOPER_DIR=/Users/mikeysee/Applications/Xcode-27.1.app/Contents/Developer sh -c 'xcodebuild -license accept && xcodebuild -runFirstLaunch'"
+   ```
+
+   Then, without sudo: `DEVELOPER_DIR=… xcodebuild -downloadPlatform iOS` (the matching simulator platform, which the build needs) and check with `xcodebuild -checkFirstLaunchStatus` and `xcrun simctl list runtimes`.
+2. Keep the iOS 18.1 runtime (the tests run on it) and Node 24 via nvm (`~/.nvm/versions/node/v24.12.0`). Noninteractive SSH has no Node PATH, so use its absolute path or export its bin directory. `lockf`, `caffeinate`, git and rsync ship with macOS.
 3. Keep `~/dev/me/poddle` cloned from `git@github-poddle:mikecann/poddle.git`. The `github-poddle` SSH alias uses the repo-only read-write deploy key. There is no `gh` login and no other GitHub access. Do not copy or print credentials.
 4. Sync the resolved `SourcePackages` directory once from the MacBook, then use a remote iOS run to refresh it when pins change. Keep checkouts, repositories and `workspace-state.json`; the worker remaps absolute git alternates and binary-artifact paths. `Packages/PoddleKit/Package.resolved` has the authoritative checkout revisions.
 5. From a checkout containing these changes on tinker-desk, run:

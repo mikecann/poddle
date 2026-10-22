@@ -32,6 +32,8 @@ const env = {
   PLAYWRIGHT_BROWSERS_PATH: path.join(root, "browsers"),
   PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(checkout, "e2e/.runtime/web-results.json"),
   E2E_SIM_NAME: config.simName ?? "Poddle E2E", E2E_SOURCE_PACKAGES: path.join(root, "SourcePackages"),
+  // tinker-desk's /Applications/Xcode.app (26.6) can't build Poddle; it uses a copy of Xcode 27.1.
+  ...(config.developerDir && { DEVELOPER_DIR: config.developerDir }),
 };
 let active;
 // Keep the lock until children have exited, including Xcode/backend subprocesses.

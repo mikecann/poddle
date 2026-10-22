@@ -24,6 +24,7 @@ writeFileSync(config, JSON.stringify({
   simName: process.env.E2E_SIM_NAME ?? "Poddle E2E",
   simRuntime: process.env.E2E_SIM_RUNTIME ?? "18.1",
   simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-16",
+  developerDir: process.env.E2E_DEVELOPER_DIR ?? path.join(home, "Applications/Xcode-27.1.app/Contents/Developer"),
 }, null, 2) + "\n");
 const escape = (s) => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const label = "com.mikecann.poddle-e2e-nightly";

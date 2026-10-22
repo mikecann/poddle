@@ -25,30 +25,24 @@ nonisolated final class ChefConnection: ChefBackend {
     func chefSubscribe<T: Decodable & Sendable>(_ name: String, args: [String: ChefValue], as type: T.Type)
         -> AnyPublisher<T, Error> {
         let subject = Box(PassthroughSubject<T, Error>())
-        let task = Self.pump(live: live, name: name, args: args.mapValues(\.json)) { data in
-            // A result Chef can't read is skipped, like a miss.
-            if let value = try? JSONDecoder().decode(T.self, from: data) { subject.value.send(value) }
+        let live = live
+        let args = args.mapValues(\.json)
+        let task = Task {
+            while !Task.isCancelled {
+                do {
+                    for try await data in await live.rawSubscribe(name, args) {
+                        // A result Chef can't read is skipped, like a miss.
+                        if let value = try? JSONDecoder().decode(T.self, from: data) { subject.value.send(value) }
+                    }
+                } catch {
+                    // Dropped or refused: ask again in a moment.
+                }
+                try? await Task.sleep(for: Self.retryAfter)
+            }
         }
         return subject.value
             .handleEvents(receiveCancel: { task.cancel() })
             .eraseToAnyPublisher()
-    }
-
-    /// Keeps a live query running until cancelled, asking again after a drop. Kept non-generic and
-    /// out of `chefSubscribe`: Swift 6.3's region-based isolation checker (tinker-desk's Xcode 26.6)
-    /// can't check a generic task closure that awaits the store.
-    private static func pump(live: LiveStore, name: String, args: [String: JSONValue],
-                             onData: @escaping @Sendable (Data) -> Void) -> Task<Void, Never> {
-        Task {
-            while !Task.isCancelled {
-                do {
-                    for try await data in await live.rawSubscribe(name, args) { onData(data) }
-                } catch {
-                    // Dropped or refused: ask again in a moment.
-                }
-                try? await Task.sleep(for: retryAfter)
-            }
-        }
     }
 
     /// Only ever sent to from the subscription's task, one value at a time.
