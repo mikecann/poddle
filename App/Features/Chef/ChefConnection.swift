@@ -27,10 +27,13 @@ nonisolated final class ChefConnection: ChefBackend {
         let subject = Box(PassthroughSubject<T, Error>())
         let live = live
         let args = args.mapValues(\.json)
-        let task = Task {
+        // The stream is held in a local and the captures are explicit: Swift 6.3's region-based
+        // isolation checker (tinker-desk's Xcode 26.6) can't check the inline `for try await … in await …`.
+        let task = Task { [subject, live, args, name] in
             while !Task.isCancelled {
                 do {
-                    for try await data in await live.rawSubscribe(name, args) {
+                    let stream = await live.rawSubscribe(name, args)
+                    for try await data in stream {
                         // A result Chef can't read is skipped, like a miss.
                         if let value = try? JSONDecoder().decode(T.self, from: data) { subject.value.send(value) }
                     }
