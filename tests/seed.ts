@@ -44,3 +44,39 @@ export async function seedShow(t: T, n: number, opts: { title?: string; duration
     return { podcastId, episodeIds };
   });
 }
+
+/**
+ * Puts episodes in `t`'s old Inbox, the way the retired code did. Nothing does
+ * that any more; this is the data `migrations:retireInbox` cleans up.
+ */
+export async function seedInbox(t: T, episodeIds: Id<"episodes">[], at = BASE) {
+  const userId = await t.userId();
+  await t.run(async (ctx) => {
+    for (const episodeId of episodeIds) {
+      const episode = (await ctx.db.get(episodeId))!;
+      const inbox = { inInbox: true, inboxAt: episode.pubDate ?? at, inboxUpdatedAt: at, updatedAt: at };
+      const existing = await ctx.db
+        .query("episodeStates")
+        .withIndex("by_user_episode", (q) => q.eq("userId", userId).eq("episodeId", episodeId))
+        .unique();
+      if (existing) {
+        await ctx.db.patch(existing._id, inbox);
+        continue;
+      }
+      await ctx.db.insert("episodeStates", {
+        userId,
+        episodeId,
+        podcastId: episode.podcastId,
+        position: 0,
+        positionUpdatedAt: 0,
+        played: false,
+        playedUpdatedAt: 0,
+        starred: false,
+        starredUpdatedAt: 0,
+        archived: false,
+        archivedUpdatedAt: 0,
+        ...inbox,
+      });
+    }
+  });
+}

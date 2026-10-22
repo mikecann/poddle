@@ -178,7 +178,7 @@ export async function setSubscribed(ctx: UserMutationCtx, podcast: Doc<"podcasts
 
 /**
  * Subscribe by feed URL. Creates the show if needed and fetches it straight away.
- * Only the newest episode lands in the Inbox (or Up Next, per the show's rule):
+ * Only the newest episode goes to Up Next (per the show's rule):
  * for a new show that happens on its first fetch, and for a show someone else
  * already has, here.
  */

@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { setup, type T } from "./helpers";
-import { BASE, seedShow } from "./seed";
+import { BASE, seedInbox, seedShow } from "./seed";
 
 const stateOf = async (t: T, episodeId: Id<"episodes">) =>
   (await t.query(api.episodes.get, { episodeId }))!.row.state!;
@@ -40,38 +40,20 @@ describe("played, starred, archived", () => {
   test("marking played takes it out of the Inbox and Up Next", async () => {
     const t = setup();
     const { episodeIds: [ep] } = await seedShow(t, 1);
-    await t.mutation(api.episodes.addToInbox, { episodeId: ep!, at: BASE });
     await t.mutation(api.queue.add, { episodeId: ep!, position: "bottom", at: BASE + 1 });
-    await t.mutation(api.episodes.addToInbox, { episodeId: ep!, at: BASE + 2 });
+    await seedInbox(t, [ep!]);
     await t.mutation(api.episodes.setPlayedState, { episodeId: ep!, played: true, at: BASE + 3 });
     expect(await t.query(api.episodes.inbox, {})).toHaveLength(0);
     expect(await t.query(api.queue.upNext, {})).toHaveLength(0);
   });
 });
 
-describe("Inbox actions", () => {
-  test("queue last, queue next, archive, mark played", async () => {
-    const t = setup();
-    const { episodeIds } = await seedShow(t, 4);
-    for (const id of episodeIds) await t.mutation(api.episodes.addToInbox, { episodeId: id, at: BASE });
-    const [e0, e1, e2, e3] = episodeIds as Id<"episodes">[];
-    await t.mutation(api.episodes.inboxAction, { episodeId: e0!, action: "queueLast", at: BASE + 1 });
-    await t.mutation(api.episodes.inboxAction, { episodeId: e1!, action: "queueLast", at: BASE + 2 });
-    await t.mutation(api.episodes.inboxAction, { episodeId: e2!, action: "queueNext", at: BASE + 3 });
-    await t.mutation(api.episodes.inboxAction, { episodeId: e3!, action: "archive", at: BASE + 4 });
-    expect(await t.query(api.episodes.inbox, {})).toHaveLength(0);
-    const q = await t.query(api.queue.upNext, {});
-    expect(q.map((r) => r.row.episode.title)).toEqual(["Ep 0", "Ep 2", "Ep 1"]);
-    expect((await stateOf(t, e3!)).archived).toBe(true);
-  });
-
+describe("Inbox leftovers", () => {
   test("archive all older only touches older Inbox episodes of that show", async () => {
     const t = setup();
     const { episodeIds } = await seedShow(t, 5);
     const other = await seedShow(t, 1, { title: "other" });
-    for (const id of [...episodeIds, ...other.episodeIds]) {
-      await t.mutation(api.episodes.addToInbox, { episodeId: id, at: BASE });
-    }
+    await seedInbox(t, [...episodeIds, ...other.episodeIds]);
     const n = await t.mutation(api.episodes.archiveAllOlder, { episodeId: episodeIds[3]!, at: BASE + 1 });
     expect(n).toBe(3);
     const inbox = await t.query(api.episodes.inbox, {});

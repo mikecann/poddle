@@ -135,7 +135,7 @@ Every function below acts for the signed-in caller (and also takes the optional 
 | `podcasts:pastShows` | query | – | `[Podcast]` unsubscribed shows that have history (a session, or a played/started/starred episode). |
 | `podcasts:get` | query | `podcastId` | `{ podcast, overrides, resolved, feed: { lastCheckedAt?, lastSuccessAt?, nextCheckAt?, lastError? } } \| null`. `overrides`/`resolved` as in `settings:forPodcast`. |
 | `podcasts:episodes` | query | `podcastId`, `order?: "newestFirst" \| "oldestFirst"`, `paginationOpts` | `Paginated<EpisodeRow>` by `pubDate`. |
-| `podcasts:subscribe` | mutation | `feedUrl`, `at`, `title?`, `author?`, `artworkUrl?`, `appleId?: Int` | `Id<"podcasts">`. Creates the show if needed (URL normalised: `feed://` → `https://`, host lower-cased), subscribes, and fetches it straight away. On a show's **first** fetch only the newest episode gets the new-episode rule, so the Inbox isn't flooded. Pass title/artwork from search so the row looks right before the fetch lands. |
+| `podcasts:subscribe` | mutation | `feedUrl`, `at`, `title?`, `author?`, `artworkUrl?`, `appleId?: Int` | `Id<"podcasts">`. Creates the show if needed (URL normalised: `feed://` → `https://`, host lower-cased), subscribes, and fetches it straight away. On a show's **first** fetch only the newest episode gets the new-episode rule, so Up Next isn't flooded. Pass title/artwork from search so the row looks right before the fetch lands. |
 | `podcasts:unsubscribe` | mutation | `podcastId`, `at` | `Bool` changed. Keeps history, stats and queue entries; clears its Inbox entries; stops polling. |
 | `podcasts:setPrivate` | mutation | `podcastId`, `isPrivate` | `null`. Your own switch. Feeds with credentials or token-ish query params start private. Private shows are left out of your year-in-review lists. |
 | `podcasts:markAllPlayed` | mutation | `podcastId`, `at`, `beforePubDate?` | `null`. Runs in background batches. Bulk marks don't count as completions in stats. |
@@ -147,22 +147,20 @@ Every function below acts for the signed-in caller (and also takes the optional 
 | `directory:search` | action | `term`, `limit?` (1–200, default 50) | `[DirectoryResult]` from the iTunes Search API (`media=podcast&entity=podcast&country=AU`). Cached 24 h server-side. Debounce 400 ms on the client; Apple allows ~20 calls a minute. |
 | `directory:lookup` | action | `appleIdOrUrl` | `DirectoryResult \| null`. Accepts `617416468`, `https://podcasts.apple.com/au/podcast/…/id617416468`, `https://overcast.fm/itunes617416468/…`. |
 | `feedActions:previewFeed` | action | `url` | `{ feedUrl, podcastId?, subscribed, title, author?, description?, artworkUrl?, link?, episodeCount: Int, episodes: [{ title, pubDate?, duration?, summary?, enclosureUrl, artworkUrl? }] }` (newest 20). Accepts a feed URL, a website (finds `<link rel="alternate">`), or an Apple / Overcast link. Writes nothing. Subscribe with the returned `feedUrl`. |
-| `feedActions:refreshNow` | action | `podcastId?` | `{ scheduled: Int, result?: { status, newEpisodes: Int, error? } }`. With `podcastId`: fetches that show and waits (pull-to-refresh on a show page). Without: schedules every subscribed feed not checked in the last 2 min and returns at once (app foreground, Inbox pull-to-refresh); results arrive through your live queries. `status` is `updated`, `notModified` (304), `unchanged` (same body), `busy` (a fetch is already running) or `error`. |
+| `feedActions:refreshNow` | action | `podcastId?` | `{ scheduled: Int, result?: { status, newEpisodes: Int, error? } }`. With `podcastId`: fetches that show and waits (pull-to-refresh on a show page). Without: schedules every subscribed feed not checked in the last 2 min and returns at once (app foreground, Up Next pull-to-refresh); results arrive through your live queries. `status` is `updated`, `notModified` (304), `unchanged` (same body), `busy` (a fetch is already running) or `error`. |
 
-### Episodes and Inbox (`episodes:*`)
+### Episodes (`episodes:*`)
 
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|
-| `episodes:inbox` | query | – | `[EpisodeRow]` newest first (max 500). |
+| `episodes:inbox` | query | – | **Deprecated.** `[EpisodeRow]` newest first (max 500). There's no Inbox any more, nothing new goes into it, and `migrations:retireInbox` empties it, so this returns `[]`. Kept while the app still subscribes to it. |
 | `episodes:starred` | query | – | `[EpisodeRow]` most recently starred first. |
 | `episodes:get` | query | `episodeId` | `{ row: EpisodeRow, showNotesHtml?, inQueue: Bool } \| null` |
 | `episodes:updatePosition` | mutation | `episodeId`, `position`, `positionUpdatedAt`, `deviceId` | `Bool` applied. LWW on `positionUpdatedAt`; equal times: later arrival wins. Send on pause, every ~30 s while playing, and on episode change. |
 | `episodes:setPlayedState` | mutation | `episodeId`, `played`, `at` | `Bool` changed. Played also removes it from the Inbox **and Up Next** (so "episode finished" = one call, and the next queue item becomes first). It counts as a completion in stats. |
 | `episodes:setStarredState` | mutation | `episodeId`, `starred`, `at` | `Bool` changed |
 | `episodes:setArchivedState` | mutation | `episodeId`, `archived`, `at` | `Bool` changed. Archiving removes it from the Inbox (not from Up Next). Archiving an unplayed episode logs a `skipped` event. |
-| `episodes:addToInbox` | mutation | `episodeId`, `at` | `Bool` |
-| `episodes:inboxAction` | mutation | `episodeId`, `action: "queueLast" \| "queueNext" \| "archive" \| "markPlayed"`, `at` | `Bool`. The Inbox swipes. Queue actions also take it out of the Inbox. |
-| `episodes:archiveAllOlder` | mutation | `episodeId`, `at`, `includeThis?` | `Int` archived. Archives that show's Inbox episodes published before this one. |
+| `episodes:archiveAllOlder` | mutation | `episodeId`, `at`, `includeThis?` | `Int` archived. Archives that show's Inbox episodes published before this one. With the Inbox gone it finds nothing; kept while the app still calls it. |
 
 ### Up Next (`queue:*`)
 
@@ -189,7 +187,7 @@ Per-show fields (each one "use default" or an explicit value):
 | `timePitch` | `"spectral" \| "timeDomain"` | `timeDomain` (the speed-up method: "Speech-tuned"; `spectral` is "Apple spectral") |
 | `skipIntroSeconds` | Double | 0 |
 | `skipOutroSeconds` | Double | 0 |
-| `newEpisodes` | `"inbox" \| "upNextTop" \| "upNextBottom" \| "none"` | `inbox` |
+| `newEpisodes` | `"upNextBottom" \| "upNextTop" \| "none"` (`"inbox"` is deprecated: still accepted, stored as `upNextBottom` on write, and a stored one resolves to and behaves as `upNextBottom`) | `upNextBottom` |
 | `autoDownload` | `"never" \| "upNext" \| "allNew"` | `upNext` |
 | `keepLatestDownloaded` | Int | 3 |
 | `notifications` | Bool | false |
@@ -317,12 +315,12 @@ New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: 
 - Sessions are keyed by the client `sessionId`, so re-sending is idempotent.
 - `podcasts:subscribe` is keyed by feed URL, and `devices:register` by `deviceId`.
 - Actions (`refreshNow`, `search`, `previewFeed`) are online-only. Don't queue them.
-- Server-side changes (auto-adding a new episode to the Inbox or Up Next, auto-archive) are stamped 10 minutes in the past, so a user action from a device whose clock runs a little slow still wins.
+- Server-side changes (auto-adding a new episode to Up Next, auto-archive) are stamped 10 minutes in the past, so a user action from a device whose clock runs a little slow still wins.
 
 ## Behaviour notes for the app
 
-- **New episodes:** a feed is polled once for everyone. Each new episode is then applied to each subscriber with their own resolved `newEpisodes` for the show. Subscribing to a show someone else already has puts its newest episode in your Inbox (or Up Next) straight away, like a first fetch.
-- **Per show:** your resolved `newEpisodes` decides where new episodes go. `upNextTop` inserts **after** the first (playing) item rather than replacing it. Items older than the show's previous newest episode by more than 2 days (back-catalogue dumps) aren't auto-added, and at most 10 per fetch are.
+- **New episodes:** a feed is polled once for everyone. Each new episode is then applied to each subscriber with their own resolved `newEpisodes` for the show. Subscribing to a show someone else already has puts its newest episode in your Up Next (per your rule) straight away, like a first fetch.
+- **Per show:** your resolved `newEpisodes` decides where new episodes go. `upNextTop` inserts **after** the first (playing) item rather than replacing it. There's no Inbox: nothing is ever put in one, and a stored `inbox` rule (global or per show) goes to the bottom of Up Next. New-episode push notifications follow the show's `notifications` setting. Items older than the show's previous newest episode by more than 2 days (back-catalogue dumps) aren't auto-added, and at most 10 per fetch are.
 - **Polling:** a cron runs every 15 min. Each feed has its own `nextCheckAt`: 15 min if it published in the last week, 1 h within a month, 4 h within six months, else 12 h. Errors back off exponentially up to 24 h. Conditional GET is used, and an unchanged body is skipped.
 - **Feed identity:** GUID, then enclosure URL (query stripped), then title + pubDate. Feed refreshes only touch feed fields, never `episodeStates`.
 - **Duration** may be absent (`itunes:duration` missing, or a ghost). Read it from the file and display it locally.
@@ -332,3 +330,7 @@ New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: 
 ## Accounts migration
 
 `convex/migrations.ts` turned the single-user data into Mike's account (docs/runbooks/accounts-prod.md): `migrations:run` makes his user (`mike.cann@gmail.com`, verified) if needed, gives every personal row without an owner to him, and moves the old `subscribed`/`subscribedAt`/`unsubscribedAt`/`subscriptionUpdatedAt` fields off each shared show into a `subscriptions` row of his. Idempotent. `migrations:report` counts `total`, `unowned` and `legacy` rows per table; done means zeros in the last two. Until it has run on prod, `userId` is optional in the schema (`vOwner`).
+
+## Retiring the Inbox
+
+`migrations:retireInbox` (docs/runbooks/accounts-prod.md, step 3b) runs per person (`migrations:retireInboxFor`, in batches of 200). Every episode in their Inbox that isn't archived, played or already queued goes to the bottom of their Up Next, oldest `pubDate` first, through the same queue helper as `queue:add` (server-computed fractional keys, LWW at server time minus 10 minutes, `addedBy: "auto"`); then every Inbox entry is cleared (`inInbox: false`, no `inboxAt`). Stored `inbox` rules become `upNextBottom`, and a per-show `inbox` override that then matches the global rule is cleared to "use default". Every touched row gets a new `updatedAt`, so `sync:changes` delivers them. Idempotent. `migrations:inboxReport` lists, per person, `inbox`, `toMove`, `upNext`, `globalInboxRule` and `showInboxRules`; done means zeros in all but `upNext`.

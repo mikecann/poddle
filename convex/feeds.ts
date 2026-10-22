@@ -8,7 +8,7 @@ import { hasSubscribers, subscribersOf } from "./lib/library";
 import { addToQueue } from "./lib/queue";
 import type { NewEpisodeRule } from "./lib/settings";
 import { resolvedSettingsFor } from "./lib/settingsDb";
-import { setInbox, systemAt } from "./lib/state";
+import { systemAt } from "./lib/state";
 
 // Feed bookkeeping and ingestion. The fetching itself happens in feedActions.ts.
 // Feeds are shared: each is polled once, and each new episode is then applied
@@ -232,10 +232,10 @@ export async function applyNewEpisodeRule(
   switch (rule) {
     case "none":
       return false;
-    case "inbox":
-      return await setInbox(ctx, episode, true, systemAt(now), Math.min(episode.pubDate ?? now, now));
     case "upNextTop":
       return await addToQueue(ctx, episode, "next", systemAt(now), "priority");
+    // There's no Inbox any more; a stored `inbox` rule means Up Next bottom.
+    case "inbox":
     case "upNextBottom":
       return await addToQueue(ctx, episode, "bottom", systemAt(now), "priority");
   }

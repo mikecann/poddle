@@ -2,7 +2,9 @@ import { v } from "convex/values";
 import { userMutation, userQuery } from "./lib/auth";
 import {
   globalSettingFields,
+  effectiveRule,
   globalSettingsPatch,
+  type NewEpisodeRule,
   podcastSettingsPatch,
   resolveGlobalSettings,
   resolveShowSettings,
@@ -50,8 +52,8 @@ function lwwPatch(patch: Record<string, unknown>, fieldTimes: Record<string, num
   const times = { ...fieldTimes };
   for (const [k, val] of Object.entries(patch)) {
     if (val === undefined || at < (fieldTimes[k] ?? 0)) continue;
-    // null means "use default": store as absent.
-    values[k] = val === null ? undefined : val;
+    // null means "use default": store as absent. An old client's `inbox` is stored as what it means.
+    values[k] = val === null ? undefined : k === "newEpisodes" ? effectiveRule(val as NewEpisodeRule) : val;
     times[k] = at;
   }
   return { values, times, applied: Object.keys(values) };

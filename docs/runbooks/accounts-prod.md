@@ -44,6 +44,19 @@ npx convex run migrations:report --prod > /tmp/after.json
 
 Done when every table shows `unowned: 0`, `podcasts` shows `legacy: 0`, `users.total` is 1 and `subscriptions.total` equals `podcasts.total`. If not, wait and report again; running `migrations:run` again is safe.
 
+## 3b. Retire the Inbox (straight after step 3)
+
+decisions.md, 22 Oct: there's no Inbox. The step-2 deploy already sends new episodes to Up Next (`upNextBottom` is the default and a stored `inbox` rule behaves as it). This moves what's still sitting in the Inbox. It needs step 3 finished (every row owned), because it works per person.
+
+```bash
+npx convex run migrations:inboxReport --prod > /tmp/inbox-before.json
+npx convex run migrations:retireInbox --prod      # prints how many people it started
+# a few seconds (it runs per person, 200 episodes a batch), then:
+npx convex run migrations:inboxReport --prod > /tmp/inbox-after.json
+```
+
+For each person, every Inbox episode that isn't archived, played or already queued goes to the bottom of Up Next, oldest first, and leaves the Inbox; stored `inbox` rules become `upNextBottom` (a show override that then matches the global rule goes back to "use default"). Done when every person shows `inbox: 0`, `toMove: 0`, `globalInboxRule: false` and `showInboxRules: 0`, and `upNext` went up by the before `toMove`. Running `migrations:retireInbox` again is safe: it finds nothing to do. The new app picks the moves up through `sync:changes`.
+
 ## 4. Checks
 
 ```bash
@@ -92,3 +105,14 @@ Restore the step-0 backup (Dashboard > Backups > Restore) and deploy the previou
 | queueItems | 13 / 13 | 13 / 0 |
 | globalSettings, importBatches | 1 / 1 each | 1 / 0 each |
 | devices | 0 | 0 |
+
+### Inbox retirement, dev, 22 Oct 2026
+
+Run on `striped-turtle-260` after the accounts migration above.
+
+| person | before: inbox / toMove / Up Next | after: inbox / toMove / Up Next | rules rewritten |
+|---|---|---|---|
+| mike.cann@gmail.com | 12 / 12 / 13 | 0 / 0 / 25 | 0 (no stored `inbox` rule; he was on the old default, now `upNextBottom`) |
+| second@poddle.test | 0 / 0 / 0 | 0 / 0 / 0 | 0 |
+
+The 12 landed at the bottom of Up Next, oldest first, as `addedBy: "auto"`. A second run reported `moved: 0, cleared: 0`.

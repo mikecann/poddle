@@ -1,8 +1,7 @@
 import { v } from "convex/values";
 import { userMutation, userQuery } from "./lib/auth";
-import { addToQueue } from "./lib/queue";
 import { episodeRows } from "./lib/rows";
-import { requireEpisode, setArchived, setInbox, setPlayed, setPosition, setStarred } from "./lib/state";
+import { requireEpisode, setArchived, setPlayed, setPosition, setStarred } from "./lib/state";
 import { vEpisodeRow } from "./lib/validators";
 
 // Episodes and per-episode user state. All writes are last-writer-wins on the
@@ -10,7 +9,11 @@ import { vEpisodeRow } from "./lib/validators";
 
 const INBOX_LIMIT = 500;
 
-/** The Inbox, newest first. */
+/**
+ * The Inbox, newest first. Deprecated: there's no Inbox any more and nothing
+ * new goes into it (`migrations:retireInbox` empties it). Kept while the app
+ * still subscribes to it.
+ */
 export const inbox = userQuery({
   args: {},
   returns: v.array(vEpisodeRow),
@@ -110,44 +113,6 @@ export const setArchivedState = userMutation({
   returns: v.boolean(),
   handler: async (ctx, { episodeId, archived, at }) => {
     return await setArchived(ctx, await requireEpisode(ctx, episodeId), archived, at);
-  },
-});
-
-/** Put an episode (back) into the Inbox, e.g. from a show page. */
-export const addToInbox = userMutation({
-  args: { episodeId: v.id("episodes"), at: v.number() },
-  returns: v.boolean(),
-  handler: async (ctx, { episodeId, at }) => {
-    const episode = await requireEpisode(ctx, episodeId);
-    return await setInbox(ctx, episode, true, at, episode.pubDate ?? at);
-  },
-});
-
-/**
- * Inbox swipe actions in one call: queue last / queue next move it to Up Next
- * (and out of the Inbox); archive and markPlayed do what they say.
- */
-export const inboxAction = userMutation({
-  args: {
-    episodeId: v.id("episodes"),
-    action: v.union(v.literal("queueLast"), v.literal("queueNext"), v.literal("archive"), v.literal("markPlayed")),
-    at: v.number(),
-  },
-  returns: v.boolean(),
-  handler: async (ctx, { episodeId, action, at }) => {
-    const episode = await requireEpisode(ctx, episodeId);
-    switch (action) {
-      case "queueLast":
-      case "queueNext": {
-        const added = await addToQueue(ctx, episode, action === "queueLast" ? "bottom" : "next", at, "manual");
-        await setInbox(ctx, episode, false, at);
-        return added;
-      }
-      case "archive":
-        return await setArchived(ctx, episode, true, at);
-      case "markPlayed":
-        return await setPlayed(ctx, episode, true, at);
-    }
   },
 });
 

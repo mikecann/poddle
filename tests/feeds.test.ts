@@ -40,14 +40,15 @@ afterEach(() => {
 });
 
 describe("subscribing", () => {
-  test("first fetch creates every episode but only the latest lands in the Inbox", async () => {
+  test("first fetch creates every episode but only the latest lands in Up Next", async () => {
     const t = setup();
     mockFetch({ [FEED]: { body: fixture("odd-feed.xml"), headers: { etag: '"v1"' } } });
     const podcastId = await subscribeTo(t);
 
     const page = await t.query(api.podcasts.episodes, { podcastId, paginationOpts: { cursor: null, numItems: 50 } });
     expect(page.page).toHaveLength(4);
-    expect(await inboxTitles(t)).toEqual(["Episode 4: Chapters & Transcripts"]);
+    expect(await queueTitles(t)).toEqual(["Episode 4: Chapters & Transcripts"]);
+    expect(await inboxTitles(t)).toEqual([]);
 
     const show = await t.query(api.podcasts.get, { podcastId });
     expect(show?.podcast).toMatchObject({ title: "The Odd Show", subscribed: true, episodeCount: 4, artworkUrl: "https://cdn.example.com/odd-3000.jpg" });
@@ -85,7 +86,7 @@ describe("refreshing", () => {
     const t = setup();
     mockFetch({ [FEED]: fixture("odd-feed.xml") });
     const podcastId = await subscribeTo(t);
-    const ep4 = (await t.query(api.episodes.inbox, {}))[0]!.episode._id;
+    const ep4 = (await t.query(api.queue.upNext, {}))[0]!.row.episode._id;
     await t.mutation(api.episodes.setStarredState, { episodeId: ep4, starred: true, at: NOW });
     await t.mutation(api.episodes.updatePosition, { episodeId: ep4, position: 99, positionUpdatedAt: NOW, deviceId: "phone" });
 
@@ -97,41 +98,65 @@ describe("refreshing", () => {
     mockFetch({ [FEED]: body });
     const r = await t.action(api.feedActions.refreshNow, { podcastId });
     expect(r.result).toMatchObject({ status: "updated", newEpisodes: 1 });
-    expect(await inboxTitles(t)).toEqual(["Episode 5: Fresh", "Episode 4: Renamed"]);
+    expect(await queueTitles(t)).toEqual(["Episode 4: Renamed", "Episode 5: Fresh"]);
 
     const detail = await t.query(api.episodes.get, { episodeId: ep4 });
     expect(detail?.row.state).toMatchObject({ starred: true, position: 99, positionDeviceId: "phone" });
   });
 
-  test("back-catalogue items appearing later don't go to the Inbox", async () => {
+  test("back-catalogue items appearing later don't go to Up Next", async () => {
     const t = setup();
     mockFetch({ [FEED]: fixture("odd-feed.xml") });
     const podcastId = await subscribeTo(t);
     mockFetch({ [FEED]: withNewItems(newItem(0, "Mon, 01 Jan 2024 00:00:00 GMT")) });
     const r = await t.action(api.feedActions.refreshNow, { podcastId });
     expect(r.result?.newEpisodes).toBe(1);
-    expect(await inboxTitles(t)).toEqual(["Episode 4: Chapters & Transcripts"]);
+    expect(await queueTitles(t)).toEqual(["Episode 4: Chapters & Transcripts"]);
   });
 
-  test.each([
-    ["upNextBottom", ["Playing", "Queued", "Episode 5: Fresh"], []],
-    ["upNextTop", ["Playing", "Episode 5: Fresh", "Queued"], []],
-    ["none", ["Playing", "Queued"], []],
-    ["inbox", ["Playing", "Queued"], ["Episode 5: Fresh"]],
-  ] as const)("rule %s", async (rule, expectedQueue, expectedInbox) => {
-    const t = setup();
+  /** Subscribed, with the first-fetch episode out of the way and two items queued. */
+  async function withQueue(t: T) {
     mockFetch({ [FEED]: fixture("odd-feed.xml") });
     const podcastId = await subscribeTo(t);
-    // Take the first-subscribe episode out of the Inbox to keep the assertions focused.
-    const first = (await t.query(api.episodes.inbox, {}))[0]!.episode._id;
-    await t.mutation(api.episodes.setArchivedState, { episodeId: first, archived: true, at: Date.now() });
+    const first = (await t.query(api.queue.upNext, {}))[0]!.row.episode._id;
+    await t.mutation(api.queue.remove, { episodeId: first, at: Date.now() });
     await seedQueue(t, podcastId, ["Playing", "Queued"]);
-    await t.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: rule }, at: Date.now() });
-
+    return podcastId;
+  }
+  async function publishFresh(t: T, podcastId: Id<"podcasts">) {
     mockFetch({ [FEED]: withNewItems(newItem(5, "Wed, 15 Oct 2025 00:00:00 GMT")) });
     await t.action(api.feedActions.refreshNow, { podcastId });
+  }
+
+  test.each([
+    ["upNextBottom", ["Playing", "Queued", "Episode 5: Fresh"]],
+    ["upNextTop", ["Playing", "Episode 5: Fresh", "Queued"]],
+    ["none", ["Playing", "Queued"]],
+  ] as const)("rule %s", async (rule, expectedQueue) => {
+    const t = setup();
+    const podcastId = await withQueue(t);
+    await t.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: rule }, at: Date.now() });
+    await publishFresh(t, podcastId);
     expect(await queueTitles(t)).toEqual(expectedQueue);
-    expect(await inboxTitles(t)).toEqual(expectedInbox);
+    expect(await inboxTitles(t)).toEqual([]);
+  });
+
+  test.each(["global", "show"] as const)("a stored %s inbox rule lands at the bottom of Up Next, never in an Inbox", async (where) => {
+    const t = setup();
+    const podcastId = await withQueue(t);
+    // Rows an old client left behind (writes of `inbox` are now stored as upNextBottom).
+    const userId = await t.userId();
+    await t.run(async (ctx) => {
+      if (where === "global") {
+        await ctx.db.insert("globalSettings", { userId, newEpisodes: "inbox", fieldTimes: { newEpisodes: 1 }, updatedAt: 1 });
+      } else {
+        await ctx.db.insert("globalSettings", { userId, newEpisodes: "upNextTop", fieldTimes: { newEpisodes: 1 }, updatedAt: 1 });
+        await ctx.db.insert("podcastSettings", { userId, podcastId, newEpisodes: "inbox", fieldTimes: { newEpisodes: 1 }, updatedAt: 1 });
+      }
+    });
+    await publishFresh(t, podcastId);
+    expect(await queueTitles(t)).toEqual(["Playing", "Queued", "Episode 5: Fresh"]);
+    expect(await inboxTitles(t)).toEqual([]);
   });
 
   test("notifications go out only for new episodes on shows with them on", async () => {

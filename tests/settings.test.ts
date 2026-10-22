@@ -14,9 +14,14 @@ describe("resolveShowSettings", () => {
     expect(r.inherited).not.toContain("smartSpeed");
   });
 
+  test("a stored inbox rule (deprecated) resolves to upNextBottom", () => {
+    expect(resolveShowSettings({ newEpisodes: "inbox" }, null).newEpisodes).toBe("upNextBottom");
+    expect(resolveShowSettings({ newEpisodes: "upNextTop" }, { newEpisodes: "inbox" }).newEpisodes).toBe("upNextBottom");
+  });
+
   test("defaults from decisions.md", () => {
     const r = resolveShowSettings(null, null);
-    expect(r).toMatchObject({ playbackSpeed: 1, smartSpeed: true, voiceBoost: true, newEpisodes: "inbox", notifications: false });
+    expect(r).toMatchObject({ playbackSpeed: 1, smartSpeed: true, voiceBoost: true, newEpisodes: "upNextBottom", notifications: false });
     expect(DEFAULT_GLOBAL_SETTINGS).toMatchObject({ skipBackSeconds: 15, skipForwardSeconds: 30, autoRewind: true, remoteNextPrevious: "skip" });
   });
 
@@ -29,6 +34,15 @@ describe("resolveShowSettings", () => {
 });
 
 describe("settings functions", () => {
+  test("an old client writing inbox stores upNextBottom", async () => {
+    const t = setup();
+    const { podcastId } = await seedShow(t, 1);
+    await t.mutation(api.settings.updateGlobal, { patch: { newEpisodes: "inbox" }, at: BASE });
+    await t.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: "inbox" }, at: BASE });
+    expect((await t.query(api.settings.getGlobal, {})).newEpisodes).toBe("upNextBottom");
+    expect((await t.query(api.settings.forPodcast, { podcastId })).overrides.newEpisodes).toBe("upNextBottom");
+  });
+
   test("a show inherits global changes live until it overrides, and null resets", async () => {
     const t = setup();
     const { podcastId } = await seedShow(t, 1);

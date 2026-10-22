@@ -3,13 +3,22 @@ import { v, type Infer } from "convex/values";
 // Spec §2.5. Every per-show setting is either "use default" (absent) or an
 // explicit value. The effective value is `override ?? global`.
 
+// Where a show's new episodes go. `inbox` is deprecated (decisions.md: there's no
+// Inbox any more). It's still accepted so old rows and old clients validate, but
+// it always behaves as `upNextBottom`: see `effectiveRule`.
 export const vNewEpisodeRule = v.union(
+  /** @deprecated Behaves as `upNextBottom`. */
   v.literal("inbox"),
   v.literal("upNextTop"),
   v.literal("upNextBottom"),
   v.literal("none"),
 );
 export type NewEpisodeRule = Infer<typeof vNewEpisodeRule>;
+
+/** A stored (deprecated) `inbox` rule means `upNextBottom`. */
+export function effectiveRule(rule: NewEpisodeRule): Exclude<NewEpisodeRule, "inbox"> {
+  return rule === "inbox" ? "upNextBottom" : rule;
+}
 
 export const vTimePitch = v.union(v.literal("spectral"), v.literal("timeDomain"));
 export const vAutoDownload = v.union(
@@ -71,7 +80,7 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   timePitch: "timeDomain",
   skipIntroSeconds: 0,
   skipOutroSeconds: 0,
-  newEpisodes: "inbox",
+  newEpisodes: "upNextBottom",
   autoDownload: "upNext",
   keepLatestDownloaded: 3,
   notifications: false,
@@ -130,7 +139,7 @@ export function resolveShowSettings(
       out[key] = g[key];
       inherited.push(key);
     } else {
-      out[key] = o;
+      out[key] = key === "newEpisodes" ? effectiveRule(o as NewEpisodeRule) : o;
     }
   }
   return { ...(out as ShowSettings), inherited };
@@ -146,5 +155,6 @@ export function resolveGlobalSettings(global: Partial<GlobalSettings> | null | u
     const value = global?.[key];
     if (value !== undefined) out[key] = value;
   }
+  out.newEpisodes = effectiveRule(out.newEpisodes as NewEpisodeRule);
   return out as GlobalSettings;
 }

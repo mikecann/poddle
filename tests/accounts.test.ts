@@ -75,7 +75,7 @@ describe("isolation", () => {
     expect(shows).toHaveLength(1);
     for (const who of [mike, ana]) {
       expect((await who.query(api.podcasts.list, {})).map((p) => p._id)).toEqual([podcastId]);
-      expect((await who.query(api.episodes.inbox, {})).map((r) => r.episode.title)).toEqual(["Episode 4: Chapters & Transcripts"]);
+      expect((await who.query(api.queue.upNext, {})).map((r) => r.row.episode.title)).toEqual(["Episode 4: Chapters & Transcripts"]);
     }
     // Ana unsubscribing doesn't touch Mike, and polling carries on for him.
     await ana.mutation(api.podcasts.unsubscribe, { podcastId, at: NOW + 1 });
@@ -130,14 +130,14 @@ describe("isolation", () => {
     });
     await mike.mutation(api.devices.register, { deviceId: "mike-phone", name: "Mike's iPhone", platform: "iOS", apnsToken: "aa11" });
 
-    // Ana sees none of it.
-    expect(await ana.query(api.queue.upNext, {})).toEqual([]);
+    // Ana sees none of it. e1 is the newest episode, in her own Up Next from
+    // subscribing, without Mike's position.
+    expect((await ana.query(api.queue.upNext, {})).map((r) => r.item.userId)).toEqual([await ana.userId()]);
     expect(await ana.query(api.episodes.starred, {})).toEqual([]);
-    // e1 is the newest episode, in Ana's own Inbox: her state, not Mike's position.
     const anaE1 = await ana.query(api.episodes.get, { episodeId: e1 });
-    expect(anaE1?.row.state).toMatchObject({ userId: await ana.userId(), position: 0, inInbox: true });
+    expect(anaE1?.row.state).toBeNull();
     expect((await ana.query(api.episodes.get, { episodeId: e3 }))?.row.state).toBeNull();
-    expect(anaE1?.inQueue).toBe(false);
+    expect(anaE1?.inQueue).toBe(true);
     expect((await ana.query(api.settings.getGlobal, {})).skipBackSeconds).toBe(15);
     expect((await ana.query(api.settings.forPodcast, { podcastId })).overrides).toEqual({});
     expect((await ana.query(api.podcasts.get, { podcastId }))?.podcast.isPrivate).toBe(false);
@@ -153,8 +153,8 @@ describe("isolation", () => {
     expect((await mike.query(api.stats.summary, { period: "all" })).totals.sessions).toBe(1);
     expect(await mike.query(api.devices.list, {})).toHaveLength(1);
 
-    // sync:changes: Ana's personal tables hold only her own rows (her Inbox entry,
-    // her subscribe event and settings), never Mike's.
+    // sync:changes: Ana's personal tables hold only her own rows (her Up Next
+    // entry, her subscribe event and settings), never Mike's.
     const anaId = await ana.userId();
     const mikeId = await mike.userId();
     for (const table of PERSONAL) {
@@ -163,7 +163,7 @@ describe("isolation", () => {
       const mine = await syncAll(mike, table);
       for (const row of mine) expect(row.userId).toBe(mikeId);
     }
-    expect(await syncAll(ana, "queueItems")).toEqual([]);
+    expect(await syncAll(ana, "queueItems")).toHaveLength(1);
     expect(await syncAll(ana, "listeningSessions")).toEqual([]);
     expect(await syncAll(ana, "deletions")).toEqual([]);
     expect(await syncAll(mike, "queueItems")).toHaveLength(1);
@@ -215,7 +215,8 @@ describe("isolation", () => {
 
   test("new episodes follow each subscriber's own rule and alert only their devices", async () => {
     const { mike, ana, podcastId } = await twoListeners();
-    await mike.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: "upNextBottom", notifications: true }, at: NOW });
+    await mike.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: "upNextTop", notifications: true }, at: NOW });
+    await ana.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: "none" }, at: NOW });
     await mike.mutation(api.devices.register, { deviceId: "mike-phone", name: "iPhone", platform: "iOS", apnsToken: "aa11" });
     await ana.mutation(api.devices.register, { deviceId: "ana-phone", name: "iPhone", platform: "iOS", apnsToken: "bb22" });
 
@@ -223,10 +224,9 @@ describe("isolation", () => {
     const r = await mike.action(api.feedActions.refreshNow, { podcastId });
     expect(r.result).toMatchObject({ status: "updated", newEpisodes: 1 });
 
-    expect((await mike.query(api.queue.upNext, {})).map((x) => x.row.episode.title)).toEqual(["Episode 5: Fresh"]);
-    expect((await mike.query(api.episodes.inbox, {})).map((x) => x.episode.title)).not.toContain("Episode 5: Fresh");
-    expect((await ana.query(api.episodes.inbox, {})).map((x) => x.episode.title)).toContain("Episode 5: Fresh");
-    expect(await ana.query(api.queue.upNext, {})).toEqual([]);
+    const titles = async (who: typeof mike) => (await who.query(api.queue.upNext, {})).map((x) => x.row.episode.title);
+    expect(await titles(mike)).toEqual(["Episode 4: Chapters & Transcripts", "Episode 5: Fresh"]);
+    expect(await titles(ana)).toEqual(["Episode 4: Chapters & Transcripts"]);
 
     // Only Mike asked for alerts, so only his devices are targeted.
     const scheduled = await mike.run(async (ctx) => await ctx.db.system.query("_scheduled_functions").collect());
