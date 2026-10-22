@@ -15,10 +15,19 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 
 ## Behaviour
 
-- **Queue:** an Inbox plus a single ordered Up Next queue. There are no Overcast-style playlists in v1.
-- **New episodes, per show:** `Inbox` (default), `Up Next top`, `Up Next bottom` or `Don't add`. Shows set to an Up Next option are the "priority" shows.
-- **Tabs:** Up Next, Inbox, Library, Discover, Stats. Global settings and the Overcast import sit behind a gear on Library.
-- **Speed edits:** the speed sheet's scope switch defaults to "Just this show" if the show already has its own speed, otherwise "All podcasts". A change applies to whichever scope is selected. There is no per-episode speed.
+- **Queue:** a single ordered Up Next queue. There's no Inbox (Mike dropped it on 22 Oct: "what's the point in having an inbox anyway?"), and no Overcast-style playlists in v1.
+- **New episodes, per show:** `Up Next bottom` (default), `Up Next top` or `Don't add`. Shows set to `Up Next top` are the "priority" shows. Episodes sitting in the old Inbox move to the bottom of Up Next, oldest first.
+- **Tabs:** Up Next, Library, Discover, Stats. Global settings and the Overcast import sit behind a gear on Library.
+- **Now Playing has three pages,** like Overcast. Swipe between them; page dots show where you are.
+  - **Left page (swipe right):** show notes and chapters.
+  - **Middle:** artwork and transport. The artwork has **no destructive gestures**: dragging it never archives, deletes or skips an episode.
+  - **Right page (swipe left):** that episode's playback settings: speed, Smart Speed, Voice Boost, speed-up method, skip intro and outro. At the top is a **"Customize for <show>"** toggle:
+    - Off: edits change the global defaults, and the page says so.
+    - On: the show gets its own values, starting from the current ones, and edits change only that show.
+    - Turning it off again returns the show to the defaults.
+  - Settings are never per-episode.
+- **Undo:** every destructive or hard-to-find action shows a toast at the bottom with **Undo** for about 5 seconds, then it's final. That covers archive, remove from Up Next, mark played, delete download, unsubscribe and clearing things.
+- **Speed edits:** they follow the Now Playing settings page's "Customize for <show>" toggle. There is no per-episode speed.
 - **Per-show settings:** each one is either "Use default" (inherits the global value live) or an explicit value. The full list is in spec §2.5.
 - **Speed-up method:** the default is PoddlePlayback's `timeDomain` stretcher. Mike preferred files 3 and 5 in the 21 Oct listening test, though only slightly. Settings > Playback has a "Speed-up method" choice ("Speech-tuned" = timeDomain, "Apple spectral" = spectral) so he can A/B on the phone with headphones. It also appears as a per-show override.
 - **Defaults:** skip back 15 s and forward 30 s; Smart Speed and Voice Boost on; AirPods next/previous = skip forward/back; auto-rewind on resume.
