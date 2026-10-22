@@ -10,7 +10,7 @@ import AppKit
 // a gold pin wherever a show has its own settings, and fern for "on".
 
 extension Color {
-    init(hex: UInt32, alpha: Double = 1) {
+    nonisolated init(hex: UInt32, alpha: Double = 1) {
         self.init(
             .sRGB,
             red: Double((hex >> 16) & 0xFF) / 255,
@@ -20,14 +20,16 @@ extension Color {
         )
     }
 
-    /// A colour with a warm-dark variant.
-    init(light: UInt32, lightAlpha: Double = 1, dark: UInt32, darkAlpha: Double = 1) {
+    /// A colour with a warm-dark variant. Nonisolated with a `@Sendable` provider, because
+    /// SwiftUI resolves colours off the main thread while animating, and a main-actor closure
+    /// there trips Swift's executor check and crashes.
+    nonisolated init(light: UInt32, lightAlpha: Double = 1, dark: UInt32, darkAlpha: Double = 1) {
         #if os(iOS)
-        self.init(uiColor: UIColor { traits in
+        self.init(uiColor: UIColor { @Sendable traits in
             traits.userInterfaceStyle == .dark ? UIColor(hex: dark, alpha: darkAlpha) : UIColor(hex: light, alpha: lightAlpha)
         })
         #else
-        self.init(nsColor: NSColor(name: nil) { appearance in
+        self.init(nsColor: NSColor(name: nil) { @Sendable appearance in
             appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
                 ? NSColor(hex: dark, alpha: darkAlpha) : NSColor(hex: light, alpha: lightAlpha)
         })
@@ -37,13 +39,13 @@ extension Color {
 
 #if os(iOS)
 extension UIColor {
-    convenience init(hex: UInt32, alpha: Double) {
+    nonisolated convenience init(hex: UInt32, alpha: Double) {
         self.init(red: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
     }
 }
 #else
 extension NSColor {
-    convenience init(hex: UInt32, alpha: Double) {
+    nonisolated convenience init(hex: UInt32, alpha: Double) {
         self.init(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255, blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
     }
 }
