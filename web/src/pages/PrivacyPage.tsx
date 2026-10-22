@@ -1,8 +1,7 @@
 import { Layout } from "../components/Layout";
+import { CONTACT_EMAIL } from "../lib/links";
 import { Link } from "../lib/router";
 import { useTitle } from "../lib/useShareData";
-
-export const CONTACT_EMAIL = "poddle@mikecann.app";
 
 // The privacy policy the App Store listing links to. Keep it in step with what
 // the backend actually stores (convex/schema.ts) and with

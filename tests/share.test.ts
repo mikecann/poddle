@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { appSiteAssociation } from "../convex/http";
-import { FALLBACK_INDEX_HTML, META_END, META_START, escapeHtml, renderSharePage } from "../convex/lib/meta";
+import { FALLBACK_INDEX_HTML, LANDING_END, LANDING_START, META_END, META_START, escapeHtml, renderSharePage } from "../convex/lib/meta";
 import { BASE, seedShow } from "./seed";
 import { setup, type T } from "./helpers";
 
@@ -251,6 +251,13 @@ describe("renderSharePage", () => {
     expect(html).toContain("<title>Show not found · Poddle</title>");
     expect(html).not.toContain("<title>Old</title>");
     expect(renderSharePage(FALLBACK_INDEX_HTML, { kind: "notFound", what: "episode" }, "https://x.test")).toContain("Episode not found");
+  });
+
+  test("leaves out the prerendered home page", () => {
+    const withLanding = built.replace(`<div id="root"></div>`, `<div id="root">${LANDING_START}<h1>Faster podcasts</h1>${LANDING_END}</div>`);
+    const html = renderSharePage(withLanding, { kind: "episode", episode }, "https://x.test");
+    expect(html).not.toContain("Faster podcasts");
+    expect(html).toContain(`<div id="root">${LANDING_START}${LANDING_END}</div>`);
   });
 
   test("escapeHtml", () => {

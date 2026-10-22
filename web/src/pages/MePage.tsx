@@ -24,7 +24,7 @@ export function MePage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
   const { signOut } = useAuthActions();
   const [leaving, setLeaving] = useState(false);
-  useTitle("Your listening · Poddle");
+  useTitle("Your listening · Poddle", { noindex: true });
   if (isLoading) return <Layout><Loading /></Layout>;
   if (!isAuthenticated) {
     return (

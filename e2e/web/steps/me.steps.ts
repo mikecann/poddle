@@ -39,11 +39,6 @@ When("they sign out on the website", async ({ page }) => {
   await page.getByRole("button", { name: "Sign out" }).click();
 });
 
-Then("the website asks them to sign in", async ({ page }) => {
-  await expect(page.getByRole("heading", { name: "Sign in to Poddle" })).toBeVisible({ timeout: 20_000 });
-  await expect(page.getByRole("button", { name: "Sign in with Apple" })).toBeVisible();
-});
-
 Then("their Up Next isn't on the page", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /^Up Next/ })).toHaveCount(0);
   await expect(page.getByText("Sunrise in A")).toHaveCount(0);

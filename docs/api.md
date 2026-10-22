@@ -61,7 +61,7 @@ Convex Auth v2 (`@convex-dev/auth` 2.0.0-beta.0), set up like Walkies: `convex/c
 | `auth:signOut` | mutation | `refreshToken` | `null` |
 | `auth:signInForTesting` | mutation | `email?` | Dev only (`PODDLE_TEST_SIGNIN=1`). Signs in as the user with that email, making a test user if there isn't one and that email could sign up (otherwise `ConvexError { code: "inviteOnly" }`, as with Apple and Google); without an email, a fresh test user. Same result shape as `complete…`. Refused with `{ code: "testSignInDisabled" }` everywhere else, including direct `auth:signInAnonymously` calls. |
 | `users:me` | query | – | `{ userId, name, email, picture } \| null` |
-| `users:signUpOpen` | query | – | `Bool`: whether anyone with a verified Apple or Google email can make an account (`PODDLE_OPEN_SIGNUP=1`). The website's home page uses it for its copy. |
+| `users:signUpOpen` | query | – | `Bool`: whether anyone with a verified Apple or Google email can make an account (`PODDLE_OPEN_SIGNUP=1`). |
 | `users:deleteAccount` | mutation | – | `{ deletionId }`. Deletes the caller's account (App Store Guideline 5.1.1(v)); signed in only, no admin path. See "Deleting an account" below. Then call `auth:signOut` to end this device's session. |
 
 - **One person, two providers:** Apple and Google with the same verified email land in the same user (`existingUser` in `users.ts`). Apple's "Hide my email" relay addresses are different emails, so they don't match (and aren't on the allowlist).

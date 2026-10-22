@@ -12,8 +12,22 @@ export function withEmbedded<T>(live: T | null | undefined, fromPage: (page: Sha
   return page ? fromPage(page) : undefined;
 }
 
-export function useTitle(title: string | undefined) {
+/**
+ * The page's title, and its canonical link (index.html's points at the home page,
+ * which every other page is served from). `noindex` keeps a page out of search.
+ */
+export function useTitle(title: string | undefined, { noindex = false } = {}) {
   useEffect(() => {
     if (title) document.title = title;
+    const canonical = document.querySelector<HTMLLinkElement>('link[rel="canonical"]');
+    if (canonical) canonical.href = `${window.location.origin}${window.location.pathname}`;
   }, [title]);
+  useEffect(() => {
+    if (!noindex) return;
+    const robots = document.createElement("meta");
+    robots.name = "robots";
+    robots.content = "noindex";
+    document.head.append(robots);
+    return () => robots.remove();
+  }, [noindex]);
 }

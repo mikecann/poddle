@@ -23,3 +23,19 @@ export function appLink(kind: "e" | "s", id: string, at?: number | null): string
 export function mightHaveApp(userAgent = typeof navigator === "undefined" ? "" : navigator.userAgent): boolean {
   return /iPhone|iPad|iPod|Macintosh/.test(userAgent);
 }
+
+export const CONTACT_EMAIL = "poddle@mikecann.app";
+
+/** The site's public address, for canonical links and structured data. */
+export const SITE_URL = "https://poddle.mikecann.app";
+
+/** The home page's title, also in index.html. */
+export const HOME_TITLE = "Poddle · A podcast player for iPhone";
+
+export const APP_STORE_URL = "https://apps.apple.com/app/id6825613455";
+
+/**
+ * Flip to true once Poddle is out on the App Store. Until then every App Store
+ * badge on the site says "Coming soon" and isn't a link.
+ */
+export const APP_STORE_LIVE = false;

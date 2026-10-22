@@ -9,6 +9,19 @@ import type { ShareEpisode, ShareShowPage } from "./sharePages";
 export const META_START = "<!--poddle:meta-->";
 export const META_END = "<!--/poddle:meta-->";
 
+// The home page is prerendered into #root between these markers when the site is
+// built (web/vite.config.ts). Share pages aren't the home page, so they drop it.
+export const LANDING_START = "<!--poddle:landing-->";
+export const LANDING_END = "<!--/poddle:landing-->";
+
+/** The page with the prerendered home page taken out of #root. */
+export function withoutLanding(html: string): string {
+  const start = html.indexOf(LANDING_START);
+  const end = html.indexOf(LANDING_END);
+  if (start === -1 || end < start) return html;
+  return html.slice(0, start + LANDING_START.length) + html.slice(end);
+}
+
 export type PageMeta = {
   title: string;
   description: string;
@@ -115,7 +128,8 @@ export const FALLBACK_INDEX_HTML = `<!doctype html>
 </html>`;
 
 /** index.html with this page's tags and data in place of the default block. */
-export function renderSharePage(indexHtml: string, page: SharePage, origin: string): string {
+export function renderSharePage(built: string, page: SharePage, origin: string): string {
+  const indexHtml = withoutLanding(built);
   const meta = metaFor(page, origin);
   const suffix = page.kind === "episode" ? page.episode.podcast.title : null;
   const data = `<script id="poddle-page" type="application/json">${scriptJson(page)}</script>`;

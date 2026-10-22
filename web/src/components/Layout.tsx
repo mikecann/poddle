@@ -1,27 +1,42 @@
 import { useConvexAuth } from "convex/react";
 import type { ReactNode } from "react";
+import { CONTACT_EMAIL } from "../lib/links";
 import { Link } from "../lib/router";
 
 export function Layout({ children, wide = false }: { children: ReactNode; wide?: boolean }) {
   const { isAuthenticated } = useConvexAuth();
   return (
     <>
-      <header className="topbar">
-        <Link to="/" className="brand" aria-label="Poddle home">
-          <img src="/icon.png" alt="" width={34} height={34} />
-          <b className="wordmark">Poddle</b>
-        </Link>
-        <Link to="/me" className="toplink">{isAuthenticated ? "Your listening" : "Sign in"}</Link>
-      </header>
+      <SiteHeader signedIn={isAuthenticated} />
       <main className={wide ? "page wide" : "page"}>{children}</main>
-      <footer className="footer">
-        <span>Poddle, a podcast player for iPhone, iPad and Mac.</span>
-        <nav aria-label="About Poddle">
-          <Link to="/support">Support</Link>
-          <Link to="/privacy">Privacy</Link>
-        </nav>
-      </footer>
+      <SiteFooter />
     </>
+  );
+}
+
+/** The top bar. No hooks, so the prerendered landing page (lib/prerender.tsx) can draw it too. */
+export function SiteHeader({ signedIn }: { signedIn: boolean }) {
+  return (
+    <header className="topbar">
+      <Link to="/" className="brand" aria-label="Poddle home">
+        <img src="/icon.png" alt="" width={34} height={34} />
+        <b className="wordmark">Poddle</b>
+      </Link>
+      <Link to="/me" className="toplink">{signedIn ? "Your listening" : "Sign in"}</Link>
+    </header>
+  );
+}
+
+export function SiteFooter() {
+  return (
+    <footer className="footer">
+      <span>Poddle, a podcast player for iPhone by Mike Cann.</span>
+      <nav aria-label="About Poddle">
+        <Link to="/support">Support</Link>
+        <Link to="/privacy">Privacy</Link>
+        <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>
+      </nav>
+    </footer>
   );
 }
 

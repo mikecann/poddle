@@ -4,28 +4,40 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
     <meta name="theme-color" content="#F5EEE3">
+    <meta name="apple-itunes-app" content="app-id=6825613455">
     <link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
     <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
     <link rel="manifest" href="/site.webmanifest">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <!-- /e/<id> and /s/<id> swap this block for the page's own tags (convex/lib/meta.ts). -->
+    <link rel="preload" href="/fonts/fredoka.woff2" as="font" type="font/woff2" crossorigin>
+    <!-- /e/<id> and /s/<id> swap this block for the page's own tags (convex/lib/meta.ts).
+         The home page's title is also HOME_TITLE in src/lib/links.ts. -->
     <!--poddle:meta-->
-    <title>Poddle</title>
-    <meta name="description" content="Poddle is a warm little podcast player for iPhone, iPad and Mac.">
+    <title>Poddle · A podcast player for iPhone</title>
+    <meta name="description" content="A podcast player for iPhone with speed-ups that still sound like people, settings for each show, the full Overcast import and listening stats. Free, with no ads and no tracking.">
+    <link rel="canonical" href="https://poddle.mikecann.app/">
     <meta property="og:site_name" content="Poddle">
     <meta property="og:type" content="website">
-    <meta property="og:title" content="Poddle">
-    <meta property="og:description" content="Poddle is a warm little podcast player for iPhone, iPad and Mac.">
+    <meta property="og:url" content="https://poddle.mikecann.app/">
+    <meta property="og:title" content="Poddle: faster podcasts, no chipmunks">
+    <meta property="og:description" content="A podcast player for iPhone with speed-ups that still sound like people, settings for each show and the full Overcast import. No ads and no tracking.">
     <meta property="og:image" content="https://poddle.mikecann.app/og-default.png">
     <meta property="og:image:width" content="1200">
     <meta property="og:image:height" content="630">
-    <meta property="og:image:alt" content="Poddle and its headphones poodle">
+    <meta property="og:image:alt" content="Poddle, a podcast player for iPhone, with its Up Next and Now Playing screens">
     <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Poddle: faster podcasts, no chipmunks">
+    <meta name="twitter:description" content="A podcast player for iPhone with speed-ups that still sound like people, settings for each show and the full Overcast import. No ads and no tracking.">
     <meta name="twitter:image" content="https://poddle.mikecann.app/og-default.png">
     <!--/poddle:meta-->
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><!--poddle:landing--><!--/poddle:landing--></div>
+    <script>
+      // The build prerenders the home page into #root (vite.config.ts). Every other
+      // page is served from this file too, so clear it there before it's drawn.
+      if (location.pathname !== "/") document.getElementById("root").replaceChildren();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

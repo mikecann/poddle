@@ -1,7 +1,7 @@
 import { Layout } from "../components/Layout";
+import { CONTACT_EMAIL } from "../lib/links";
 import { Link } from "../lib/router";
 import { useTitle } from "../lib/useShareData";
-import { CONTACT_EMAIL } from "./PrivacyPage";
 
 // The support page the App Store listing links to.
 
