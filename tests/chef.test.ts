@@ -1,6 +1,8 @@
 import { convexTest } from "convex-test";
 import feedbackTest from "@convex-dev/feedback/test";
 import chefCloudTest from "@convex-dev/chef-cloud/test";
+import { checkBuildConfig } from "@convex-dev/chef-cloud/launcher";
+import { deploymentFromCloudUrl } from "@convex-dev/feedback/chef/deployKey.js";
 import { describe, expect, test } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import * as chef from "../convex/chef";
@@ -85,5 +87,15 @@ describe("chef", { timeout: 30_000 }, () => {
     expect(lookup("/e/abc", "GET")).toBe("/e/*");
     expect(lookup("/s/abc", "GET")).toBe("/s/*");
     expect(lookup("/me", "GET")).toBe("/*");
+  });
+
+  // scripts/chef-patch-vendor.sh: Poddle's deployments are in Sydney. Fails when
+  // Chef is re-vendored without the patch.
+  test("the vendored Chef accepts Poddle's regional deployment URLs", () => {
+    expect(deploymentFromCloudUrl("https://striped-turtle-260.ap-southeast-2.convex.cloud")).toBe("striped-turtle-260");
+    expect(deploymentFromCloudUrl("https://cautious-hamster-376.convex.cloud")).toBe("cautious-hamster-376");
+    const config = { gitHost: "convex.code.storage", snapshot: "shared:chef-base-1" };
+    expect(() => checkBuildConfig({ ...config, siteHost: "striped-turtle-260.ap-southeast-2.convex.site" } as never)).not.toThrow();
+    expect(() => checkBuildConfig({ ...config, siteHost: "evil.example.com" } as never)).toThrow();
   });
 });

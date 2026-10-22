@@ -41,4 +41,8 @@ export const {
   // The website (web/) is the only thing a build can preview: the iOS app can't
   // compile in the sandbox (`npx chef ios` tries it on the phone instead).
   frontend: { command: ["npm", "run", "web:build"], urlEnvVar: "VITE_CONVEX_URL", distDir: "web/dist" },
+  // The live site "Ship it" checks. Chef's default, https://<name>.convex.site,
+  // misses the region in Poddle's Sydney URLs: poddle.mikecann.app on prod, the
+  // deployment's own site on dev.
+  ship: { siteUrl: process.env.PODDLE_SITE_URL || process.env.CONVEX_SITE_URL },
 });
