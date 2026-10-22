@@ -7,6 +7,7 @@ Mike's own podcast player for iPhone, iPad and Mac, built to replace Overcast. S
 - `docs/architecture.md`: how the code is laid out
 - `designs/c-earful-warm.html`: the chosen look (open it in a browser)
 - `docs/api.md`: the backend API the app is written against, including the offline/outbox contract
+- `docs/testing.md`: the test layers and the end-to-end BDD suites; `AGENTS.md` has the rules and a cheatsheet
 
 ## Brand
 
@@ -37,6 +38,8 @@ Signing in (Debug simulator builds only): `-PoddleTestSignIn <email>` signs in a
 
 Share links (Debug): `-PoddleOpenURL <url>` opens a website link at launch as if it had been tapped, e.g. `https://striped-turtle-260.ap-southeast-2.convex.site/e/<id>?t=754` or `poddle://s/<id>`.
 
+End-to-end tests (Debug): `-PoddleConvexURL <url>` and `-PoddleSiteURL <url>` point the app at another backend (the e2e suite's local one; `-ChefConvexURL` still works for Chef previews), `-PoddleResetState YES` starts as a fresh install (signs out and wipes caches, outbox, downloads and preferences), `-PoddleImportFile <path>` stands in for picking an Overcast export in the file picker, `-PoddleUndoSeconds <n>` changes how long Undo toasts stay, and `-showPoddle NO` hides the companion. `docs/testing.md` has the details.
+
 Smaller ones: `-PoddlePaused YES` stops a mock screenshot run starting playback, `-PoddleAutoplay YES` starts the real engine playing at launch, and `-PoddleQuery <text>` pre-fills Discover.
 
 ## Backend
@@ -64,7 +67,10 @@ The app needs no secrets: Debug talks to dev (`striped-turtle-260`) and Release 
 | `npm run typecheck` | `tsc` over `convex/` and the tests |
 | `npm test` | Vitest + convex-test, once |
 | `npm run test:watch` | Vitest in watch mode |
-| `npm run check` | Typecheck, then tests |
+| `npm run check` | Typecheck, tests, then the BDD pairing and drift checks (no browsers or simulators) |
+| `npm run test:e2e:web` | The website's BDD suite (playwright-bdd), on a throwaway local backend. `-- -g "<scenario>"` for one |
+| `npm run test:e2e:ios` | The app's BDD suite (XCUITest) on the "Poddle E2E" simulator. `-- --feature <name>` or `-- -g "<scenario>"` |
+| `npm run test:e2e` | Both, on one world. Slow: see `AGENTS.md`, "End-to-end cadence" |
 
 ## Website
 
@@ -111,7 +117,7 @@ The app uses the web sign-in pages in a secure sheet rather than the native Sign
 
 ### Test sign-in
 
-On dev only (`PODDLE_TEST_SIGNIN=1`), `auth:signInForTesting { email? }` signs in without Apple or Google, as the user with that email (or a new test user). The server refuses it unless the flag is exactly `1`, and on prod's addresses even then. In the app: the button on the sign-in screen (Debug simulator builds), or `-PoddleTestSignIn <email>`.
+On dev only (`PODDLE_TEST_SIGNIN=1`), `auth:signInForTesting { email? }` signs in without Apple or Google, as the user with that email, or makes that user if the email could sign up (on `PODDLE_ALLOWED_EMAILS`, or open sign-up), the same gate as Apple and Google. Without an email it's a fresh test user. The server refuses it unless the flag is exactly `1`, and on prod's addresses even then. In the app: the button on the sign-in screen (Debug simulator builds), or `-PoddleTestSignIn <email>`.
 
 ### Scripts: the admin path
 

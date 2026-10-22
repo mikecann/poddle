@@ -67,13 +67,13 @@ struct EpisodeDetailView: View {
                                 player.load(item.id, position: start, smartSaved: 0)
                                 player.resume()
                                 app.linkStarts[item.id] = nil
-                                app.showNowPlaying = true
+                                app.openNowPlaying()
                             }
                             .accessibilityIdentifier("episode.play")
                         } else {
                             PoddleButton(title: player.currentEpisodeId == item.id && player.isPlaying ? "Playing" : "Play", systemImage: "play.fill", kind: .primary) {
                                 player.play(item.id)
-                                app.showNowPlaying = true
+                                app.openNowPlaying()
                             }
                             .accessibilityIdentifier("episode.play")
                         }

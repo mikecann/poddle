@@ -125,6 +125,8 @@ struct DiscoverView: View {
                     resultRow(r)
                         .cloudCard()
                         .padding(.horizontal, 12)
+                        // A container, so the Follow button keeps its own identifier.
+                        .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("discover.result.\(r.id)")
                 }
             }
@@ -256,7 +258,16 @@ struct DiscoverView: View {
         #if os(iOS)
         if url == nil { url = UIPasteboard.general.url?.absoluteString ?? UIPasteboard.general.string }
         #endif
-        guard let url else { return }
+        guard let url, !url.isEmpty else {
+            // They said no to the paste prompt (or it's empty). Paste used to do nothing here, and
+            // with "Type" swapped out for it there was no way left to enter a link.
+            withAnimation(.snappy) {
+                clipboard = .none
+                showManual = true
+            }
+            show("Couldn't read the clipboard. Paste or type the link here.")
+            return
+        }
         await add(url)
     }
 

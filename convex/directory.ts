@@ -5,13 +5,13 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { userAction } from "./lib/auth";
+import { directoryBase } from "./lib/e2e";
 import { fetchWithTimeout, USER_AGENT } from "./lib/feedFetch";
 import { parseAppleId } from "./lib/parse";
 import { type DirectoryResult, vDirectoryResult } from "./lib/validators";
 
-// Apple Podcasts directory (iTunes Search API), spec §2.1.
-
-const ITUNES = "https://itunes.apple.com";
+// Apple Podcasts directory (iTunes Search API), spec §2.1. The e2e suites point
+// it at their fixture server instead (lib/e2e.ts).
 
 type ItunesItem = {
   collectionId?: number;
@@ -65,7 +65,7 @@ export const search = userAction({
     const t = term.trim();
     if (!t) return [];
     const n = Math.min(Math.max(limit ?? 50, 1), 200);
-    const url = `${ITUNES}/search?term=${encodeURIComponent(t.toLowerCase())}&media=podcast&entity=podcast&country=AU&limit=${n}`;
+    const url = `${directoryBase()}/search?term=${encodeURIComponent(t.toLowerCase())}&media=podcast&entity=podcast&country=AU&limit=${n}`;
     return await toResults(ctx, await itunesJson(ctx, url));
   },
 });
@@ -77,7 +77,7 @@ export const lookup = userAction({
   handler: async (ctx, { appleIdOrUrl }) => {
     const id = parseAppleId(appleIdOrUrl);
     if (!id) return null;
-    const items = await itunesJson(ctx, `${ITUNES}/lookup?id=${id}&entity=podcast&country=AU`);
+    const items = await itunesJson(ctx, `${directoryBase()}/lookup?id=${id}&entity=podcast&country=AU`);
     const [first] = await toResults(ctx, items.slice(0, 1));
     return first ?? null;
   },

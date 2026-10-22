@@ -10,6 +10,12 @@ public struct LibrarySnapshot: Codable, Sendable, Hashable {
     public var queue: [QueueItem]
     public var global: GlobalSettings
     public var podcastSettings: [String: PodcastSettings]
+    /// The server's "Past shows" (`podcasts:pastShows`): unsubscribed shows it knows have history.
+    /// Their episodes aren't synced, so the history can't be seen here. Nil until it arrives.
+    public var pastShowIds: Set<String>? = nil
+    /// Set once the person's own global settings have come from the server. Until then `global`
+    /// is the defaults, which mustn't drive anything they'd notice (auto-downloads).
+    public var settingsSynced: Bool? = nil
 
     public init(
         podcasts: [String: Podcast] = [:], episodes: [String: Episode] = [:], states: [String: EpisodeState] = [:],

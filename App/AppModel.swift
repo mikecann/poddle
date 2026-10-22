@@ -72,6 +72,8 @@ final class AppModel {
     /// Sheets shown on top of Now Playing (it's its own presentation).
     var nowPlayingSheet: SheetRoute?
     var showNowPlaying = false
+    /// Open Now Playing once the sheet that asked for it has gone (see `openNowPlaying`).
+    var nowPlayingAfterSheet = false
     var nowPlayingPage: NowPlayingPage = .player
     /// The Undo toast for destructive actions.
     let undo = UndoCenter()
@@ -93,6 +95,18 @@ final class AppModel {
     /// Whose cache, outbox and downloads to wipe from this device once the store has switched
     /// away from them (they just deleted their account; `PoddleApp.accountChanged`).
     var wipeAfterSignOut: String?
+
+    /// Opens Now Playing from anywhere. From a sheet (the episode page opened by a share link)
+    /// the sheet goes first: a full-screen cover can't come up while it's showing, so playing from
+    /// there used to start the episode and leave you on the sheet.
+    func openNowPlaying() {
+        if sheet != nil {
+            nowPlayingAfterSheet = true
+            sheet = nil
+        } else {
+            showNowPlaying = true
+        }
+    }
 
     func path(_ tab: Tab) -> Binding<[Route]> {
         Binding { self.paths[tab] ?? [] } set: { self.paths[tab] = $0 }

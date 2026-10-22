@@ -92,9 +92,14 @@ struct PoddleApp: App {
             ?? LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!)
         #if DEBUG
         // `-ChefConvexURL <url>`: a Chef cloud build's preview backend, passed by `npx chef ios`.
-        if let raw = UserDefaults.standard.string(forKey: "ChefConvexURL"), let url = URL(string: raw), url.host() != nil {
-            config = LiveConfig(deploymentURL: url)
+        // `-PoddleConvexURL <url>` (with `-PoddleSiteURL <url>`): any backend, e.g. the e2e suite's local one.
+        let defaults = UserDefaults.standard
+        if let raw = defaults.string(forKey: "PoddleConvexURL") ?? defaults.string(forKey: "ChefConvexURL"),
+           let url = URL(string: raw), url.host() != nil {
+            config = LiveConfig(deploymentURL: url, siteURL: defaults.string(forKey: "PoddleSiteURL").flatMap(URL.init(string:)))
         }
+        // `-PoddleResetState YES`: start as a fresh install on this backend (the e2e suite, before every scenario).
+        if defaults.bool(forKey: "PoddleResetState") { resetForTests(config) }
         #endif
         let account = Account(config: config)
         let disk = account.userId.map { LiveDisk.forUser($0, deployment: config.deploymentURL) }
@@ -106,6 +111,21 @@ struct PoddleApp: App {
         let store = PoddleStore(dataSource: live, seed: LiveStore.cachedSnapshot(disk: disk), deviceId: live.deviceId)
         return (store, account)
     }
+
+    #if DEBUG
+    /// Everything a fresh install wouldn't have: the session, every cache and outbox, downloads,
+    /// pending listening sessions, artwork thumbnails and saved preferences. Launch arguments stay.
+    private static func resetForTests(_ config: LiveConfig) {
+        KeychainSessionStore(deployment: config).delete()
+        let files = FileManager.default
+        for dir in [URL.applicationSupportDirectory, URL.cachesDirectory] {
+            for item in (try? files.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? [] {
+                try? files.removeItem(at: item)
+            }
+        }
+        if let bundle = Bundle.main.bundleIdentifier { UserDefaults.standard.removePersistentDomain(forName: bundle) }
+    }
+    #endif
 
     /// Someone signed in or out (or their session ran out). The player lets go, sessions still
     /// waiting go into the previous person's outbox, then everything switches to the new person.

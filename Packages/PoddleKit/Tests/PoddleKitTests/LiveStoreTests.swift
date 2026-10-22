@@ -465,4 +465,50 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         #expect(try await updates.next().map { String(decoding: $0, as: UTF8.self) } == "false")
         await store.stop()
     }
+
+    /// The e2e suite found a fresh sign-in auto-downloading for someone who'd turned it off:
+    /// Up Next arrived before their settings, and housekeeping ran on the defaults.
+    @Test func settingsAreOnlyReadyOnceTheyveSynced() async throws {
+        let fake = FakeTransport()
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        let stream = await store.snapshots()
+        fake.push("queue:upNext", "[]")
+        fake.push("settings:getGlobal", #"{"autoDownload":"never","playbackSpeed":1.5}"#)
+        var latest = LibrarySnapshot()
+        for await s in stream {
+            latest = s
+            if s.settingsSynced == true { break }
+        }
+        #expect(latest.global.speed == 1.5)
+        #expect(LibrarySnapshot().settingsSynced == nil)
+        await store.stop()
+    }
+
+
+    /// The e2e suite found a share link opened as the app started (mid sign-in) reporting a real
+    /// episode as "not available". Only the server saying null means that now.
+    @Test func sharedLinksRetryUntilTheConnectionIsReady() async throws {
+        let fake = FakeTransport()
+        fake.respond = { name, args in
+            guard name == "episodes:get", args["episodeId"] == "e1" else { return Data("null".utf8) }
+            return Data(#"""
+            {"row":{"episode":{"_id":"e1","podcastId":"p1","title":"One","pubDate":1000,"duration":60,"transcripts":[],"isGhost":false,"firstSeenAt":1,"updatedAt":1},
+                    "state":null,"podcast":{"_id":"p1","title":"Alpha","isPrivate":false}},"inQueue":false}
+            """#.utf8)
+        }
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        fake.online = false
+        Task {
+            try? await Task.sleep(for: .milliseconds(30))
+            fake.online = true
+        }
+        #expect(await store.loadShared(.episode(id: "e1", startAt: 40)))
+        #expect(await !store.loadShared(.episode(id: "gone", startAt: nil)))
+        await store.stop()
+    }
+
 }

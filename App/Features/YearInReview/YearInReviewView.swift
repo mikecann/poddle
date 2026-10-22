@@ -108,7 +108,7 @@ struct YearInReviewView: View {
             }
         }
         .background { NowPlayingBackground() }
-        .task { await store.loadYearInReview(year: year) }
+        .task(id: store.accountGeneration) { await store.loadYearInReview(year: year) }
         .task(id: "\(style.rawValue)-\(includePrivate)-\(store.yearInReview?.year ?? 0)") { render() }
     }
 

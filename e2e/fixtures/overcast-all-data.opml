@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- A made-up Overcast "All data" export for the import scenarios (never anyone's real one).
+     {{FIXTURES}} becomes the fixture server's address (worldApi.mjs, "overcastExport"). -->
+<opml version="1.0">
+  <head><title>Overcast Podcast Subscriptions</title></head>
+  <body>
+    <outline text="playlists">
+      <outline type="podcast-playlist" title="All Episodes" smart="1" sorting="chronological" includePodcastIds="501,502" priorityPodcastIds="502" />
+    </outline>
+    <outline text="feeds">
+      <outline type="rss" overcastId="501" text="Morning Tones" title="Morning Tones" xmlUrl="{{FIXTURES}}/feeds/morning.xml" subscribed="1" notifications="0" overcastAddedDate="2025-06-01T09:00:00Z">
+        <outline type="podcast-episode" overcastId="5001" pubDate="{{AGO_3D}}" title="Sunrise in A" enclosureUrl="{{FIXTURES}}/audio/tone-30s.mp3" userUpdatedDate="{{AGO_2D}}" played="1" userDeleted="1" />
+        <outline type="podcast-episode" overcastId="5002" pubDate="{{AGO_2D}}" title="Breakfast in C" enclosureUrl="{{FIXTURES}}/audio/tone-40s.mp3" userUpdatedDate="{{AGO_1D}}" progress="12" />
+        <outline type="podcast-episode" overcastId="5003" pubDate="{{AGO_1D}}" title="Commute in D" enclosureUrl="{{FIXTURES}}/audio/tone-45s.mp3" />
+      </outline>
+      <outline type="rss" overcastId="502" text="Evening Echoes" title="Evening Echoes" xmlUrl="{{FIXTURES}}/feeds/evening.xml" subscribed="1" notifications="0" overcastAddedDate="2025-06-02T09:00:00Z">
+        <outline type="podcast-episode" overcastId="5101" pubDate="{{AGO_6D}}" title="Dusk" enclosureUrl="{{FIXTURES}}/audio/tone-45s.mp3" userUpdatedDate="{{AGO_5D}}" played="1" userDeleted="1" />
+        <outline type="podcast-episode" overcastId="5102" pubDate="{{AGO_1D}}" title="Twilight" enclosureUrl="{{FIXTURES}}/audio/tone-60s.mp3" />
+      </outline>
+      <outline type="rss" overcastId="503" text="Priority Pings" title="Priority Pings" xmlUrl="{{FIXTURES}}/feeds/pings.xml" subscribed="0" notifications="0" overcastAddedDate="2024-01-01T00:00:00Z">
+        <outline type="podcast-episode" overcastId="5201" pubDate="{{AGO_4D}}" title="First Ping" enclosureUrl="{{FIXTURES}}/audio/tone-30s.mp3" userUpdatedDate="{{AGO_3D}}" played="1" userDeleted="1" />
+      </outline>
+    </outline>
+  </body>
+</opml>

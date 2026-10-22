@@ -356,7 +356,9 @@ public actor LiveStore: PoddleDataSource {
                     cache.snapshot.podcasts[id]?.subscribed = false
                 }
             case .pastShows:
-                for p in try d.decode([PodcastDoc].self, from: data) { cache.snapshot.podcasts[p._id] = p.model }
+                let pods = try d.decode([PodcastDoc].self, from: data)
+                for p in pods { cache.snapshot.podcasts[p._id] = p.model }
+                cache.snapshot.pastShowIds = Set(pods.map(\._id))
             case .upNext:
                 let entries = try d.decode([UpNextEntryDoc].self, from: data)
                 for e in entries { upsert(e.row) }
@@ -374,6 +376,7 @@ public actor LiveStore: PoddleDataSource {
                 }
             case .global:
                 cache.snapshot.global = SettingsMapping.global(try d.decode([String: JSONValue].self, from: data))
+                cache.snapshot.settingsSynced = true
                 liveGlobal = true
             case let .podcastEpisodes(podcastId):
                 let page = try d.decode(Paginated<EpisodeRowDoc>.self, from: data)
@@ -495,6 +498,7 @@ public actor LiveStore: PoddleDataSource {
         case "globalSettings":
             let p = try page([String: JSONValue].self)
             if !liveGlobal, let d = p.page.last { cache.snapshot.global = SettingsMapping.global(d) }
+            if p.isDone { cache.snapshot.settingsSynced = true }
             return p.isDone
         case "deletions":
             let p = try page(DeletionDoc.self)
@@ -935,21 +939,33 @@ public actor LiveStore: PoddleDataSource {
         }
     }
 
+    /// Fetches a shared episode or show. False only when the server says it doesn't exist (or is
+    /// private). A link opened as the app starts can land mid sign-in, while the connection has no
+    /// session yet or is switching people; that used to read as "not found", so those are retried.
     public func loadShared(_ target: ShareLinks.Target) async -> Bool {
-        let gen = generation
         let d = JSONDecoder()
-        switch target {
-        case let .episode(id, _):
-            guard let data = try? await transport.query("episodes:get", ["episodeId": .string(id)]),
-                  let got = (try? d.decode(EpisodeGetDoc?.self, from: data)) ?? nil, gen == generation else { return false }
-            upsert(got.row)
-        case let .show(id):
-            guard let data = try? await transport.query("podcasts:get", ["podcastId": .string(id)]),
-                  let got = (try? d.decode(PodcastGetDoc?.self, from: data)) ?? nil, gen == generation else { return false }
-            cache.snapshot.podcasts[got.podcast._id] = got.podcast.model
+        for attempt in 0..<8 {
+            if attempt > 0 { try? await Task.sleep(for: timing.retry * Double(attempt)) }
+            let gen = generation
+            let name: String
+            let args: [String: JSONValue]
+            switch target {
+            case let .episode(id, _): (name, args) = ("episodes:get", ["episodeId": .string(id)])
+            case let .show(id): (name, args) = ("podcasts:get", ["podcastId": .string(id)])
+            }
+            guard let data = try? await transport.query(name, args), gen == generation else { continue }
+            switch target {
+            case .episode:
+                guard let got = (try? d.decode(EpisodeGetDoc?.self, from: data)) ?? nil else { return false }
+                upsert(got.row)
+            case .show:
+                guard let got = (try? d.decode(PodcastGetDoc?.self, from: data)) ?? nil else { return false }
+                cache.snapshot.podcasts[got.podcast._id] = got.podcast.model
+            }
+            changed()
+            return true
         }
-        changed()
-        return true
+        return false
     }
 
     public func showNotes(episodeId: String) async -> String? {

@@ -44,6 +44,11 @@ const app = defineApp({
     // for link previews' canonical URLs and as an allowed sign-in return origin.
     // Unset: the deployment's own site.
     PODDLE_SITE_URL: v.optional(v.string()),
+    // The end-to-end suites' throwaway local backend only (lib/e2e.ts, docs/testing.md):
+    // exactly "1" turns on testing.ts, and PODDLE_DIRECTORY_URL points Apple Podcasts
+    // search at the fixture server. Both are ignored anywhere but 127.0.0.1.
+    PODDLE_E2E: v.optional(v.string()),
+    PODDLE_DIRECTORY_URL: v.optional(v.string()),
   },
 });
 

@@ -235,3 +235,31 @@ import Testing
         #expect(player.sleepTimer == .endOfEpisode)
     }
 }
+
+/// Regressions the e2e suite found (docs/testing.md).
+@MainActor
+@Suite struct AccountAndPastShowsTests {
+    @Test func pastShowsFromTheServerShowWithoutLocalHistory() {
+        // An Overcast import's unsubscribed show: the server knows it has history, but its
+        // episodes aren't synced, so nothing here says so.
+        var seed = MockData.snapshot()
+        let id = seed.podcasts.keys.sorted().first!
+        seed.podcasts[id]?.subscribed = false
+        for (episodeId, episode) in seed.episodes where episode.podcastId == id { seed.states[episodeId] = nil }
+        seed.queue.removeAll { seed.episodes[$0.episodeId]?.podcastId == id }
+        let without = MockStore.makeStore(seed: seed, downloads: [:], sync: false)
+        #expect(!without.pastShows.contains { $0.id == id })
+
+        seed.pastShowIds = [id]
+        let with = MockStore.makeStore(seed: seed, downloads: [:], sync: false)
+        #expect(with.pastShows.map(\.id).contains(id))
+    }
+
+    @Test func signingInAgainAsksScreensToReload() {
+        let store = MockStore.makeStore(sync: false)
+        let before = store.accountGeneration
+        store.resetForAccountChange()
+        #expect(store.accountGeneration == before + 1)
+        #expect(store.stats == nil)
+    }
+}

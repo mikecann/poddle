@@ -17,7 +17,14 @@ final class UndoCenter {
         var commit: () -> Void
     }
 
-    static let duration: Duration = .seconds(5)
+    static let duration: Duration = {
+        #if DEBUG
+        // `-PoddleUndoSeconds <n>`: the e2e suite gives itself longer, so a slow run can still reach Undo.
+        let override = UserDefaults.standard.double(forKey: "PoddleUndoSeconds")
+        if override > 0 { return .seconds(override) }
+        #endif
+        return .seconds(5)
+    }()
 
     private(set) var toast: Toast?
     @ObservationIgnored private var timer: Task<Void, Never>?

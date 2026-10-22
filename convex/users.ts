@@ -115,7 +115,8 @@ export const onSignInGoogle = internalMutation({
  * Test sign-in (dev only). Every anonymous sign-in calls this, including direct
  * calls that bypass `auth:signInForTesting`, so the gate is here, before any user
  * or session exists. `signInForTesting` leaves the email it wants in
- * `testSignIns`; that user is reused (Mike's migrated one, say) or made.
+ * `testSignIns`; that user is reused (Mike's migrated one, say) or made, if
+ * that email could sign up (the allowlist, or open sign-up).
  * A bare anonymous sign-in gets a fresh test user with no email.
  */
 export const createUserAnonymous = internalMutation({
@@ -129,6 +130,9 @@ export const createUserAnonymous = internalMutation({
     if (request) {
       const existing = await userByEmail(ctx, request.email);
       if (existing) return existing._id;
+      // A new person goes through the same gate as Apple and Google, so test sign-in
+      // shows what they'd see (the e2e suites' invite-only scenario).
+      assertMaySignUp(request.email, true);
       return await ctx.db.insert("users", { email: request.email, emailVerified: true, name: request.email, isTest: true });
     }
     const suffix = crypto.randomUUID().slice(0, 4).toUpperCase();

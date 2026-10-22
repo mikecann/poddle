@@ -14,6 +14,9 @@ poddle/
     PoddlePlayback/       Swift package: the audio engine (AVAudioEngine, time-pitch, Smart Speed, Voice Boost), remote commands, Now Playing info
   convex/                 Convex backend (TypeScript), which also serves the website
   web/                    the website (Vite + React + TypeScript), poddle.mikecann.app
+  features/               Gherkin features: app/ (run by PoddleUITests) and web/ (run by playwright-bdd), docs/testing.md
+  PoddleUITests/          XCUITest target: the in-repo Gherkin runner and the app's step files
+  e2e/                    the e2e world (local backend, fixture server, fixtures) and the website's step files
   package.json            backend and website tooling
   docs/  designs/  scripts/
 ```

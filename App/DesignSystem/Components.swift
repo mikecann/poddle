@@ -423,12 +423,20 @@ extension TopBar where Leading == EmptyView {
     }
 }
 
-/// "< Library" back button.
+/// "< Library" back button. It pops the tab's own path: `dismiss()` from these pushed screens
+/// did nothing on iOS 27 (the e2e suite found it), leaving people stuck on a show page.
 struct BackButton: View {
     var title: String
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppModel.self) private var app: AppModel?
     var body: some View {
-        Button { dismiss() } label: {
+        Button {
+            if let app, app.paths[app.tab]?.isEmpty == false {
+                app.paths[app.tab]?.removeLast()
+            } else {
+                dismiss()
+            }
+        } label: {
             HStack(spacing: 4) {
                 Image(systemName: "chevron.left").font(.system(size: 18, weight: .bold))
                 Text(title).font(.text(17, .semibold))

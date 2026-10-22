@@ -19,7 +19,12 @@ struct RootView: View {
             SidebarRoot()
             #endif
         }
-        .sheet(item: $app.sheet) { SheetHost(route: $0) }
+        .sheet(item: $app.sheet, onDismiss: {
+            if app.nowPlayingAfterSheet {
+                app.nowPlayingAfterSheet = false
+                app.showNowPlaying = true
+            }
+        }) { SheetHost(route: $0) }
         .modifier(MobileDownloadPrompt())
         .modifier(CompanionDirector())
         // Up Next changed: download what's coming, clean up what's done.
@@ -28,6 +33,8 @@ struct RootView: View {
             if player.currentEpisodeId == nil, let head = queue.first { player.load(head) }
             AppServices.current?.runHousekeeping()
         }
+        // Their settings just arrived (a fresh sign-in): now it's safe to auto-download.
+        .onChange(of: store.settingsReady) { _, ready in if ready { AppServices.current?.runHousekeeping() } }
         // Ask for notifications after the first subscribe, not on first launch (when the library
         // arriving from Convex also bumps the count from zero).
         .onChange(of: store.library.count) { old, new in if old > 0, new > old { push.requestAuthorizationIfNeeded() } }

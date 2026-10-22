@@ -24,6 +24,7 @@ import type * as http from "../http.js";
 import type * as importActions from "../importActions.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
 import type * as lib_auth from "../lib/auth.js";
+import type * as lib_e2e from "../lib/e2e.js";
 import type * as lib_feedFetch from "../lib/feedFetch.js";
 import type * as lib_feedParser from "../lib/feedParser.js";
 import type * as lib_identity from "../lib/identity.js";
@@ -52,6 +53,7 @@ import type * as settings from "../settings.js";
 import type * as share from "../share.js";
 import type * as stats from "../stats.js";
 import type * as sync from "../sync.js";
+import type * as testing from "../testing.js";
 import type * as users from "../users.js";
 
 import type {
@@ -77,6 +79,7 @@ declare const fullApi: ApiFromModules<{
   importActions: typeof importActions;
   "lib/allowlist": typeof lib_allowlist;
   "lib/auth": typeof lib_auth;
+  "lib/e2e": typeof lib_e2e;
   "lib/feedFetch": typeof lib_feedFetch;
   "lib/feedParser": typeof lib_feedParser;
   "lib/identity": typeof lib_identity;
@@ -105,6 +108,7 @@ declare const fullApi: ApiFromModules<{
   share: typeof share;
   stats: typeof stats;
   sync: typeof sync;
+  testing: typeof testing;
   users: typeof users;
 }>;
 

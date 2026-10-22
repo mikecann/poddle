@@ -36,6 +36,7 @@ Set with `npx convex env set NAME value` on the deployment.
 | `PODDLE_OPEN_SIGNUP` | at launch | Exactly `1` lets anyone with a verified Apple or Google email make an account; the allowlist no longer matters. Anything else: invite-only. |
 | `PODDLE_TEST_SIGNIN` | dev only | Exactly `1` enables test sign-in. Never set it on prod (it's refused on prod's addresses anyway). |
 | `PODDLE_API_TOKEN` | for scripts | Long random string for the admin path. |
+| `PODDLE_E2E`, `PODDLE_DIRECTORY_URL` | e2e only | The end-to-end suites' local backend (`docs/testing.md`): exactly `1` turns on `testing:*`, and the URL points Apple Podcasts search at the fixture server. Both are ignored unless the deployment's own URLs are `127.0.0.1`/`localhost` (`lib/e2e.ts`). Never set them on dev or prod. |
 | `PODDLE_SITE_URL` | prod | The website's public origin, `https://poddle.mikecann.app`. Link previews' canonical URLs, and an allowed sign-in return origin. Unset on dev (the request's own origin). |
 | `APNS_KEY_P8` | for push | Contents of the `.p8` auth key. PEM (newlines or literal `\n`) or the bare base64 body. |
 | `APNS_KEY_ID` | for push | The key's 10-character ID. |
@@ -58,7 +59,7 @@ Convex Auth v2 (`@convex-dev/auth` 2.0.0-beta.0), set up like Walkies: `convex/c
 | `auth:completeSignInWithApple`, `auth:completeSignInWithGoogle` | mutation | `code`, `state` | `{ status: "complete", tokens: { accessToken, accessTokenExpiresAt, refreshToken, refreshTokenExpiresAt, userId } }` (times in ms). Someone not on the allowlist gets `ConvexError { code: "inviteOnly", message: "Poddle is invite-only for now." }`. |
 | `auth:refreshSession` | mutation | `refreshToken` | `{ kind: "rotated", tokens }` or `{ kind: "noSession" }` (signed out). Access tokens last a minute; refresh tokens rotate, so refresh one at a time. |
 | `auth:signOut` | mutation | `refreshToken` | `null` |
-| `auth:signInForTesting` | mutation | `email?` | Dev only (`PODDLE_TEST_SIGNIN=1`). Signs in as the user with that email, making a test user if there isn't one; without an email, a fresh test user. Same result shape as `complete…`. Refused with `{ code: "testSignInDisabled" }` everywhere else, including direct `auth:signInAnonymously` calls. |
+| `auth:signInForTesting` | mutation | `email?` | Dev only (`PODDLE_TEST_SIGNIN=1`). Signs in as the user with that email, making a test user if there isn't one and that email could sign up (otherwise `ConvexError { code: "inviteOnly" }`, as with Apple and Google); without an email, a fresh test user. Same result shape as `complete…`. Refused with `{ code: "testSignInDisabled" }` everywhere else, including direct `auth:signInAnonymously` calls. |
 | `users:me` | query | – | `{ userId, name, email, picture } \| null` |
 | `users:signUpOpen` | query | – | `Bool`: whether anyone with a verified Apple or Google email can make an account (`PODDLE_OPEN_SIGNUP=1`). The website's home page uses it for its copy. |
 | `users:deleteAccount` | mutation | – | `{ deletionId }`. Deletes the caller's account (App Store Guideline 5.1.1(v)); signed in only, no admin path. See "Deleting an account" below. Then call `auth:signOut` to end this device's session. |
@@ -331,6 +332,15 @@ New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: 
 - Personal tables are read off their `by_user_updatedAt` index.
 - Shared shows and episodes come through the caller's library: one `subscriptions` row per show they've subscribed to or have any state for (an episode state, queue item, setting or session makes one, unsubscribed). `podcasts` walks those rows and sends each show whose own or subscription `updatedAt` is in range. `episodes` walks them and, per show, reads `by_podcast_updatedAt` from `since`; a show that joined the library after `since` sends its whole back catalogue, so a new subscription to an old show still fills in. A show nobody in your library points at never reaches you. (Pages may come back short after filtering; keep paging until `isDone`.)
 - `episodeNotes` isn't synced (it never was used offline): `episodes:get` returns show notes.
+
+### End-to-end hooks (`testing:*`)
+
+For the e2e suites' throwaway local backend only (`docs/testing.md`). Each takes `token` (the admin token) and refuses unless `PODDLE_E2E=1` and the deployment is local (`lib/e2e.ts`).
+
+| Function | Kind | Args | Returns / behaviour |
+|---|---|---|---|
+| `testing:reset` | mutation | `token` | `{ deleted, more }`. Empties every app table (Convex Auth's own tables are left) and cancels scheduled jobs. Call again while `more`. |
+| `testing:refreshFeed` | action | `token`, `feedUrl` | `{ status, newEpisodes, error? }`. Fetches that show's feed now (forced), as the poll would. |
 
 ## Offline and outbox contract
 

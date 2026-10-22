@@ -123,6 +123,13 @@ struct ImportView: View {
         }
         .sensoryFeedback(.success, trigger: done)
         .onAppear {
+            #if DEBUG
+            // `-PoddleImportFile <path>`: the e2e suite's stand-in for picking a file in the system's
+            // document picker. Everything after the pick is the real thing.
+            if file == nil, !started, let path = UserDefaults.standard.string(forKey: "PoddleImportFile") {
+                pick(.success(URL(fileURLWithPath: path)))
+            }
+            #endif
             if app.importDemo && !started {
                 // Screenshot mode: pretend the file's been picked and run the mock import.
                 openedOvercast = true

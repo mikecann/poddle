@@ -158,7 +158,7 @@ describe("test sign-in", () => {
   });
 
   test("signs in as a chosen email: an existing user is reused, a new one is made", async () => {
-    const t = setupAuth({ PODDLE_TEST_SIGNIN: "1" });
+    const t = setupAuth({ PODDLE_TEST_SIGNIN: "1", PODDLE_ALLOWED_EMAILS: "mike.cann@gmail.com, second@poddle.test" });
     const ownerId = await t.raw.mutation(internal.migrations.ensureOwner, {});
     const { episodeIds } = await seedShow(t, 1);
     await t.mutation(api.queue.add, { episodeId: episodeIds[0]!, position: "bottom", at: 1 });
@@ -188,5 +188,18 @@ describe("test sign-in", () => {
     const fresh = await t.raw.mutation(api.auth.signInForTesting, {});
     expect(fresh.tokens.userId).not.toBe(second.tokens.userId);
     await expect(t.raw.mutation(api.auth.signInForTesting, { email: "not an email" })).rejects.toThrow(/email/);
+  });
+
+  test("a new email goes through the sign-up gate, like Apple and Google", async () => {
+    const t = setupAuth({ PODDLE_TEST_SIGNIN: "1", PODDLE_ALLOWED_EMAILS: "listener@poddle.test" });
+    await expect(t.raw.mutation(api.auth.signInForTesting, { email: "stranger@poddle.test" })).rejects.toThrow(/invite-only/);
+    expect(await users(t)).toEqual([]);
+    expect(await t.run(async (ctx) => await ctx.db.query("testSignIns").collect())).toEqual([]);
+    const allowed = await t.raw.mutation(api.auth.signInForTesting, { email: "listener@poddle.test" });
+    expect(allowed.status).toBe("complete");
+
+    vi.stubEnv("PODDLE_OPEN_SIGNUP", "1");
+    const open = await t.raw.mutation(api.auth.signInForTesting, { email: "stranger@poddle.test" });
+    expect(open.tokens.userId).not.toBe(allowed.tokens.userId);
   });
 });

@@ -4,10 +4,17 @@ import Security
 /// Which deployment to talk to. Who's signed in is `Account`'s business.
 public struct LiveConfig: Sendable, Hashable {
     public var deploymentURL: URL
-    public init(deploymentURL: URL) { self.deploymentURL = deploymentURL }
+    /// Set when the site isn't the `.convex.cloud` address's `.convex.site` twin (a local backend).
+    private var explicitSiteURL: URL?
+
+    public init(deploymentURL: URL, siteURL: URL? = nil) {
+        self.deploymentURL = deploymentURL
+        explicitSiteURL = siteURL
+    }
 
     /// `https://<name>.<region>.convex.site`, where HTTP actions (and Convex Auth's sign-in pages) live.
     public var siteURL: URL {
+        if let explicitSiteURL { return explicitSiteURL }
         guard var parts = URLComponents(url: deploymentURL, resolvingAgainstBaseURL: false),
               let host = parts.host, host.hasSuffix(".convex.cloud") else { return deploymentURL }
         parts.host = String(host.dropLast(".convex.cloud".count)) + ".convex.site"

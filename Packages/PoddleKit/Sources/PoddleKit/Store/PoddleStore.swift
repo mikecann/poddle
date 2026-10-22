@@ -27,6 +27,10 @@ public final class PoddleStore {
     public private(set) var chapterCache: [String: [Chapter]] = [:]
 
     public private(set) var stats: StatsSummary?
+    /// Goes up whenever someone signs in or out (`resetForAccountChange`). Screens that load
+    /// per-person data in a `.task` key it on this, so they load again for the new person
+    /// instead of keeping the cleared value (Stats used to sit on "Counting up…" after signing in).
+    public private(set) var accountGeneration = 0
     public private(set) var years: [Int] = []
     public private(set) var yearInReview: YearInReview?
     public private(set) var importProgress: ImportProgress?
@@ -172,11 +176,15 @@ public final class PoddleStore {
             .sorted { (latestPubDate($0.id) ?? 0) > (latestPubDate($1.id) ?? 0) }
     }
 
-    /// Unsubscribed shows that still have history, so imported history isn't orphaned.
+    /// Unsubscribed shows that still have history, so imported history isn't orphaned. The server
+    /// says which (their episodes aren't synced, so an imported show's history isn't here), plus
+    /// any just unsubscribed here with history on this device.
     public var pastShows: [Podcast] {
         let byPodcast = byPodcast
+        let fromServer = snapshot.pastShowIds ?? []
         return snapshot.podcasts.values.filter { p in
-            !p.subscribed && (byPodcast[p.id] ?? []).contains { snapshot.states[$0.id].map { $0.played || $0.position > 1 || $0.isStarred } ?? false }
+            !p.subscribed && (fromServer.contains(p.id)
+                || (byPodcast[p.id] ?? []).contains { snapshot.states[$0.id].map { $0.played || $0.position > 1 || $0.isStarred } ?? false })
         }.sorted { $0.title < $1.title }
     }
 
@@ -342,8 +350,12 @@ public final class PoddleStore {
 
     /// Auto-downloads and cleanup: the first Up Next items plus new episodes from priority shows,
     /// then deletes played files, extras beyond each show's "keep latest" and anything over the cap.
+    /// Whether the person's settings are here yet (always, on sample data). Until they are,
+    /// the defaults would auto-download for someone who's turned it off.
+    public var settingsReady: Bool { dataSource is MockStore || snapshot.settingsSynced == true }
+
     public func runDownloadHousekeeping(playing: String?) {
-        guard let downloader else { return }
+        guard let downloader, settingsReady else { return }
         let g = global
         func candidate(_ id: String) -> DownloadPlanner.Candidate? {
             guard let ep = episode(id) else { return nil }
@@ -466,6 +478,7 @@ public final class PoddleStore {
     /// Someone else signed in (or out): drop everything that was the last person's. The data
     /// source pushes the new person's snapshot straight after.
     public func resetForAccountChange(seed: LibrarySnapshot = .init()) {
+        accountGeneration += 1
         pending = []
         snapshot = seed
         stats = nil

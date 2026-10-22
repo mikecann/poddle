@@ -7,6 +7,7 @@ import { Artwork } from "../components/Artwork";
 import { ChefAdminPanel } from "../components/ChefAdminPanel";
 import { DeleteAccount } from "../components/DeleteAccount";
 import { LockIcon } from "../components/Icons";
+import { SessionBoundary } from "../components/SessionBoundary";
 import { EmptyListening, Layout, Loading } from "../components/Layout";
 import { SignIn } from "../components/SignIn";
 import { duration, listened, relativeDate } from "../lib/format";
@@ -21,6 +22,7 @@ type Row = FunctionReturnType<typeof api.queue.upNext>[number]["row"];
 
 export function MePage() {
   const { isAuthenticated, isLoading } = useConvexAuth();
+  const { signOut } = useAuthActions();
   const [leaving, setLeaving] = useState(false);
   useTitle("Your listening · Poddle");
   if (isLoading) return <Layout><Loading /></Layout>;
@@ -38,9 +40,11 @@ export function MePage() {
   }
   return (
     <Layout wide>
-      {!leaving && <Dashboard />}
-      {!leaving && <ChefAdminPanel />}
-      <DeleteAccount onLeaving={setLeaving} />
+      <SessionBoundary onSignedOut={() => void signOut()}>
+        {!leaving && <Dashboard />}
+        {!leaving && <ChefAdminPanel />}
+        <DeleteAccount onLeaving={setLeaving} />
+      </SessionBoundary>
     </Layout>
   );
 }

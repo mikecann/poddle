@@ -12,8 +12,19 @@
 		AA0000000000000000000321 /* ChefKit in Frameworks */ = {isa = PBXBuildFile; platformFilters = (ios, ); productRef = AA0000000000000000000421 /* ChefKit */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		AA0000000000000000000912 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AA0000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = AA0000000000000000000701;
+			remoteInfo = Poddle;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
 		AA0000000000000000000101 /* Poddle.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Poddle.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		AA0000000000000000000104 /* PoddleUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PoddleUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AA0000000000000000000102 /* PoddleKit */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = PoddleKit; path = Packages/PoddleKit; sourceTree = "<group>"; };
 		AA0000000000000000000103 /* PoddlePlayback */ = {isa = PBXFileReference; lastKnownFileType = wrapper; name = PoddlePlayback; path = Packages/PoddlePlayback; sourceTree = "<group>"; };
 		AA0000000000000000000111 /* Debug.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Debug.xcconfig; sourceTree = "<group>"; };
@@ -40,6 +51,11 @@
 			path = App;
 			sourceTree = "<group>";
 		};
+		AA0000000000000000000611 /* PoddleUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PoddleUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -53,6 +69,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000812 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -60,6 +83,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000601 /* App */,
+				AA0000000000000000000611 /* PoddleUITests */,
 				AA0000000000000000000504 /* Config */,
 				AA0000000000000000000503 /* Packages */,
 				AA0000000000000000000502 /* Products */,
@@ -70,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				AA0000000000000000000101 /* Poddle.app */,
+				AA0000000000000000000104 /* PoddleUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -121,6 +146,27 @@
 			productReference = AA0000000000000000000101 /* Poddle.app */;
 			productType = "com.apple.product-type.application";
 		};
+		AA0000000000000000000711 /* PoddleUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = AA0000000000000000000A03 /* Build configuration list for PBXNativeTarget "PoddleUITests" */;
+			buildPhases = (
+				AA0000000000000000000811 /* Sources */,
+				AA0000000000000000000812 /* Frameworks */,
+				AA0000000000000000000813 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				AA0000000000000000000911 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				AA0000000000000000000611 /* PoddleUITests */,
+			);
+			name = PoddleUITests;
+			productName = PoddleUITests;
+			productReference = AA0000000000000000000104 /* PoddleUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -133,6 +179,10 @@
 				TargetAttributes = {
 					AA0000000000000000000701 = {
 						CreatedOnToolsVersion = 27.1;
+					};
+					AA0000000000000000000711 = {
+						CreatedOnToolsVersion = 27.1;
+						TestTargetID = AA0000000000000000000701;
 					};
 				};
 			};
@@ -156,12 +206,20 @@
 			projectRoot = "";
 			targets = (
 				AA0000000000000000000701 /* Poddle */,
+				AA0000000000000000000711 /* PoddleUITests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
 		AA0000000000000000000803 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		AA0000000000000000000813 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -178,7 +236,22 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		AA0000000000000000000811 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		AA0000000000000000000911 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = AA0000000000000000000701 /* Poddle */;
+			targetProxy = AA0000000000000000000912 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
 		AA0000000000000000000B01 /* Debug */ = {
@@ -341,6 +414,48 @@
 			};
 			name = Release;
 		};
+		AA0000000000000000000C11 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4DTAZSZL6B;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikecann.poddle.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Poddle;
+			};
+			name = Debug;
+		};
+		AA0000000000000000000C12 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 4DTAZSZL6B;
+				"EXCLUDED_ARCHS[sdk=iphonesimulator*]" = x86_64;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 1.0.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.mikecann.poddle.uitests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 6.0;
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_TARGET_NAME = Poddle;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -358,6 +473,15 @@
 			buildConfigurations = (
 				AA0000000000000000000C01 /* Debug */,
 				AA0000000000000000000C02 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		AA0000000000000000000A03 /* Build configuration list for PBXNativeTarget "PoddleUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				AA0000000000000000000C11 /* Debug */,
+				AA0000000000000000000C12 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

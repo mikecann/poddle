@@ -262,8 +262,11 @@ extension String {
     var strippingHTML: String {
         replacingOccurrences(of: "<br\\s*/?>", with: "\n", options: .regularExpression)
             .replacingOccurrences(of: "</p>", with: "\n\n")
+            // List items on their own lines, not run together ("…middle bit0:40 The finale").
+            .replacingOccurrences(of: "<li(\\s[^>]*)?>", with: "\n• ", options: .regularExpression)
             .replacingOccurrences(of: "<[^>]+>", with: "", options: .regularExpression)
             .replacingOccurrences(of: "&amp;", with: "&")
+            .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

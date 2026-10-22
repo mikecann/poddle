@@ -20,3 +20,7 @@ designs/branding/round1/*/
 designs/branding/final/*/
 designs/explore-poodle/*/
 designs/explore-poodle/*.png
+
+# End-to-end runs (docs/testing.md)
+e2e/.runtime/
+e2e/.features-gen/

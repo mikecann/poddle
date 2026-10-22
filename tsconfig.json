@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
     "target": "ESNext",
-    "lib": ["ES2023", "DOM"],
+    "lib": [
+      "ES2023",
+      "DOM"
+    ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "strict": true,
@@ -12,7 +15,22 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
-    "types": ["node", "vite/client"]
+    "types": [
+      "node",
+      "vite/client"
+    ],
+    "allowJs": true
   },
-  "include": ["tests/**/*.ts", "vitest.config.ts"]
+  "include": [
+    "tests/**/*.ts",
+    "vitest.config.ts",
+    "e2e/**/*.ts",
+    "e2e/**/*.mjs",
+    "scripts/*.mjs",
+    "playwright.config.ts"
+  ],
+  "exclude": [
+    "e2e/.features-gen",
+    "e2e/.runtime"
+  ]
 }

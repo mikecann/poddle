@@ -243,6 +243,7 @@ struct SettingsView: View {
                 .buttonStyle(.plain)
                 .disabled(deleting)
                 .accessibilityHint("Deletes your Poddle account and everything in it")
+                .accessibilityIdentifier("settings.deleteAccount")
             }
         }
     }

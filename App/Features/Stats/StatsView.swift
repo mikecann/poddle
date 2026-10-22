@@ -41,7 +41,8 @@ struct StatsView: View {
             }
             .padding(.bottom, 24)
         }
-        .task(id: year) { await store.loadStats(year: year) }
+        // Again for whoever signs in next: signing in clears the store's stats.
+        .task(id: "\(year)-\(store.accountGeneration)") { await store.loadStats(year: year) }
         .sheet(isPresented: $showAllShows) {
             if let stats = store.stats { AllShowsSheet(stats: stats) }
         }
