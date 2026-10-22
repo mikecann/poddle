@@ -57,6 +57,12 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
   - Prod `coordinated-dodo-120` is in Sydney, with daily backups at 06:01 (Perth time) since 22 Oct.
   - Dev moved to Sydney as `striped-turtle-260` on 22 Oct, seeded from a prod snapshot. The old US dev `qualified-hedgehog-912` is unused.
 
+## App Store (Mike, 22 Oct)
+
+- **Listing:** Poddle goes on the App Store: **free**, **iPhone only** for v1 (iPad and the Mac app later), worldwide.
+- **Sign-up opens to anyone** with Apple or Google at launch, each person with their own library. The allowlist gate stays in code (`convex/lib/allowlist.ts`) but is switched off. Apple requires in-app **account deletion** for apps with sign-up.
+- **Timing:** it goes in for review **after** the Cloud Fluff restyle and the BDD suite, so the screenshots and first impression show the new look.
+
 ## Tech
 
 - **Backend: Convex,** on Mike's Personal team (`mikec`) in Sydney. It's the source of truth for the library, episodes, user state, queue, settings and listening sessions. It does all feed fetching and parsing, polling, the Overcast import, stats and year-in-review maths, and APNs push.
