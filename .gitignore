@@ -18,3 +18,5 @@ web/dist/
 # Image-generation working folders (prompts, logs, full-size PNGs); the picked results are copied out
 designs/branding/round1/*/
 designs/branding/final/*/
+designs/explore-poodle/*/
+designs/explore-poodle/*.png
