@@ -2,7 +2,7 @@ import SwiftUI
 import PoddleKit
 
 enum Tab: String, CaseIterable, Identifiable, Hashable {
-    case upNext, library, discover, stats
+    case upNext, library, discover, stats, profile
     var id: String { rawValue }
 
     var title: String {
@@ -11,6 +11,7 @@ enum Tab: String, CaseIterable, Identifiable, Hashable {
         case .library: "Library"
         case .discover: "Discover"
         case .stats: "Stats"
+        case .profile: "Profile"
         }
     }
 
@@ -20,6 +21,7 @@ enum Tab: String, CaseIterable, Identifiable, Hashable {
         case .library: "square.grid.2x2"
         case .discover: "safari"
         case .stats: "chart.bar"
+        case .profile: "person.crop.circle"
         }
     }
 }
@@ -129,10 +131,10 @@ final class AppModel {
             paths[.library] = [.podcast(show("pod_conan"))]
             sheet = .showSettings(podcastId: show("pod_conan"))
         case "episode": tab = .upNext; paths[.upNext] = [.episode(episode)]
-        case "settings": tab = .library; paths[.library] = [.settings]
+        case "settings", "profile": tab = .profile
         case "import", "importDone":
-            tab = .library
-            paths[.library] = [.settings, .importOvercast]
+            tab = .profile
+            paths[.profile] = [.importOvercast]
             importDemo = name == "importDone"
         case "discover":
             tab = .discover

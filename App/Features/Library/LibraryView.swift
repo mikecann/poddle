@@ -82,8 +82,7 @@ struct LibraryView: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 0) {
             TopBar {
-                RoundIconButton(systemImage: "gearshape", label: "Settings") { app.push(.settings, on: .library) }
-                    .padding(.horizontal, 4)
+                EmptyView()
             } trailing: {
                 Menu {
                     Picker("Sort", selection: $sort) {
@@ -168,7 +167,6 @@ struct LibraryView: View {
                     .font(.text(14)).foregroundStyle(Palette.ink2).multilineTextAlignment(.center)
                 if !showPast {
                     PoddleButton(title: "Import from Overcast", systemImage: "square.and.arrow.down", kind: .primary) {
-                        app.push(.settings, on: .library)
                         app.push(.importOvercast, on: .library)
                     }
                     .padding(.top, 6)

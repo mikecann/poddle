@@ -133,6 +133,7 @@ struct TabRoot: View {
                 case .library: LibraryView()
                 case .discover: DiscoverView()
                 case .stats: StatsView()
+                case .profile: SettingsView(isTab: true)
                 }
             }
             .navigationDestination(for: Route.self) { route in

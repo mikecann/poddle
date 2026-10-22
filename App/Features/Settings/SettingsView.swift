@@ -1,8 +1,11 @@
 import SwiftUI
 import PoddleKit
 
-/// Global defaults. Every show set to "Use default" follows these live.
+/// The Profile tab: who's signed in, then the global defaults. Every show set to "Use default"
+/// follows these live. Also pushable (with a back button) when `isTab` is false.
 struct SettingsView: View {
+    var isTab = false
+
     @Environment(PoddleStore.self) private var store
     @Environment(AppModel.self) private var app
     @Environment(PushCoordinator.self) private var push
@@ -53,9 +56,13 @@ struct SettingsView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 0) {
-                TopBar { BackButton(title: "Library") } trailing: { EmptyView() }
-                LargeTitle(title: "Settings", subtitle: "Defaults for every show. Shows can override any of these.")
-                    .padding(.top, 6)
+                if !isTab {
+                    TopBar { BackButton(title: "Library") } trailing: { EmptyView() }
+                }
+                LargeTitle(title: isTab ? "Profile" : "Settings",
+                           subtitle: isTab ? "Your account, and the defaults for every show. Shows can override any of these."
+                                           : "Defaults for every show. Shows can override any of these.")
+                    .padding(.top, isTab ? 16 : 6)
 
                 connection.padding(.top, 8)
 
