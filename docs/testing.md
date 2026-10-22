@@ -93,7 +93,7 @@ The ports are 3410 (backend), 3411 (site) and 3412 (fixtures); set `E2E_CONVEX_P
 
 ### Nightly and GitHub reporting
 
-The user launch agent `com.mikecann.poddle-e2e-nightly` runs at **03:00 in tinker-desk's local time zone**. It uses the user's Background launchd domain, so installation over SSH works without a GUI login; launchd runs a missed calendar event when the Mac next wakes. It fetches `origin/main`, skips a SHA already reported, takes the shared render/e2e lock, and runs both suites. If the lock is busy, that night is skipped and the SHA stays eligible for the next launch. It waits for the remote-runner changes to land on main before its first suite run.
+A user crontab entry tagged `# poddle-e2e-nightly` runs at **03:00 in tinker-desk's local time zone**. It's cron rather than a launch agent because nobody logs in to tinker-desk's desktop, and launchd never fires calendar jobs in the Background user domain without a GUI login. tinker-desk never sleeps (`pmset sleep 0`), so a missed run isn't caught up. It fetches `origin/main`, skips a SHA already reported, takes the shared render/e2e lock, and runs both suites. If the lock is busy, that night is skipped and the SHA stays eligible for the next launch. It waits for the remote-runner changes to land on main before its first suite run.
 
 The deploy key pushes a small results commit to the **orphan `e2e-nightly` branch**, containing `results/latest.json`, up to 12 failure screenshots within a 5 MiB budget, and the reporting workflow. Each commit replaces the latest result tree; earlier results remain in branch history. Raw logs, traces, accessibility dumps and credentials stay off the branch. The last-nightly SHA is saved only after a successful push, including failed test results, so a push failure can retry. A failed test is rerun when main changes, not every night on the same commit.
 
@@ -116,10 +116,10 @@ The deploy key pushes a small results commit to the **orphan `e2e-nightly` branc
    ```sh
    export PATH="$HOME/.nvm/versions/node/v24.12.0/bin:/usr/bin:/bin:/usr/sbin:/sbin"
    node scripts/install-e2e-nightly.mjs
-   launchctl print user/$(id -u)/com.mikecann.poddle-e2e-nightly
+   crontab -l | grep poddle-e2e-nightly
    ```
 
-   This copies the worker and reporter to `~/.local/share/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, installs `~/Library/LaunchAgents/com.mikecann.poddle-e2e-nightly.plist`, and loads it without starting a suite. Rerun the installer after changing worker/reporting code. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed for the agent.
+   This copies the worker and reporter to `~/.local/share/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, replaces the tagged crontab line (keeping any other entries), and removes the launch agent earlier installs used, without starting a suite. Rerun the installer after changing worker/reporting code. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed.
 6. The first iOS run creates the dedicated simulator. To create it once after Xcode setup, without running tests:
 
    ```sh

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Run on tinker-desk with Node from nvm. No sudo, tokens or changes to the main checkout.
-import { mkdirSync, copyFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, copyFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -10,8 +10,7 @@ const home = os.homedir();
 const root = process.env.E2E_REMOTE_ROOT ?? path.join(home, ".local/share/poddle-e2e");
 const tools = path.join(root, "tools");
 const logs = path.join(home, "Library/Logs/Poddle E2E");
-const agents = path.join(home, "Library/LaunchAgents");
-for (const directory of [tools, logs, agents]) mkdirSync(directory, { recursive: true });
+for (const directory of [tools, logs]) mkdirSync(directory, { recursive: true });
 for (const name of ["e2e-remote-worker.mjs", "e2e-remote-lib.mjs"]) {
   const target = path.join(tools, name);
   if (path.join(scripts, name) !== target) copyFileSync(path.join(scripts, name), target);
@@ -26,26 +25,19 @@ writeFileSync(config, JSON.stringify({
   simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
   developerDir: process.env.E2E_DEVELOPER_DIR ?? path.join(home, "Applications/Xcode-27.1.app/Contents/Developer"),
 }, null, 2) + "\n");
-const escape = (s) => String(s).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;");
 const label = "com.mikecann.poddle-e2e-nightly";
-const plist = path.join(agents, `${label}.plist`);
+const tag = "# poddle-e2e-nightly";
+const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
 const argv = ["/usr/bin/lockf", "-t", "0", "-k", path.join(home, ".blender-queue.lock"), "/usr/bin/caffeinate", "-i", process.execPath, path.join(tools, "e2e-remote-worker.mjs"), "--nightly", config];
-writeFileSync(plist, `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0"><dict>
-<key>Label</key><string>${label}</string>
-<key>ProgramArguments</key><array>${argv.map((a) => `<string>${escape(a)}</string>`).join("")}</array>
-<key>EnvironmentVariables</key><dict><key>PATH</key><string>${escape(path.dirname(process.execPath))}:/usr/bin:/bin:/usr/sbin:/sbin</string></dict>
-<key>LimitLoadToSessionType</key><string>Background</string>
-<key>StartCalendarInterval</key><dict><key>Hour</key><integer>3</integer><key>Minute</key><integer>0</integer></dict>
-<key>StandardOutPath</key><string>${escape(path.join(logs, "nightly.log"))}</string>
-<key>StandardErrorPath</key><string>${escape(path.join(logs, "nightly.error.log"))}</string>
-</dict></plist>\n`);
-command("plutil", ["-lint", plist]);
-// Background is available over SSH even before a GUI login. The calendar job
-// does not need an Aqua session, and must not depend on a GUI domain existing.
-const domain = `user/${process.getuid()}`;
-try { command("launchctl", ["bootout", `${domain}/${label}`]); } catch { /* First install has no existing agent. */ }
-command("launchctl", ["bootstrap", domain, plist]);
-console.log(command("launchctl", ["print", `${domain}/${label}`]));
-console.log(`Installed nightly run at 03:00 local. Logs: ${logs}. No suite started.`);
+const line = `0 3 * * * PATH=${quote(`${path.dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`)} ${argv.map(quote).join(" ")} >> ${quote(path.join(logs, "nightly.log"))} 2>> ${quote(path.join(logs, "nightly.error.log"))} ${tag}`;
+// cron, not launchd: tinker-desk has no GUI login, and launchd never fires calendar
+// jobs in the Background user domain without one (runs = 0 after 03:00, 23 Oct).
+let existing = "";
+try { existing = command("crontab", ["-l"]); } catch { /* No crontab yet. */ }
+const kept = existing.split("\n").filter((l) => l && !l.endsWith(tag));
+command("crontab", ["-"], { input: [...kept, line].join("\n") + "\n" });
+// Remove the launch agent earlier installs used.
+try { command("launchctl", ["bootout", `user/${process.getuid()}/${label}`]); } catch { /* Not loaded. */ }
+rmSync(path.join(home, "Library/LaunchAgents", `${label}.plist`), { force: true });
+console.log(command("crontab", ["-l"]).split("\n").filter((l) => l.endsWith(tag)).join("\n"));
+console.log(`Installed nightly run at 03:00 local (crontab). Logs: ${logs}. No suite started.`);
