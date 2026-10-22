@@ -5,6 +5,7 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 ## Product
 
 - **Name:** Poddle. Bundle ID `com.mikecann.poddle`. Apple team `4DTAZSZL6B` (paid account).
+- **Brand (22 Oct):** Poddle sounds like "poodle", so the brand is a cute, fluffy cartoon poodle. Mike chose **A, "Headphones Poodle"** (`designs/branding/round1/concept-a.jpg`): a round cream poodle with cloud curls, a thick deep-ink outline, closed happy eyes, blush cheeks and tomato-red headphones. Flat sticker style, a tomato-to-orange gradient icon and a chunky rounded wordmark. The other four directions are kept beside it for reference. Final assets live in `designs/branding/final/`.
 - **Look:** direction C, "Earful", warm and tactile: `designs/c-earful-warm.html`. Swap the name Earful for Poddle everywhere. Directions A and B are only kept for reference.
 - **Platforms:** native SwiftUI. iPhone first, iPad and Mac to follow from the same multiplatform target. Minimum **iOS 18.0** (Mike's phone is an iPhone XS Max on iOS 18.7, which can't run iOS 26 or later) and **macOS 26.0**. Newer APIs go behind `if #available`. His iPad is on iPadOS 26.6. No Watch or CarPlay for now.
 - **Import:** Overcast "All data" OPML, with history. Apple Podcasts only by searching the directory.

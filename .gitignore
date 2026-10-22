@@ -15,3 +15,6 @@ node_modules/
 # Simulator screenshots, regenerate with scripts/screenshots.sh
 designs/build-shots/
 web/dist/
+# Image-generation working folders (prompts, logs, full-size PNGs); the picked results are copied out
+designs/branding/round1/*/
+designs/branding/final/*/
