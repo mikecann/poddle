@@ -10,6 +10,7 @@
 
 import type * as apns from "../apns.js";
 import type * as auth from "../auth.js";
+import type * as chef from "../chef.js";
 import type * as crons from "../crons.js";
 import type * as devices from "../devices.js";
 import type * as directory from "../directory.js";
@@ -60,6 +61,7 @@ import type {
 declare const fullApi: ApiFromModules<{
   apns: typeof apns;
   auth: typeof auth;
+  chef: typeof chef;
   crons: typeof crons;
   devices: typeof devices;
   directory: typeof directory;
@@ -134,4 +136,6 @@ export declare const components: {
   authGoogle: import("@convex-dev/auth/components/google/_generated/component.js").ComponentApi<"authGoogle">;
   authAnonymous: import("@convex-dev/auth/components/anonymous/_generated/component.js").ComponentApi<"authAnonymous">;
   staticHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"staticHosting">;
+  feedback: import("@convex-dev/feedback/_generated/component.js").ComponentApi<"feedback">;
+  chefCloud: import("@convex-dev/chef-cloud/_generated/component.js").ComponentApi<"chefCloud">;
 };

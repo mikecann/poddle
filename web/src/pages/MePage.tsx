@@ -3,6 +3,7 @@ import { useConvexAuth, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { api } from "../../../convex/_generated/api";
 import { Artwork } from "../components/Artwork";
+import { ChefAdminPanel } from "../components/ChefAdminPanel";
 import { LockIcon } from "../components/Icons";
 import { EmptyListening, Layout, Loading } from "../components/Layout";
 import { SignIn } from "../components/SignIn";
@@ -32,7 +33,7 @@ export function MePage() {
       </Layout>
     );
   }
-  return <Layout wide><Dashboard /></Layout>;
+  return <Layout wide><Dashboard /><ChefAdminPanel /></Layout>;
 }
 
 function Dashboard() {

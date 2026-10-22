@@ -1,5 +1,8 @@
 import SwiftUI
 import PoddleKit
+#if canImport(ChefKit)
+import ChefKit
+#endif
 
 @main
 struct PoddleApp: App {
@@ -38,6 +41,7 @@ struct PoddleApp: App {
             let live = Self.liveStore()
             store = live.store
             account = live.account
+            Self.installChef(store)
         }
         let app = AppModel()
         app.isMock = mock
@@ -69,8 +73,14 @@ struct PoddleApp: App {
     /// The Convex-backed store for whoever's signed in, seeded from their on-disk cache so the
     /// first frame has data (offline too). Signed out, it's empty until someone signs in.
     private static func liveStore() -> (store: PoddleStore, account: Account) {
-        let config = LiveConfigStore.bundled()
+        var config = LiveConfigStore.bundled()
             ?? LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!)
+        #if DEBUG
+        // `-ChefConvexURL <url>`: a Chef cloud build's preview backend, passed by `npx chef ios`.
+        if let raw = UserDefaults.standard.string(forKey: "ChefConvexURL"), let url = URL(string: raw), url.host() != nil {
+            config = LiveConfig(deploymentURL: url)
+        }
+        #endif
         let account = Account(config: config)
         let disk = account.userId.map { LiveDisk.forUser($0, deployment: config.deploymentURL) }
         if let disk { LiveDisk.adoptPreAccountFiles(deployment: config.deploymentURL, into: disk) }
@@ -97,10 +107,23 @@ struct PoddleApp: App {
         store.resetForAccountChange(seed: LiveStore.cachedSnapshot(disk: disk))
         app.paths = [:]
         app.tab = .upNext
+        Self.installChef(store)
         if userId != nil {
             push.registerAgain()
             if let head = store.queue.first { player.load(head.id) }
         }
+    }
+
+    /// Chef (Seth's feedback board) on Poddle's own connection, as whoever's signed in. Settings
+    /// opens it ("Suggest a feature"); its floating button stays hidden. iOS only. Called again
+    /// after an account change, so Chef asks again as the new person and sends what's waiting.
+    private static func installChef(_ store: PoddleStore) {
+        #if canImport(ChefKit)
+        guard let live = store.dataSource as? LiveStore else { return }
+        ChefKit.isHidden = true
+        ChefKit.install(client: ChefConnection(live: live))
+        ChefKit.retryPending()
+        #endif
     }
 
     var body: some Scene {

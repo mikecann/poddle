@@ -9,6 +9,7 @@
 /* Begin PBXBuildFile section */
 		AA0000000000000000000301 /* PoddleKit in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000401 /* PoddleKit */; };
 		AA0000000000000000000311 /* PoddlePlayback in Frameworks */ = {isa = PBXBuildFile; productRef = AA0000000000000000000411 /* PoddlePlayback */; };
+		AA0000000000000000000321 /* ChefKit in Frameworks */ = {isa = PBXBuildFile; platformFilters = (ios, ); productRef = AA0000000000000000000421 /* ChefKit */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,7 @@
 			files = (
 				AA0000000000000000000301 /* PoddleKit in Frameworks */,
 				AA0000000000000000000311 /* PoddlePlayback in Frameworks */,
+				AA0000000000000000000321 /* ChefKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -113,6 +115,7 @@
 			packageProductDependencies = (
 				AA0000000000000000000401 /* PoddleKit */,
 				AA0000000000000000000411 /* PoddlePlayback */,
+				AA0000000000000000000421 /* ChefKit */,
 			);
 			productName = Poddle;
 			productReference = AA0000000000000000000101 /* Poddle.app */;
@@ -145,6 +148,7 @@
 			packageReferences = (
 				AA0000000000000000000201 /* XCLocalSwiftPackageReference "Packages/PoddleKit" */,
 				AA0000000000000000000211 /* XCLocalSwiftPackageReference "Packages/PoddlePlayback" */,
+				AA0000000000000000000221 /* XCRemoteSwiftPackageReference "feedback-chef" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = AA0000000000000000000502 /* Products */;
@@ -371,6 +375,17 @@
 		};
 /* End XCLocalSwiftPackageReference section */
 
+/* Begin XCRemoteSwiftPackageReference section */
+		AA0000000000000000000221 /* XCRemoteSwiftPackageReference "feedback-chef" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/sethconvex/feedback-chef";
+			requirement = {
+				kind = revision;
+				revision = dc9056d4bfb52cac5719d29f39d5bf61c211ac21;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
 /* Begin XCSwiftPackageProductDependency section */
 		AA0000000000000000000401 /* PoddleKit */ = {
 			isa = XCSwiftPackageProductDependency;
@@ -379,6 +394,11 @@
 		AA0000000000000000000411 /* PoddlePlayback */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = PoddlePlayback;
+		};
+		AA0000000000000000000421 /* ChefKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = AA0000000000000000000221 /* XCRemoteSwiftPackageReference "feedback-chef" */;
+			productName = ChefKit;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

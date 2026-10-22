@@ -5,6 +5,8 @@ import apple from "@convex-dev/auth/components/apple/convex.config.js";
 import google from "@convex-dev/auth/components/google/convex.config.js";
 import anonymous from "@convex-dev/auth/components/anonymous/convex.config.js";
 import staticHosting from "@convex-dev/static-hosting/convex.config.js";
+import feedback from "@convex-dev/feedback/convex.config.js";
+import chefCloud from "@convex-dev/chef-cloud/convex.config.js";
 
 const app = defineApp({
   env: {
@@ -74,5 +76,9 @@ app.use(anonymous);
 // The website (web/). No httpPrefix: http.ts keeps its routes at the root and
 // registers the static catch-all under them.
 app.use(staticHosting);
+
+// Chef: requests and approvals (feedback), and cloud builds (chefCloud).
+app.use(feedback);
+app.use(chefCloud);
 
 export default app;
