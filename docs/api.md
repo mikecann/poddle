@@ -41,6 +41,7 @@ Set with `npx convex env set NAME value` on the deployment.
 | `APNS_TEAM_ID` | for push | `4DTAZSZL6B` |
 | `APNS_TOPIC` | for push | `com.mikecann.poddle` |
 | `APNS_ENV` | for push | `sandbox` (default) or `production`. A device's own `apnsEnvironment` overrides it. |
+| `CHEF_PREVIEW_DEPLOY_KEY`, `CHEF_DEPLOY_KEY` | for Chef's cloud builds | Set by `npx chef init`, never by hand: the preview deploy key builds deploy with, and the key "Ship it" deploys to this deployment with. |
 
 Without the four required APNs vars, every push is a logged no-op.
 
@@ -147,6 +148,10 @@ The website (`web/`) is served by the same deployment: Convex static hosting for
 **Private feeds never have a public page** (`lib/sharePages.ts`): both return `null`, exactly like an id that doesn't exist (or isn't an id at all), when the show has `isPrivate`, its feed URL carries credentials or a token-ish query param (`parse.looksPrivate`), anyone has switched it to private in their library, or (for an episode) its enclosure URL carries a token. Those episodes are also left out of `share:show`'s list, and so are ghosts. Tests: `tests/share.test.ts`.
 
 **Share links:** `https://<site>/e/<episodeId>?t=<whole seconds>` and `https://<site>/s/<podcastId>` (PoddleKit's `ShareLinks`). The website's "Open in Poddle" button uses `poddle://e/<id>?t=…` and `poddle://s/<id>`, because iOS never opens a universal link from a page on the same site. The app reads both forms. `PODDLE_SITE_URL` (optional) is the site's public origin, used for canonical and `og:url` tags and as an extra allowed sign-in return origin; unset, it's the request's own origin.
+
+## Chef
+
+`convex/chef.ts` is Chef's API (`@convex-dev/feedback`'s `exposeChefApi`): `chef:submitRequest`, `chef:submitRequestWithMedia`, `chef:mine`, `chef:amAdmin`, `chef:awaitingApproval`, `chef:review` and the rest that ChefKit and the web panel call. They act for `currentUserId`, so merged accounts are one person, and they refuse signed-out callers. The `chef:chef*` functions (`chefSetup`, `chefSetAdmin`, `chefEnableCloudBuilds`, `chefIos`, ...) are internal, for `npx chef` and `npx convex run`. `/chef-agent/*` in `http.ts` is where cloud builds talk back. The README's "Chef" section covers the rest.
 
 ## Functions
 

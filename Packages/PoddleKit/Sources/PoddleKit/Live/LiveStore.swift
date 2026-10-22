@@ -993,6 +993,28 @@ public actor LiveStore: PoddleDataSource {
         }
     }
 
+    // MARK: - Raw calls
+
+    /// A mutation on this store's connection, as whoever's signed in, answered as raw JSON. For
+    /// clients that bring their own models: Chef, through the app's `ChefConnection`.
+    public func rawMutation(_ name: String, _ args: [String: JSONValue]) async throws -> Data {
+        await authIfNeeded()
+        return try await transport.mutation(name, args)
+    }
+
+    /// A live query on this store's connection, as raw JSON. It finishes with an error when the
+    /// function throws or the account changes (a new connection), so ask again after that.
+    public func rawSubscribe(_ name: String, _ args: [String: JSONValue]) async -> AsyncThrowingStream<Data, Error> {
+        await authIfNeeded()
+        return transport.subscribe(name, args)
+    }
+
+    private func authIfNeeded() async {
+        guard authPending, userId != nil else { return }
+        authPending = false
+        await transport.setAuth(auth)
+    }
+
     // MARK: - Chapters
 
     private struct ChapterFile: Decodable {

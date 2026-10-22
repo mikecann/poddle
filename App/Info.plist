@@ -18,6 +18,10 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Record a voice note with a feature request.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Write out your voice note as you speak, so your request has the words too.</string>
 	<key>PoddleConvexURL</key>
 	<string>$(PODDLE_CONVEX_URL)</string>
 	<key>PoddleSiteURL</key>

@@ -1,5 +1,8 @@
 import SwiftUI
 import PoddleKit
+#if canImport(ChefKit)
+import ChefKit
+#endif
 
 /// Global defaults. Every show set to "Use default" follows these live.
 struct SettingsView: View {
@@ -141,6 +144,24 @@ struct SettingsView: View {
                                     onIncrement: { store.updateGlobal { $0.storageCapGB = min(100, $0.storageCapGB + 1) } })
                     }
                 }
+
+                #if canImport(ChefKit)
+                if !app.isMock {
+                    GroupLabel(text: "Feedback")
+                    GroupCard {
+                        // Chef: send a request (typed, or a screenshot and a voice note) and follow it.
+                        // Mike, as its admin, gets the approval queue and the builds in the same sheet.
+                        Button { ChefKit.present() } label: {
+                            Cell(title: "Suggest a feature", subtitle: "Ask for something, and follow how it's going",
+                                 icon: "lightbulb", iconTint: Palette.mustard) {
+                                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
+                            }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                #endif
 
                 VStack(spacing: 6) {
                     AppMark(size: 44)

@@ -443,3 +443,26 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         await live.stop()
     }
 }
+
+/// Chef's calls (the app's ChefConnection) go out on the store's own connection, signed in.
+@Suite struct RawCallTests {
+    @Test func rawCallsUseTheSignedInConnection() async throws {
+        let fake = FakeTransport()
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+
+        // Before anything else has started the store, a raw call still goes out as Mike.
+        let reply = try await store.rawMutation("chef:submitRequest", ["title": "Footer text"])
+        #expect(String(decoding: reply, as: UTF8.self) == "true")
+        #expect(fake.mutations == [.init(name: "chef:submitRequest", args: ["title": "Footer text"])])
+        #expect((fake.auth as? FixedToken)?.token == "mike-token")
+
+        fake.push("chef:amAdmin", "true")
+        var updates = await store.rawSubscribe("chef:amAdmin", [:]).makeAsyncIterator()
+        #expect(try await updates.next().map { String(decoding: $0, as: UTF8.self) } == "true")
+        fake.push("chef:amAdmin", "false")
+        #expect(try await updates.next().map { String(decoding: $0, as: UTF8.self) } == "false")
+        await store.stop()
+    }
+}

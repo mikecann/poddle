@@ -109,3 +109,24 @@ Scripts act as a named user by passing `admin: { token, email }` to any public f
 ### The accounts migration
 
 Before accounts everything was Mike's. `npx convex run migrations:run` makes his user and gives it every existing personal row; `npx convex run migrations:report` shows the counts. The prod steps are in `docs/runbooks/accounts-prod.md`.
+
+## Chef (feature requests and cloud builds)
+
+Settings > Feedback > "Suggest a feature" opens Chef, Seth Raphael's feedback board (`@convex-dev/feedback`, private and pre-release, from `sethconvex/feedback-chef`). People type a request, or send a screenshot with a voice note, and follow it through. There's no floating button. The admin (Mike) gets Chef's admin sheet. At this commit ChefKit never loads its approval queue, though: `ChefApprovalsSection` binds `awaitingApproval` in a `.task` on a `Group` that's empty until the list loads, so the task never runs. Until Seth fixes it, Mike approves, watches builds and ships from Chef's web panel. It's on the website's `/me`, for the admin only (`web/src/components/ChefAdminPanel.tsx`). Chef also has **cloud builds** (`@convex-dev/chef-cloud`): an approved request (Mike's own skip approval) is built by Claude Code in a Daytona sandbox, checked with `npm run typecheck` and `npm test`, pushed to the app's repo on Convex's Code Storage, and deployed to a preview deployment with the website on it. "Ship it" in the sheet then deploys it. It all runs on Convex's marketplace components, billed to the `mikec` team, with no keys of Mike's. A build costs about $1 in model calls (capped at $20) plus sandbox time.
+
+- **Backend:** both packages are vendored in `vendor/` from the same commit (`dc9056d4bfb5`). `convex/convex.config.ts` uses both components. `convex/chef.ts` has the API (`exposeChefApi`, on `currentUserId`, so merged accounts are one person) and the cloud functions (`chefCloud`: the website is the frontend a build previews, `npm run web:build` into `web/dist`). `convex/http.ts` mounts the runner's `/chef-agent/*` routes. `scripts/chef-local-env.mjs` gives a build's local backend throwaway values for the env vars `convex.config.ts` requires; add new required ones there.
+- **Sydney patch:** Chef only knows `<name>.convex.cloud`/`.convex.site` URLs, and Poddle's dev and prod are `<name>.ap-southeast-2.convex.*`. `scripts/chef-patch-vendor.sh` widens the two host checks that stop builds and "Ship it" (`tests/chef.test.ts` fails without it). Run it again after packing a new Chef, until Chef handles regions itself.
+- **App:** the `ChefKit` Swift package, pinned to the same commit and linked on iOS only (it doesn't build for the Mac). `App/Features/Chef/ChefConnection.swift` runs Chef's calls on `LiveStore`'s own connection and session (`rawMutation`, `rawSubscribe`). The app installs it at launch and again when the account changes.
+- **Admin:** `npx convex run chef:chefSetAdmin '{"userId":"<users _id>"}'` (add `--prod` for prod). `npx chef status` shows the setup, by name only.
+- **Your checkout after a ship:** "Ship it" moves the Chef repo's `main`. Run `git pull chef main` before deploying from your checkout. `npm run dev` runs `chef guard` first and refuses until you have.
+
+### Trying an iOS change from a cloud build
+
+Chef's sandboxes can't compile Swift. A build that changes `App/` or `Packages/` is checked by its gates only (the backend and website). The Ship card flags it as iOS code the cloud didn't compile. To try it on the phone (plugged in, or on the same Wi-Fi):
+
+```bash
+scripts/chef-ios.sh <runId or request id>          # Release against prod, like the phone normally runs
+CONFIG=Debug scripts/chef-ios.sh <id>              # Debug against dev
+```
+
+It fetches the build's commit from the `chef` remote into a throwaway worktree, builds and installs it with `scripts/install-phone.sh`'s signing (the App Store Connect key, no Xcode account), and marks the run "compiled ✓ / installed ✓" on its card. The run id is on the card in the web panel and in `npx convex run chef:recentRuns`. `npx chef ios <id>` (configured under `chef.ios` in package.json) does the same with Xcode's own signing, but that needs an Apple account signed in to Xcode, and this Mac doesn't have one. Debug builds read `-ChefConvexURL <url>` to talk to a build's preview backend (`PREVIEW=1`), but signing in there needs test sign-in, so use dev or prod unless the change needs the preview's backend. To ship, press "Ship it" for the backend and website, and install the app from `main` as usual.

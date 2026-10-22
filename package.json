@@ -43,5 +43,15 @@
     "typescript": "^7.0.2",
     "vite": "^8.3.5",
     "vitest": "^5.0.5"
+  },
+  "chef": {
+    "ios": {
+      "projectDir": ".",
+      "project": "Poddle.xcodeproj",
+      "scheme": "Poddle",
+      "bundleId": "com.mikecann.poddle",
+      "team": "4DTAZSZL6B",
+      "device": "00008020-000369202E90003A"
+    }
   }
 }
