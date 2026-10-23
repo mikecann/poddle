@@ -10,7 +10,7 @@ It's free on iPhone, and there's no ads or tracking. It's waiting on Apple's rev
 
 <p align="center">
   <img src="web/public/screens/up-next.webp" width="160" alt="The Up Next queue">
-  <img src="web/public/screens/speed.webp" width="160" alt="The playback speed dial with Smart Speed and Voice Boost">
+  <img src="web/public/screens/speed.webp" width="160" alt="The playback speed dial with Poodle Trim and Even Volume">
   <img src="web/public/screens/show-settings.webp" width="160" alt="Settings for one show">
   <img src="web/public/screens/stats.webp" width="160" alt="Listening stats">
   <img src="web/public/screens/year-in-review.webp" width="160" alt="A Year in Review receipt">
@@ -18,7 +18,7 @@ It's free on iPhone, and there's no ads or tracking. It's waiting on Apple's rev
 
 ## What it does
 
-- The speed-up is tuned for voices, so even at 2x it still sounds like the person talking. Smart Speed trims the little gaps between words too, and Voice Boost evens out quiet hosts and loud ads.
+- The speed-up is tuned for voices, so even at 2x it still sounds like the person talking. Poodle Trim snips out the little gaps between words too (poodles do love a trim), and Even Volume sorts out quiet hosts and loud ads.
 - Every show can have its own speed, skip its intros and outros, and choose whether its new episodes go to the top or bottom of Up Next (or don't get added at all).
 - You can import your shows and your whole listening history, so your stats start with everything you've already heard.
 - You can see how long you've listened and how much time the speed-ups have saved you, and at the end of the year there's a Year in Review you can share.

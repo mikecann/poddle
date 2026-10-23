@@ -16,9 +16,9 @@ const SHOT = { width: 600, height: 1304 };
 const shots = {
   upNext: { src: "/screens/up-next.webp", caption: "Up Next", alt: "Poddle's Up Next queue, with the speed each episode plays at and the time left" },
   nowPlaying: { src: "/screens/now-playing.webp", caption: "Now Playing", alt: "Now Playing, with the show's artwork, the current chapter and the play controls" },
-  speed: { src: "/screens/speed.webp", caption: "Speed", alt: "The playback speed dial at 1.40x for just this show, with Smart Speed and Voice Boost switched on" },
+  speed: { src: "/screens/speed.webp", caption: "Speed", alt: "The playback speed dial at 1.40x for just this show, with Poodle Trim and Even Volume switched on" },
   podcast: { src: "/screens/podcast.webp", caption: "A show", alt: "A show's page with its newest episodes and its settings" },
-  showSettings: { src: "/screens/show-settings.webp", caption: "Settings for a show", alt: "Settings for one show: its own speed, Voice Boost off and the first 45 seconds skipped" },
+  showSettings: { src: "/screens/show-settings.webp", caption: "Settings for a show", alt: "Settings for one show: its own speed, Even Volume off and the first 45 seconds skipped" },
   discover: { src: "/screens/discover.webp", caption: "Discover", alt: "Searching Apple Podcasts in Discover, with a button to add a feed by its URL" },
   stats: { src: "/screens/stats.webp", caption: "Stats", alt: "Stats: 612 hours listened this year, 148 hours saved, a 41 day streak and when you listen" },
   yearInReview: { src: "/screens/year-in-review.webp", caption: "Year in Review", alt: "A Year in Review receipt saying Mike listened for 612 hours, ready to share" },
@@ -162,8 +162,9 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <div className="feature-copy">
               <h3>Speed-ups without the chipmunks</h3>
               <p>
-                The speed-up in Poddle is tuned for voices, so even at 2x it still sounds like the person talking. Smart
-                Speed trims the little gaps between words too, and Voice Boost evens out quiet hosts and loud ads.
+                The speed-up in Poddle is tuned for voices, so even at 2x it still sounds like the person talking. Poodle
+                Trim snips out the little gaps between words too (poodles do love a trim), and Even Volume sorts out
+                quiet hosts and loud ads.
               </p>
             </div>
             <div className="feature-media"><Phone shot={shots.speed} /></div>
@@ -173,7 +174,7 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <div className="feature-copy">
               <h3>Settings for each show</h3>
               <p>
-                Every show can have its own speed, Smart Speed and Voice Boost, skip its intros and outros, and choose
+                Every show can have its own speed, Poodle Trim and Even Volume, skip its intros and outros, and choose
                 whether its new episodes go to the top or bottom of Up Next (or don't get added at all). Or you can
                 just leave them all on your defaults and forget about it.
               </p>
@@ -196,7 +197,7 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <div className="feature-copy">
               <h3>Stats, and a Year in Review</h3>
               <p>
-                You can see how long you've listened, how much time the speed-ups and Smart Speed have saved you, your
+                You can see how long you've listened, how much time the speed-ups and Poodle Trim have saved you, your
                 top shows and your streaks, and then at the end of the year there's a Year in Review you can share.
               </p>
             </div>
