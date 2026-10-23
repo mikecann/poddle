@@ -261,7 +261,6 @@ a.tile:hover b { color: var(--tomato-d); }
 
 /* ---------- the home page (pages/Landing.tsx) ---------- */
 .landing { width: 100%; flex: 1; padding-bottom: 40px; }
-.landing .eyebrow { color: var(--tomato-d); }
 .landing h1, .section-title, .closing h2 { font-family: "Fredoka", var(--round); font-weight: 700; letter-spacing: -.025em; }
 .landing h3 { font: 800 clamp(22px, 3vw, 28px)/1.15 var(--round); letter-spacing: -.015em; color: var(--ink); text-wrap: balance; }
 .landing p { text-wrap: pretty; }

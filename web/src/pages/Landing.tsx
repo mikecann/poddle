@@ -51,7 +51,7 @@ function StructuredData() {
     "@context": "https://schema.org",
     "@type": "MobileApplication",
     name: "Poddle",
-    description: "A podcast player for iPhone with speed-ups that still sound like people, settings for each show, the full Overcast import and listening stats.",
+    description: "A podcast player for iPhone that Mike Cann made to replace Overcast, with speed-ups that still sound like people talking, settings for each show, the full Overcast import and listening stats.",
     operatingSystem: "iOS 18.0 or later",
     applicationCategory: "MultimediaApplication",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
@@ -73,11 +73,11 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
         <section className="hero">
           <div className="hero-copy">
             <img className="hero-icon" src="/icon-192.png" alt="" width={76} height={76} />
-            <p className="eyebrow">A podcast player for iPhone</p>
-            <h1>Faster podcasts, no chipmunks</h1>
+            <h1>A podcast player I made for myself</h1>
             <p className="lede">
-              Poddle is a podcast player I made for myself after years of using Overcast. It has one Up Next queue,
-              speed-ups that still sound like people, and stats on how much you actually listen (a lot, in my case).
+              I used Overcast for years and Poddle is what I made to replace it. It's got one Up Next queue, speed-ups
+              that still sound like people talking, settings for each show and stats on how much I actually listen (a
+              lot, it turns out). Hopefully you like it too!
             </p>
             {deleted && (
               <div className="notice" role="status">
@@ -87,7 +87,7 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             )}
             <div className="hero-cta">
               <AppStoreBadge />
-              <p className="muted">Free, with no ads and no tracking.</p>
+              <p className="muted">It's free, and there's no ads or tracking.</p>
             </div>
             <p className="hero-signin">
               {signedIn ? (
@@ -109,10 +109,10 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
 
           <article className="feature">
             <div className="feature-copy">
-              <h3>Speed without the chipmunks</h3>
+              <h3>Speed-ups without the chipmunks</h3>
               <p>
-                Poddle's Speech-tuned speed-up is made for voices, so 2x still sounds like the person talking. Smart
-                Speed trims the silences between words, and Voice Boost evens out quiet hosts and loud ads.
+                The speed-up in Poddle is tuned for voices, so even at 2x it still sounds like the person talking. Smart
+                Speed trims the little gaps between words too, and Voice Boost evens out quiet hosts and loud ads.
               </p>
             </div>
             <div className="feature-media"><Phone shot={shots.speed} /></div>
@@ -122,8 +122,9 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <div className="feature-copy">
               <h3>Settings for each show</h3>
               <p>
-                Every show can have its own speed, Smart Speed, Voice Boost, intro and outro skips, and where its new
-                episodes go. Or leave them on your defaults and forget about it.
+                Every show can have its own speed, Smart Speed and Voice Boost, skip its intros and outros, and choose
+                whether its new episodes go to the top or bottom of Up Next (or don't get added at all). Or you can
+                just leave them all on your defaults and forget about it.
               </p>
             </div>
             <div className="feature-media"><Phone shot={shots.showSettings} /></div>
@@ -131,11 +132,11 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
 
           <article className="feature">
             <div className="feature-copy">
-              <h3>Bring everything from Overcast</h3>
+              <h3>Bring everything over from Overcast</h3>
               <p>
-                Export "All data" from Overcast and Poddle brings over your shows, what you've played, where you're up
-                to, your starred episodes and your whole listening history, so your stats start with everything you've
-                already heard.
+                If you're coming from Overcast like me, export "All data" from your Overcast account and Poddle brings
+                over your shows, what you've played, where you're up to, your starred episodes and your whole
+                listening history. So your stats start with everything you've already heard.
               </p>
             </div>
             <div className="feature-media"><Phone shot={shots.importDone} /></div>
@@ -145,8 +146,8 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <div className="feature-copy">
               <h3>Stats, and a Year in Review</h3>
               <p>
-                See how long you've listened, how much time speed and Smart Speed saved you, your top shows and your
-                streaks. At the end of the year there's a Year in Review you can share.
+                You can see how long you've listened, how much time the speed-ups and Smart Speed have saved you, your
+                top shows and your streaks, and then at the end of the year there's a Year in Review you can share.
               </p>
             </div>
             <div className="feature-media pair">
@@ -157,24 +158,25 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
 
           <div className="bits">
             <article className="bit">
-              <h3>Downloads that look after your data</h3>
+              <h3>Wi-Fi only downloads</h3>
               <p>
-                Poddle only downloads on Wi-Fi unless you say otherwise. Out and about and want something now? Allow
-                mobile downloads for an hour, three hours or until tomorrow, and it goes back to Wi-Fi only by itself.
+                Poddle only downloads on Wi-Fi unless you tell it otherwise. If you're out and want something now you
+                can allow mobile downloads for an hour, three hours or until tomorrow, then it goes back to Wi-Fi only
+                by itself.
               </p>
             </article>
             <article className="bit">
               <h3>Share links</h3>
               <p>
-                Share an episode or a show and your friend gets a page that plays it in their browser, from the bit you
-                meant, or opens it in Poddle if they have it.
+                When you share an episode or a show your friend gets a page that plays it right there in their browser,
+                starting from the bit you meant. If they've got Poddle it opens in the app instead.
               </p>
             </article>
             <article className="bit">
-              <h3>No ads and no tracking</h3>
+              <h3>No ads or tracking</h3>
               <p>
-                You sign in with Apple or Google so your library stays in sync, and that's about it. If you ever want
-                out, you can delete your account from the app.
+                You sign in with Apple or Google so your library stays in sync, and if you ever want out you can delete
+                your account from inside the app.
               </p>
             </article>
             <article className="bit poodle">
@@ -182,8 +184,8 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
               <div>
                 <h3>And a poodle</h3>
                 <p>
-                  Poddle sounds like poodle, so there's a fluffy cartoon poodle in headphones who keeps you company round
-                  the app. If it's a bit much you can turn the animation off in Profile.
+                  Poddle sounds a bit like poodle, so of course there's a fluffy cartoon poodle in headphones keeping you
+                  company round the app. If it gets a bit much you can turn the animations off in Profile.
                 </p>
               </div>
             </article>
@@ -207,8 +209,9 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
         <section className="closing" aria-labelledby="closing-title">
           <h2 id="closing-title">Give it a go</h2>
           <p className="lede">
-            Poddle's free on iPhone, and iPad and Mac will come a bit later. If you find a bug or have an idea, give me a
-            shout at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+            Poddle's free on iPhone and hopefully iPad and Mac won't be too far behind. If you find a bug or have an
+            idea for it, drop me an email at <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a> or tap "Suggest a
+            feature" in the app.
           </p>
           <AppStoreBadge />
         </section>

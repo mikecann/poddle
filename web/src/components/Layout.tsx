@@ -30,7 +30,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
 export function SiteFooter() {
   return (
     <footer className="footer">
-      <span>Poddle, a podcast player for iPhone by Mike Cann.</span>
+      <span>Poddle is made by Mike Cann.</span>
       <nav aria-label="About Poddle">
         <Link to="/support">Support</Link>
         <Link to="/privacy">Privacy</Link>
