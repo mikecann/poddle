@@ -62,7 +62,7 @@ Both harnesses arrange and inspect the backend through `POST <fixtures>/_world/<
 
 ## Running
 
-Full runs go to **tinker-desk**. Use local runs only for the scenarios you touched. `npm run check` remains the cheap check on every change.
+Full runs go to **tinker-desk**, Mike's spare Mac, over SSH (`E2E_REMOTE_HOST` or `--host` points them at another Mac). Use local runs only for the scenarios you touched. `npm run check` remains the cheap check on every change.
 
 ```sh
 npm run test:e2e:remote                           # both suites, one isolated world
@@ -75,7 +75,7 @@ npm run test:e2e:remote -- --commit <pushed-sha> --suite web -g "Sign in"
 
 The runner fetches `origin` and refuses a commit that is not reachable from a pushed branch. It tests the commit, not your uncommitted files. Push the commit first. It uses SSH (no GitHub CLI login), fetches on tinker-desk, checks out the commit in its own worktree under `~/.local/share/poddle-e2e/worktree`, runs `npm ci`, verifies and syncs the Swift package cache, installs Playwright Chromium in its own browser cache when needed, and runs the selected suite. The main checkout at `~/dev/me/poddle` is left alone. Arguments after `--suite` are passed to that suite; a `-g` filter on the default combined run reaches both harnesses. Use `--suite ios` for `--feature` and iOS-only flags.
 
-The whole remote run holds `~/.blender-queue.lock` with `lockf`, the same lock render-box uses. It refuses immediately if another render or e2e run owns it. The OS releases the lock when the process exits; do not delete the lock file. `caffeinate -i` keeps the Mac awake during the run.
+The whole remote run holds `~/.blender-queue.lock` with `lockf`, the same lock render-box (another job on tinker-desk) uses. It refuses immediately if another render or e2e run owns it. The OS releases the lock when the process exits; do not delete the lock file. `caffeinate -i` keeps the Mac awake during the run.
 
 Results return to `e2e/.remote-results/<sha>/`: `latest.json` contains pass/fail per scenario and setup failures, alongside the xcresult, Xcode logs, web JSON/HTML report and traces, failure screenshots and iOS accessibility dumps. A failing run exits nonzero. Disposable backend configuration and `world.json` are never downloaded or published. Remote copies remain under `~/.local/share/poddle-e2e/results/<sha>/<run-id>/`; these can be removed after inspecting/downloading them. One reusable worktree and package cache avoid growing a checkout and DerivedData per commit.
 
@@ -104,7 +104,7 @@ The deploy key pushes a small results commit to the **orphan `e2e-nightly` branc
 1. Poddle needs Xcode 27 (Swift 6.4). tinker-desk's `/Applications/Xcode.app` is 26.6, whose compiler crashes on the app, so the runner uses a copy of this Mac's Xcode at **`~/Applications/Xcode-27.1.app`**, through `DEVELOPER_DIR` (override with `E2E_DEVELOPER_DIR`). The default `xcode-select` is left alone. After copying an Xcode there, Mike runs once, in Terminal on the MacBook:
 
    ```sh
-   ssh -t tinker-desk "sudo env DEVELOPER_DIR=/Users/mikeysee/Applications/Xcode-27.1.app/Contents/Developer sh -c 'xcodebuild -license accept && xcodebuild -runFirstLaunch'"
+   ssh -t tinker-desk "sudo env DEVELOPER_DIR=\$HOME/Applications/Xcode-27.1.app/Contents/Developer sh -c 'xcodebuild -license accept && xcodebuild -runFirstLaunch'"
    ```
 
    Then, without sudo: `DEVELOPER_DIR=… xcodebuild -downloadPlatform iOS` (the matching simulator platform, which the build needs) and check with `xcodebuild -checkFirstLaunchStatus` and `xcrun simctl list runtimes`.

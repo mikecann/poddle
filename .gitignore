@@ -8,6 +8,7 @@ DerivedData/
 build/
 # Node / Convex
 node_modules/
+.env
 .env.local
 .env*.local
 # Secrets

@@ -6,11 +6,11 @@
 poddle/
   Poddle.xcodeproj        Xcode project using synchronized folders (objectVersion 77), so adding files never touches the pbxproj
   App/                    SwiftUI app sources, one multiplatform target (iOS + macOS)
-    DesignSystem/         Poddle's tokens and components, taken from designs/c-earful-warm.html
-    Features/             UpNext, Library, Podcast, Discover, Stats, YearInReview, NowPlaying, Settings, Import, Undo
-    Preview/              mock data for previews and the mock data source
+    DesignSystem/         Poddle's tokens and components, the "Cloud Fluff" look (decisions.md)
+    Features/             UpNext, Library, Podcast, Discover, Stats, YearInReview, NowPlaying, Settings, Import, Downloads, Account, Chef, Undo, Shared
+    Playback/             wiring the engine, downloads and push into the app
   Packages/
-    PoddleKit/            Swift package: models, the API layer over convex-swift, local cache + outbox, settings resolution, formatting
+    PoddleKit/            Swift package: models, the API layer over convex-swift, local cache + outbox, settings resolution, formatting, and the sample data (Mock/)
     PoddlePlayback/       Swift package: the audio engine (AVAudioEngine, time-pitch, Smart Speed, Voice Boost), remote commands, Now Playing info
   convex/                 Convex backend (TypeScript), which also serves the website
   web/                    the website (Vite + React + TypeScript), poddle.mikecann.app

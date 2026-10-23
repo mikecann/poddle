@@ -47,7 +47,7 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 ## Accounts, website and Chef (Mike, 22 Oct)
 
 - **Accounts:** just Mike for now, but built so other people can sign up later, each with their own library, queue, stats and settings. Every per-person table gets an owner. Shared feed data (shows, episodes) stays shared. Sign-up is limited to an allowlist of emails (only Mike's) until he opens it up.
-- **Sign-in:** Convex Auth v2 with Apple and Google, on the website and in the iPhone app, the same way Walkies does it (`~/dev/me/walkies`: `convex/convex.config.ts`, `convex/auth.ts`, `convex/users.ts`, the README's "Setting up Apple and Google sign-in"). Apple and Google with the same email are one account. The app's hidden API token goes away once the app signs in. Scripts and tests may keep an admin path.
+- **Sign-in:** Convex Auth v2 with Apple and Google, on the website and in the iPhone app, the same way Walkies, another of Mike's apps, does it (its `convex/convex.config.ts`, `convex/auth.ts`, `convex/users.ts` and its README's "Setting up Apple and Google sign-in"). Apple and Google with the same email are one account. The app's hidden API token goes away once the app signs in. Scripts and tests may keep an admin path.
 - **Website:** `poddle.mikecann.app` (DNS on Cloudflare), on Convex static hosting (`@convex-dev/static-hosting`) on the prod deployment, through its HTTP-actions custom domain.
   - Public share pages for an episode or a show, with no sign-in. They play the episode in the browser and open the app when it's installed (universal links).
   - Signed-in pages for your shows and what you're listening to.

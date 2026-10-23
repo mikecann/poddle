@@ -1,6 +1,7 @@
-// Usage: node phones.mjs <html file> <out prefix>
+// Usage: node scripts/phones.mjs <absolute path to html file> <out prefix>
 // Finds each phone frame (outermost ~393x852 element) and saves it as a JPEG.
-import { chromium } from "/Users/m5-mike/dev/me/lets-build-it/node_modules/playwright/index.mjs";
+// Playwright comes from this repo's devDependencies (npm install, then npx playwright install chromium).
+import { chromium } from "@playwright/test";
 const [file, out] = process.argv.slice(2);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: 1440, height: 1000 }, deviceScaleFactor: 2 });

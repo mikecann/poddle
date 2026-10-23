@@ -30,7 +30,7 @@ If you find a bug or have an idea for it, open an issue here, email me at [poddl
 
 ## Working on the code
 
-If you want a nose around, it's a SwiftUI app with a [Convex](https://convex.dev) backend, and the website is React on Convex's static hosting. The app builds for iPad and Mac too, they just aren't on the App Store yet. It's set up for me, so to run your own copy you'll need your own Convex deployment and your own Apple and Google sign-in keys (all covered below).
+If you want a nose around, it's a SwiftUI app with a [Convex](https://convex.dev) backend, and the website is React on Convex's static hosting. The app builds for iPad and Mac too, they just aren't on the App Store yet. It's set up for me, so to run your own copy you'll need your own Convex deployment and your own Apple and Google sign-in keys (all covered below). The app also pulls in ChefKit, the feedback board's Swift package, from a private repo (`sethconvex/feedback-chef`), so for now Xcode can't build it without access to that.
 
 These are the best places to start:
 
@@ -87,7 +87,7 @@ Deploy the backend first (`npx convex dev --once` on dev), since the site's `/e`
 
 ### Accounts and sign-in
 
-Everyone signs in with Apple or Google (Convex Auth v2, set up like Walkies). Each person has their own library, queue, settings, stats and devices; shows and episodes are shared. Sign-up is limited to `PODDLE_ALLOWED_EMAILS` unless `PODDLE_OPEN_SIGNUP=1`, which lets anyone with a verified Apple or Google email in. People can delete their account in the app (Profile) or on `/me`. Releasing to the App Store: `docs/runbooks/appstore-release.md`. The API reference is in `docs/api.md`, "Accounts and sign-in".
+Everyone signs in with Apple or Google (Convex Auth v2). Each person has their own library, queue, settings, stats and devices; shows and episodes are shared. Sign-up is limited to `PODDLE_ALLOWED_EMAILS` unless `PODDLE_OPEN_SIGNUP=1`, which lets anyone with a verified Apple or Google email in. People can delete their account in the app (Profile) or on `/me`. Releasing to the App Store: `docs/runbooks/appstore-release.md`. The API reference is in `docs/api.md`, "Accounts and sign-in".
 
 #### Setting up Apple and Google sign-in
 
@@ -153,16 +153,16 @@ Smaller ones: `-PoddlePaused YES` stops a mock screenshot run starting playback,
 
 Poddle's headphones poodle is direction A from `docs/decisions.md`, in the warm paper and tomato look.
 
-- `designs/branding/final/src/`: approved board, light/dark icon art and six transparent mascot originals, kept unchanged.
+- `designs/branding/final/src/` and `src-companion/` (not in the repo, they're git-ignored): approved board, light/dark icon art and the transparent mascot originals, kept unchanged.
 - `designs/branding/final/`: light, dark and grayscale tinted icons (1024×1024), trimmed mascots (up to 800px), and the default link preview (1200×630).
-- `App/Assets.xcassets/`: iOS icon appearances, macOS icon sizes, `BrandIcon` and namespaced `Mascot/listening`, `sleeping`, `waving`, `empty`, `searching`, `confused` image sets. `App/DesignSystem/Brand.swift` provides the views and rounded heavy wordmark.
+- `App/Assets.xcassets/`: iOS icon appearances, macOS icon sizes, `BrandIcon` and namespaced `Mascot/listening`, `sleeping`, `waving`, `empty`, `searching`, `confused` image sets, plus the companion's `celebrate`, `peek`, `peek-sleepy` and `trot`. `App/DesignSystem/Brand.swift` provides the views and rounded heavy wordmark.
 - `web/public/`: PNG favicons (16/32), Apple touch icon (180), manifest icons (192/512), mascots and `og-default.png`. The self-hosted Fredoka wordmark font and its SIL Open Font License are in `fonts/`.
 
-Regenerate the processed PNGs with `swift scripts/prepare-brand.swift` from the repo root. The website and asset catalog keep their own copies of these files.
+Regenerate the processed PNGs with `swift scripts/prepare-brand.swift` (and `prepare-companion.swift` for the companion) from the repo root, which needs those originals. The website and asset catalog keep their own copies of these files.
 
 ### Chef (feature requests)
 
-Settings > Feedback > "Suggest a feature" opens Chef, Seth Raphael's feedback board (`@convex-dev/feedback`, private and pre-release, from `sethconvex/feedback-chef`). People type a request, or send a screenshot with a voice note, follow it through and vote on other people's. There's no floating button. The admin (Mike) approves or rejects requests in Chef's admin sheet. At this commit ChefKit never loads its approval queue, though: `ChefApprovalsSection` binds `awaitingApproval` in a `.task` on a `Group` that's empty until the list loads, so the task never runs. Until Seth fixes it, Mike approves from Chef's web panel. It's on the website's `/me`, for the admin only (`web/src/components/ChefAdminPanel.tsx`).
+Settings > Feedback > "Suggest a feature" opens Chef, Seth Raphael's feedback board (`@convex-dev/feedback`, private and pre-release, from `sethconvex/feedback-chef`). People type a request, or send a screenshot with a voice note, follow it through and vote on other people's. There's no floating button. The admin (Mike) approves or rejects requests in Chef's admin sheet. At this commit ChefKit never loads its approval queue, though: `ChefApprovalsSection` binds `awaitingApproval` in a `.task` on a `Group` that's empty until the list loads, so the task never runs. Until that's fixed in ChefKit, Mike approves from Chef's web panel. It's on the website's `/me`, for the admin only (`web/src/components/ChefAdminPanel.tsx`).
 
 It's the board alone, as `npx chef init --no-cloud` sets it up: no cloud builds (`docs/decisions.md`). An approved request waits for Mike to build it himself. The panel says "Cloud builds are off" next to approved requests, and that's expected.
 

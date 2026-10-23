@@ -1,6 +1,7 @@
-// Usage: node shot.mjs <html file> <out prefix> [width]
+// Usage: node scripts/shot.mjs <absolute path to html file> <out prefix> [width]
 // Saves a full-page PNG plus one PNG per 1000px band, and logs page errors.
-import { chromium } from "/Users/m5-mike/dev/me/lets-build-it/node_modules/playwright/index.mjs";
+// Playwright comes from this repo's devDependencies (npm install, then npx playwright install chromium).
+import { chromium } from "@playwright/test";
 const [file, out, width = "1440"] = process.argv.slice(2);
 const browser = await chromium.launch();
 const page = await browser.newPage({ viewport: { width: Number(width), height: 1000 }, deviceScaleFactor: 1 });

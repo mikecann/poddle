@@ -50,7 +50,7 @@ Convex Auth's components refuse to deploy unless every provider variable has a v
 
 ## Accounts and sign-in
 
-Convex Auth v2 (`@convex-dev/auth` 2.0.0-beta.0), set up like Walkies: `convex/convex.config.ts`, `convex/auth.ts`, `convex/users.ts`, `convex/http.ts`.
+Convex Auth v2 (`@convex-dev/auth` 2.0.0-beta.0): `convex/convex.config.ts`, `convex/auth.ts`, `convex/users.ts`, `convex/http.ts`.
 
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # Personal podcast player: product spec (v1 draft)
 
-Working name: **Pod**. SwiftUI multiplatform app (iPhone first, iPad and Mac later), replacing Overcast for one listener.
+Working name: **Pod** (it's Poddle now, `decisions.md`). SwiftUI multiplatform app (iPhone first, iPad and Mac later), made for one listener.
 
 Claims marked **[verified]** were checked against a source listed at the end. Claims marked **[inferred]** are my own design reasoning or memory and haven't been checked.
 
@@ -9,9 +9,9 @@ Claims marked **[verified]** were checked against a source listed at the end. Cl
 ## 1. Goals and non-goals
 
 ### Goals (v1)
-- Replace Overcast day to day on iPhone, with nothing important missing.
+- Mike's everyday podcast player on iPhone, with nothing important missing.
 - Bring in all Overcast data (subscriptions, played state, progress, stars, history) so stats are real from day one.
-- Playback at least as good as Overcast: pitch-corrected speed, Smart Speed, Voice Boost, chapters, sleep timer, and proper lock screen, AirPods and AirPlay support.
+- Playback with pitch-corrected speed, Smart Speed, Voice Boost, chapters, sleep timer, and proper lock screen, AirPods and AirPlay support.
 - Per-podcast overrides that just work.
 - Stats and a year in review he'd actually want to share.
 - Gestures everywhere. Every list row can be swiped, long-pressed and dragged.
@@ -137,7 +137,7 @@ Episodes in the export that are no longer in the feed get created as **archived 
 - **Auto-add:** a per-show setting with three options: Inbox (default), Up Next bottom, or Up Next top.
 
 Why not Overcast-style playlists in v1:
-- One listener, one context. Smart playlists mostly exist to fake a queue, and an explicit queue plus Priority covers that.
+- One listener, one context. Here smart playlists would mostly stand in for a queue, and an explicit queue plus Priority covers that.
 - One ordered list is much easier to sync without conflicts (fractional order keys, §2.12) than several smart and manual lists.
 - Gestures stay simple: "queue next" and "queue last" mean exactly one thing.
 - **Later:** saved filters ("Unplayed under 20 min", "Starred", "Show X backlog") as read-only views you can play from, not as competing queues.

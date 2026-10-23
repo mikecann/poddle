@@ -47,7 +47,7 @@ These must keep end-to-end coverage. Change one, and its feature changes in the 
 
 ### End-to-end cadence
 
-The e2e suites are slow (the app's takes about 17 minutes). Full runs belong on **tinker-desk**, through `npm run test:e2e:remote`, so the M5 MacBook stays free. Local e2e runs are for the scenarios you touched.
+The e2e suites are slow (the app's takes about 17 minutes). Full runs belong on **tinker-desk** (Mike's spare Mac, over SSH), through `npm run test:e2e:remote`, so the M5 MacBook stays free. Local e2e runs are for the scenarios you touched.
 
 - **Narrow changes:** run the smallest relevant checks: `npm test`, one Vitest file, `swift test` in one package, or one feature or scenario of an e2e suite.
 - **Run the whole suite remotely** (or every feature covering what you touched) when the change is large or risky: auth, sync and the outbox, playback, navigation that spans screens, the website's pages, anything on a critical path above, and before an App Store build.

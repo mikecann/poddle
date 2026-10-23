@@ -11,8 +11,11 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const APP_ID = "6825613455";
-const KEY_ID = "7SS6J9F98P";
-const ISSUER = "69a6de6f-a06e-47e3-e053-5b8c7c11a4d1";
+// The App Store Connect API key (as in appstore-metadata.mjs): override with ASC_KEY_ID, ASC_ISSUER_ID
+// and ASC_KEY (the .p8 path).
+const KEY_ID = process.env.ASC_KEY_ID ?? "7SS6J9F98P";
+const ISSUER = process.env.ASC_ISSUER_ID ?? "69a6de6f-a06e-47e3-e053-5b8c7c11a4d1";
+const KEY_PATH = process.env.ASC_KEY ?? join(homedir(), ".config/poddle", `AuthKey_${KEY_ID}.p8`);
 const [buildNumber] = process.argv.slice(2).filter((a) => !a.startsWith("--"));
 const submit = process.argv.includes("--submit");
 if (!buildNumber) {
@@ -24,7 +27,7 @@ let jwt;
 let jwtAt = 0;
 function token() {
   if (Date.now() - jwtAt < 10 * 60_000) return jwt;
-  const key = createPrivateKey(readFileSync(join(homedir(), `.config/poddle/AuthKey_${KEY_ID}.p8`)));
+  const key = createPrivateKey(readFileSync(KEY_PATH));
   const b64 = (o) => Buffer.from(JSON.stringify(o)).toString("base64url");
   const now = Math.floor(Date.now() / 1000);
   const head = `${b64({ alg: "ES256", kid: KEY_ID, typ: "JWT" })}.${b64({ iss: ISSUER, iat: now, exp: now + 1200, aud: "appstoreconnect-v1" })}`;
