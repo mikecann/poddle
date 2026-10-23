@@ -37,6 +37,7 @@ const vTotals = v.object({
   /** Content-weighted. Null if nothing was played. */
   averageSpeed: v.union(v.number(), v.null()),
 });
+const vCompletion = v.object({ started: v.number(), completed: v.number(), rate: v.union(v.number(), v.null()) });
 const vTopShow = v.object({ podcast: vPodcastSummary, wall: v.number(), content: v.number(), sessions: v.number() });
 const vTopEpisode = v.object({
   episodeId: v.id("episodes"),
@@ -52,7 +53,7 @@ const vSummary = v.object({
   startDay: v.string(),
   endDay: v.string(),
   totals: vTotals,
-  completion: v.object({ started: v.number(), completed: v.number(), rate: v.union(v.number(), v.null()) }),
+  completion: vCompletion,
   topShows: v.array(vTopShow),
   topEpisodes: v.array(vTopEpisode),
   longestStreak: vStreak,
@@ -70,7 +71,8 @@ const vSummary = v.object({
 
 type Totalish = Pick<Doc<"statsDays">, "wall" | "content" | "speedSaved" | "smartSaved" | "rateContent" | "estimatedWall" | "sessions" | "episodesStarted" | "episodesCompleted">;
 
-function sumTotals(rows: Totalish[]) {
+/** Totals and completion summed from a period's rollup rows (days or months). */
+function totalsOf(rows: Totalish[]) {
   const t = { wall: 0, content: 0, speedSaved: 0, smartSaved: 0, rateContent: 0, estimatedWall: 0, sessions: 0, started: 0, completed: 0 };
   for (const r of rows) {
     t.wall += r.wall;
@@ -83,8 +85,37 @@ function sumTotals(rows: Totalish[]) {
     t.started += r.episodesStarted;
     t.completed += r.episodesCompleted;
   }
-  return t;
+  return {
+    totals: {
+      wall: t.wall,
+      content: t.content,
+      speedSaved: t.speedSaved,
+      smartSaved: t.smartSaved,
+      timeSaved: t.speedSaved + t.smartSaved,
+      estimatedWall: t.estimatedWall,
+      sessions: t.sessions,
+      averageSpeed: t.content > 0 ? t.rateContent / t.content : null,
+    },
+    completion: { started: t.started, completed: t.completed, rate: t.started > 0 ? Math.min(1, t.completed / t.started) : null },
+  };
 }
+
+async function daysIn(ctx: QueryCtx, startDay: string, endDay: string) {
+  return await ctx.db
+    .query("statsDays")
+    .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).gte("day", startDay).lte("day", endDay))
+    .collect();
+}
+
+async function monthsIn(ctx: QueryCtx, startDay: string, endDay: string) {
+  return await ctx.db
+    .query("statsMonths")
+    .withIndex("by_user_month", (q) => q.eq("userId", ctx.userId).gte("month", startDay.slice(0, 7)).lte("month", endDay.slice(0, 7)))
+    .collect();
+}
+
+/** Weeks and months total their days; years and all time total their months. */
+const totalsFromDays = (period: Period) => period === "week" || period === "month";
 
 async function todayFor(ctx: QueryCtx): Promise<string> {
   const tz = resolveGlobalSettings(await globalSettingsDoc(ctx)).timeZone;
@@ -159,16 +190,32 @@ async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endD
     }
     ranked = [...byEpisode.entries()].map(([episodeId, a]) => ({ episodeId, ...a }));
   }
+  // Rank first, then look things up only for episodes that can still make the
+  // list. A year can have thousands of episodes, and reading each one's state
+  // put the playing episode's row (patched every few seconds) in every Stats
+  // subscription's read set.
+  //
+  // Walking down by wall time, once `limit` rows are kept with the lowest at
+  // wall W, a later episode can only overtake a kept row through the star
+  // tie-break below: it must be starred and less than 60 s under W. So past
+  // that point only starred episodes get looked up, and the walk stops at the
+  // first one 60 s or more under W. The sort is stable, so equal walls keep
+  // the order they had before, and the final sort sees the same ties.
+  ranked.sort((a, b) => b.wall - a.wall);
   const rows = [];
   const show = showCache(ctx);
   for (const r of ranked) {
-    const episode = await ctx.db.get(r.episodeId);
-    const podcast = episode && (await show(episode.podcastId));
-    if (!episode || !podcast || r.wall <= 0.5) continue;
+    if (r.wall <= 0.5) break;
+    const cutoff = rows[limit - 1];
+    if (cutoff && cutoff.wall - r.wall >= 60) break;
     const state = await ctx.db
       .query("episodeStates")
       .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", r.episodeId))
       .unique();
+    if (cutoff && !state?.starred) continue;
+    const episode = await ctx.db.get(r.episodeId);
+    const podcast = episode && (await show(episode.podcastId));
+    if (!episode || !podcast) continue;
     rows.push({
       episodeId: episode._id,
       title: episode.title,
@@ -196,18 +243,12 @@ async function currentStreakFrom(ctx: QueryCtx, today: string) {
 export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: string | undefined, limit = 10) {
   const today = await todayFor(ctx);
   const { startDay, endDay } = periodRange(period, anchorDay ?? today);
-  const days = await ctx.db
-    .query("statsDays")
-    .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).gte("day", startDay).lte("day", endDay))
-    .collect();
-  const months = await ctx.db
-    .query("statsMonths")
-    .withIndex("by_user_month", (q) => q.eq("userId", ctx.userId).gte("month", startDay.slice(0, 7)).lte("month", endDay.slice(0, 7)))
-    .collect();
-  const t = sumTotals(period === "week" || period === "month" ? days : months);
+  const days = await daysIn(ctx, startDay, endDay);
+  const months = await monthsIn(ctx, startDay, endDay);
+  const { totals, completion } = totalsOf(totalsFromDays(period) ? days : months);
 
   let heatmap = new Array<number>(7 * 24).fill(0);
-  if (period === "week" || period === "month") {
+  if (totalsFromDays(period)) {
     for (const d of days) {
       const wd = weekdayOf(d.day);
       d.liveHours.forEach((secs, h) => (heatmap[wd * 24 + h]! += secs));
@@ -232,17 +273,8 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
     period,
     startDay,
     endDay,
-    totals: {
-      wall: t.wall,
-      content: t.content,
-      speedSaved: t.speedSaved,
-      smartSaved: t.smartSaved,
-      timeSaved: t.speedSaved + t.smartSaved,
-      estimatedWall: t.estimatedWall,
-      sessions: t.sessions,
-      averageSpeed: t.content > 0 ? t.rateContent / t.content : null,
-    },
-    completion: { started: t.started, completed: t.completed, rate: t.started > 0 ? Math.min(1, t.completed / t.started) : null },
+    totals,
+    completion,
     topShows: await topShows(ctx, period, startDay, endDay, limit),
     topEpisodes: await topEpisodes(ctx, period, startDay, endDay, limit),
     longestStreak: longestStreak(days),
@@ -252,8 +284,13 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
     busiestMonth,
     days: period === "all" ? [] : days.map((d) => ({ day: d.day, wall: d.wall })),
     months: period === "year" || period === "all" ? months.map((m) => ({ month: m.month, wall: m.wall })) : [],
-    includesEstimated: t.estimatedWall > 0,
+    includesEstimated: totals.estimatedWall > 0,
   };
+}
+
+export async function computeTotals(ctx: QueryCtx, period: Period, anchorDay: string | undefined) {
+  const { startDay, endDay } = periodRange(period, anchorDay ?? (await todayFor(ctx)));
+  return totalsOf(totalsFromDays(period) ? await daysIn(ctx, startDay, endDay) : await monthsIn(ctx, startDay, endDay));
 }
 
 /**
@@ -264,6 +301,18 @@ export const summary = userQuery({
   args: { period: vPeriod, anchorDay: v.optional(v.string()) },
   returns: vSummary,
   handler: async (ctx, { period, anchorDay }) => await computeSummary(ctx, period, anchorDay),
+});
+
+/**
+ * Just the totals and completion for a period, from the day or month rollups
+ * alone. For the website's stat cards: unlike `summary`, it never reads
+ * sessions, episodes or episode state, so the app saving its position every
+ * few seconds doesn't re-run it.
+ */
+export const totals = userQuery({
+  args: { period: vPeriod, anchorDay: v.optional(v.string()) },
+  returns: v.object({ totals: vTotals, completion: vCompletion }),
+  handler: async (ctx, { period, anchorDay }) => await computeTotals(ctx, period, anchorDay),
 });
 
 /** One show's all-time and per-month listening. */

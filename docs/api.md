@@ -265,6 +265,7 @@ All seconds are wall-clock unless named `content`.
 | Function | Kind | Args | Returns |
 |---|---|---|---|
 | `stats:summary` | query | `period: "week" \| "month" \| "year" \| "all"`, `anchorDay?: "YYYY-MM-DD"` | `Summary` for the calendar period containing `anchorDay` (default today). Weeks start Monday. |
+| `stats:totals` | query | `period`, `anchorDay?` (as `summary`) | `{ totals, completion }`, the same as in `Summary`, from the day and month rollups alone (the website's stat cards). It never reads sessions, episodes or episode state, so saving the position doesn't re-run it. |
 | `stats:forPodcast` | query | `podcastId` | `{ wall, content, timeSaved, sessions: Int, months: [{ month, wall }] }` |
 | `stats:yearInReview` | query | `year: Int`, `includePrivate?: Bool` | `YearInReview` |
 
