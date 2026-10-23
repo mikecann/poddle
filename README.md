@@ -169,3 +169,7 @@ It's the board alone, as `npx chef init --no-cloud` sets it up: no cloud builds 
 - **Backend:** the package is vendored in `vendor/` (`dc9056d4bfb5`). It still has a one-line patch from when Poddle had cloud builds (a wider Sydney URL check in `dist/chef/deployKey.js`, for "Ship it"). Nothing on the board uses it, so a fresh pack can leave it out. `convex/convex.config.ts` uses its `feedback` component. `convex/chef.ts` has the API (`exposeChefApi`, on `currentUserId`, so merged accounts are one person) and the CLI's admin functions (`chefAdmin`). Its build and ship functions stay exported so ChefKit and the panel never call a missing one; with no cloud builds they report them off.
 - **App:** the `ChefKit` Swift package, pinned to the same commit and linked on iOS only (it doesn't build for the Mac). `App/Features/Chef/ChefConnection.swift` runs Chef's calls on `LiveStore`'s own connection and session (`rawMutation`, `rawSubscribe`). The app installs it at launch and again when the account changes.
 - **Admin:** `npx convex run chef:chefSetAdmin '{"userId":"<users _id>"}'` (add `--prod` for prod). `npx chef status` shows the setup, by name only.
+
+## Licence
+
+MIT, see `LICENSE`. The poodle and the Poddle name are mine though, so please give your fork its own name and mascot.

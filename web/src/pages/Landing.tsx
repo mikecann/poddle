@@ -140,7 +140,7 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             </div>
             <p className="hero-signin">
               {signedIn ? (
-                <Link to="/me">See what you're listening to</Link>
+                <Link to="/me">Go to your dashboard</Link>
               ) : (
                 <>Already using Poddle? <Link to="/me">Sign in on the web</Link></>
               )}

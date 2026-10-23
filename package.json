@@ -1,6 +1,7 @@
 {
   "name": "poddle-backend",
   "private": true,
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "convex dev",

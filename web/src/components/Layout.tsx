@@ -23,7 +23,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
         <img src="/icon.png" alt="" width={34} height={34} />
         <b className="wordmark">Poddle</b>
       </Link>
-      <Link to="/me" className="toplink">{signedIn ? "Your listening" : "Sign in"}</Link>
+      <Link to="/me" className="toplink">{signedIn ? "Dashboard" : "Sign in"}</Link>
     </header>
   );
 }
