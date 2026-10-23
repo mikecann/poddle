@@ -91,10 +91,9 @@ struct PoddleApp: App {
         var config = LiveConfigStore.bundled()
             ?? LiveConfig(deploymentURL: URL(string: "https://unconfigured.convex.cloud")!)
         #if DEBUG
-        // `-ChefConvexURL <url>`: a Chef cloud build's preview backend, passed by `npx chef ios`.
         // `-PoddleConvexURL <url>` (with `-PoddleSiteURL <url>`): any backend, e.g. the e2e suite's local one.
         let defaults = UserDefaults.standard
-        if let raw = defaults.string(forKey: "PoddleConvexURL") ?? defaults.string(forKey: "ChefConvexURL"),
+        if let raw = defaults.string(forKey: "PoddleConvexURL"),
            let url = URL(string: raw), url.host() != nil {
             config = LiveConfig(deploymentURL: url, siteURL: defaults.string(forKey: "PoddleSiteURL").flatMap(URL.init(string:)))
         }

@@ -7,6 +7,6 @@ export default defineConfig({
     environment: "node",
     include: ["tests/**/*.test.ts", "web/src/**/*.test.ts"],
     // Chef's test helpers use import.meta.glob, so they go through Vite too.
-    server: { deps: { inline: ["convex-test", "@convex-dev/feedback", "@convex-dev/chef-cloud"] } },
+    server: { deps: { inline: ["convex-test", "@convex-dev/feedback"] } },
   },
 });

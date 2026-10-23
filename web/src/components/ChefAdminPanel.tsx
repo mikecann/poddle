@@ -4,9 +4,9 @@ import { useQuery } from "convex/react";
 import { api } from "../../../convex/_generated/api";
 import { convexUrl } from "../lib/convexUrl";
 
-// Chef's web panel, for its admin only (Mike): the approval queue, cloud builds
-// and "Ship it" with the diff. Everyone else asks for features from the app's
-// Settings, so nobody else gets a button here.
+// Chef's web panel, for its admin only (Mike): the approval queue and the
+// requests. Everyone else asks for features from the app's Settings, so nobody
+// else gets a button here.
 export function ChefAdminPanel() {
   const admin = useQuery(api.chef.amAdmin);
   const token = useAuthToken();

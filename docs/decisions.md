@@ -52,7 +52,8 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
   - Public share pages for an episode or a show, with no sign-in. They play the episode in the browser and open the app when it's installed (universal links).
   - Signed-in pages for your shows and what you're listening to.
   - The app's share sheet hands out these links.
-- **Chef 2.0:** the feedback board, plus cloud builds, as in Walkies (`npx chef init --cloud`, ChefKit opened from Settings rather than a floating button). Chef's cloud builds run on Convex's own marketplace (Daytona, Code Storage, Resend, the AI gateway), billed to the Convex team, so they need no keys of Mike's.
+- **Chef 2.0:** the feedback board, as in Walkies (`npx chef init --no-cloud`, ChefKit opened from Settings rather than a floating button).
+  - **Cloud builds removed (23 Oct 2026):** Mike doesn't use them, and `@convex-dev/chef-cloud` carries private Convex marketplace code that shouldn't be in this public repo. Approved requests wait for Mike to build them himself.
 - **Data:**
   - Prod `coordinated-dodo-120` is in Sydney, with daily backups at 06:01 (Perth time) since 22 Oct.
   - Dev moved to Sydney as `striped-turtle-260` on 22 Oct, seeded from a prod snapshot. The old US dev `qualified-hedgehog-912` is unused.

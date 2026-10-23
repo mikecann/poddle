@@ -4,9 +4,8 @@
 # provisioning, no Xcode account needed. Without it, it builds without push using the
 # existing wildcard profile.
 #
-# For trying a Chef cloud build (scripts/chef-ios.sh): SRC=<checkout> builds that checkout
-# instead of this one, CONFIG=Debug builds against dev, LAUNCH_ARGS are passed to the app, and
-# BUILD_ONLY=1 stops after the build.
+# SRC=<checkout> builds another checkout (a worktree, say) instead of this one, CONFIG=Debug
+# builds against dev, LAUNCH_ARGS are passed to the app, and BUILD_ONLY=1 stops after the build.
 set -euo pipefail
 cd "${SRC:-$(dirname "$0")/..}"
 CONFIG=${CONFIG:-Release}

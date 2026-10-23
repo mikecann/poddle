@@ -3,7 +3,6 @@ import { registerStaticRoutes } from "@convex-dev/static-hosting";
 import { api, components } from "./_generated/api";
 import { httpAction, type ActionCtx } from "./_generated/server";
 import { FALLBACK_INDEX_HTML, renderSharePage, type SharePage } from "./lib/meta";
-import { mountChefAgentRoutes } from "@convex-dev/feedback/http";
 
 // Convex Auth serves its own routes under /auth, /oauth/apple and /oauth/google
 // (convex.config.ts). These are the app's, and the website (web/) is served from
@@ -92,10 +91,6 @@ const sharePage = httpAction(async (ctx, request) => {
 
 http.route({ pathPrefix: "/e/", method: "GET", handler: sharePage });
 http.route({ pathPrefix: "/s/", method: "GET", handler: sharePage });
-
-// /chef-agent/*: Chef's cloud builds talk back here (the runner's API and its
-// model proxy).
-mountChefAgentRoutes(http, components.feedback);
 
 // Everything else: the website's files, with /me and other app routes falling
 // back to index.html.

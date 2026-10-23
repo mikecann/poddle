@@ -43,7 +43,6 @@ Set with `npx convex env set NAME value` on the deployment.
 | `APNS_TEAM_ID` | for push | `4DTAZSZL6B` |
 | `APNS_TOPIC` | for push | `com.mikecann.poddle` |
 | `APNS_ENV` | for push | `sandbox` (default) or `production`. A device's own `apnsEnvironment` overrides it. |
-| `CHEF_PREVIEW_DEPLOY_KEY`, `CHEF_DEPLOY_KEY` | for Chef's cloud builds | Set by `npx chef init`, never by hand: the preview deploy key builds deploy with, and the key "Ship it" deploys to this deployment with. |
 
 Without the four required APNs vars, every push is a logged no-op.
 
@@ -159,7 +158,7 @@ The website (`web/`) is served by the same deployment: Convex static hosting for
 
 ## Chef
 
-`convex/chef.ts` is Chef's API (`@convex-dev/feedback`'s `exposeChefApi`): `chef:submitRequest`, `chef:submitRequestWithMedia`, `chef:mine`, `chef:amAdmin`, `chef:awaitingApproval`, `chef:review` and the rest that ChefKit and the web panel call. They act for `currentUserId`, so merged accounts are one person, and they refuse signed-out callers. The `chef:chef*` functions (`chefSetup`, `chefSetAdmin`, `chefEnableCloudBuilds`, `chefIos`, ...) are internal, for `npx chef` and `npx convex run`. `/chef-agent/*` in `http.ts` is where cloud builds talk back. The README's "Chef" section covers the rest.
+`convex/chef.ts` is Chef's API (`@convex-dev/feedback`'s `exposeChefApi`): `chef:submitRequest`, `chef:submitRequestWithMedia`, `chef:mine`, `chef:upvoteRequest`, `chef:listPublicItems`, `chef:amAdmin`, `chef:awaitingApproval`, `chef:review` and the rest that ChefKit and the web panel call. They act for `currentUserId`, so merged accounts are one person, and they refuse signed-out callers. There are no cloud builds, so the build and ship functions (`chef:buildState`, `chef:buildCard`, `chef:shipCandidate`, ...) report them off. `chef:chefSetAdmin` and `chef:chefMigrateAgentKeys` are internal, for `npx chef` and `npx convex run`. The README's "Chef" section covers the rest.
 
 ## Functions
 

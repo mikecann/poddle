@@ -145,5 +145,4 @@ export declare const components: {
   authAnonymous: import("@convex-dev/auth/components/anonymous/_generated/component.js").ComponentApi<"authAnonymous">;
   staticHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"staticHosting">;
   feedback: import("@convex-dev/feedback/_generated/component.js").ComponentApi<"feedback">;
-  chefCloud: import("@convex-dev/chef-cloud/_generated/component.js").ComponentApi<"chefCloud">;
 };
