@@ -26,6 +26,8 @@ export function mightHaveApp(userAgent = typeof navigator === "undefined" ? "" :
 
 export const CONTACT_EMAIL = "poddle@mikecann.app";
 
+export const GITHUB_URL = "https://github.com/mikecann/poddle";
+
 /** The site's public address, for canonical links and structured data. */
 export const SITE_URL = "https://poddle.mikecann.app";
 
