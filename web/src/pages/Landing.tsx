@@ -124,9 +124,9 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <img className="hero-icon" src="/icon-192.png" alt="" width={76} height={76} />
             <h1>A podcast player I made for myself</h1>
             <p className="lede">
-              It's got one Up Next queue, speed-ups that still sound like people talking, settings for each show and
-              stats on how much I actually listen (a lot, it turns out). Now anyone can use it, so hopefully you like
-              it too!
+              I listen to a lot of podcasts and wanted a player that looks, works and feels exactly the way I want it
+              to. It's got one Up Next queue, speed-ups that still sound like people talking and stats on how much I
+              actually listen (a lot, it turns out). Now anyone can use it, so hopefully you like it too!
             </p>
             {deleted && (
               <div className="notice" role="status">
