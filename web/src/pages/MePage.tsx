@@ -54,8 +54,10 @@ function Dashboard() {
   const upNext = useQuery(api.queue.upNext, {});
   const shows = useQuery(api.podcasts.list, {});
   const recent = useQuery(api.sessions.recent, { limit: 12 });
-  const week = useQuery(api.stats.summary, { period: "week" });
-  const year = useQuery(api.stats.summary, { period: "year" });
+  // The cards only need totals, so they skip `stats.summary`: that reads every
+  // session and episode in the period and re-runs on each position save.
+  const week = useQuery(api.stats.totals, { period: "week" });
+  const year = useQuery(api.stats.totals, { period: "year" });
   const { signOut } = useAuthActions();
   const firstName = me?.name?.split(" ")[0];
 
@@ -130,7 +132,7 @@ function Dashboard() {
   );
 }
 
-function StatCard({ label, s }: { label: string; s: FunctionReturnType<typeof api.stats.summary> | undefined }) {
+function StatCard({ label, s }: { label: string; s: FunctionReturnType<typeof api.stats.totals> | undefined }) {
   return (
     <div className="stat">
       <span className="cap">{label}</span>
