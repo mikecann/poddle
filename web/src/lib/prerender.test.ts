@@ -24,11 +24,13 @@ describe("the prerendered home page", () => {
     expect(screens.filter((img) => !img.includes(`loading="lazy"`))).toHaveLength(2);
   });
 
-  test("links to sign-in and carries the app's structured data", () => {
+  test("links to sign-in and carries the app's and the video's structured data", () => {
     expect(html).toContain(`href="/me"`);
     const json = /<script type="application\/ld\+json">([\s\S]*?)<\/script>/.exec(html)![1]!;
-    const data = JSON.parse(json);
+    const [data, video] = JSON.parse(json);
     expect(data["@type"]).toBe("MobileApplication");
+    expect(video["@type"]).toBe("VideoObject");
+    expect(video.embedUrl).toContain("youtube.com/embed/");
     expect(data.operatingSystem).toMatch(/iOS/);
     expect(data.offers.price).toBe("0");
     expect(data.author.name).toBe("Mike Cann");

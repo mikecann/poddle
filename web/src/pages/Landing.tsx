@@ -1,9 +1,10 @@
 import { AppStoreBadge } from "../components/AppStoreBadge";
 import { SiteFooter, SiteHeader } from "../components/Layout";
-import { APP_STORE_LIVE, APP_STORE_URL, CONTACT_EMAIL, SITE_URL } from "../lib/links";
+import { APP_STORE_LIVE, APP_STORE_URL, CONTACT_EMAIL, PROMO_VIDEO_ID, PROMO_VIDEO_TITLE, SITE_URL } from "../lib/links";
 import { Link } from "../lib/router";
+import { useState } from "react";
 
-// The home page's content. It takes everything as props and uses no hooks, so
+// The home page's content. It takes everything as props and uses no context hooks (only local state), so
 // the build can also render it to static HTML (lib/prerender.tsx) for search
 // engines and a fast first paint. HomePage.tsx wires it to the session.
 
@@ -19,14 +20,13 @@ const shots = {
   podcast: { src: "/screens/podcast.webp", caption: "A show", alt: "A show's page with its newest episodes and its settings" },
   showSettings: { src: "/screens/show-settings.webp", caption: "Settings for a show", alt: "Settings for one show: its own speed, Voice Boost off and the first 45 seconds skipped" },
   discover: { src: "/screens/discover.webp", caption: "Discover", alt: "Searching Apple Podcasts in Discover, with a button to add a feed by its URL" },
-  importDone: { src: "/screens/import-done.webp", caption: "Moving from Overcast", alt: "The Overcast import finished: 84 podcasts, 3,412 played episodes and 1,920 hours brought over" },
   stats: { src: "/screens/stats.webp", caption: "Stats", alt: "Stats: 612 hours listened this year, 148 hours saved, a 41 day streak and when you listen" },
   yearInReview: { src: "/screens/year-in-review.webp", caption: "Year in Review", alt: "A Year in Review receipt saying Mike listened for 612 hours, ready to share" },
 } satisfies Record<string, Shot>;
 
 const gallery: Shot[] = [
   shots.upNext, shots.nowPlaying, shots.speed, shots.podcast, shots.showSettings,
-  shots.discover, shots.importDone, shots.stats, shots.yearInReview,
+  shots.discover, shots.stats, shots.yearInReview,
 ];
 
 /** A screenshot in a phone. Only the hero's load straight away; `first` is the one to fetch first. */
@@ -45,13 +45,52 @@ function Phone({ shot, hero = false, first = false, className = "" }: { shot: Sh
   );
 }
 
+/**
+ * The promo video, unlisted on Mike's YouTube channel. It shows a still with a play button and only
+ * loads YouTube's player when it's clicked, so the page stays fast and YouTube sets no cookies until
+ * then. Without JavaScript it's a plain link to the video.
+ */
+function PromoVideo() {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <section className="promo" aria-label="Poddle in a 35 second video">
+      <div className="promo-frame">
+        {playing ? (
+          <iframe
+            src={`https://www.youtube-nocookie.com/embed/${PROMO_VIDEO_ID}?autoplay=1&rel=0`}
+            title={PROMO_VIDEO_TITLE}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        ) : (
+          <a
+            className="promo-play"
+            href={`https://youtu.be/${PROMO_VIDEO_ID}`}
+            aria-label={`Play the video: ${PROMO_VIDEO_TITLE}`}
+            onClick={(e) => {
+              e.preventDefault();
+              setPlaying(true);
+            }}
+          >
+            <img src="/promo-poster.webp" alt="" width={1280} height={720} loading="lazy" decoding="async" />
+            <span className="promo-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z" /></svg>
+            </span>
+          </a>
+        )}
+      </div>
+    </section>
+  );
+}
+
 /** schema.org data for the app, so search engines know what Poddle is. */
 function StructuredData() {
   const app = {
     "@context": "https://schema.org",
     "@type": "MobileApplication",
     name: "Poddle",
-    description: "A podcast player for iPhone that Mike Cann made to replace Overcast, with speed-ups that still sound like people talking, settings for each show, the full Overcast import and listening stats.",
+    description: "A podcast player for iPhone that Mike Cann made for himself, with speed-ups that still sound like people talking, settings for each show, importing your listening history and listening stats.",
     operatingSystem: "iOS 18.0 or later",
     applicationCategory: "MultimediaApplication",
     offers: { "@type": "Offer", price: "0", priceCurrency: "USD" },
@@ -61,7 +100,17 @@ function StructuredData() {
     author: { "@type": "Person", name: "Mike Cann" },
     ...(APP_STORE_LIVE ? { downloadUrl: APP_STORE_URL, installUrl: APP_STORE_URL } : {}),
   };
-  const json = JSON.stringify(app).replace(/</g, "\\u003c");
+  const video = {
+    "@context": "https://schema.org",
+    "@type": "VideoObject",
+    name: PROMO_VIDEO_TITLE,
+    description: "Poddle's poodle shows you round the app: speed-ups, settings for each show, importing your history and your listening stats.",
+    thumbnailUrl: `${SITE_URL}/promo-poster.webp`,
+    uploadDate: "2026-10-23",
+    duration: "PT35S",
+    embedUrl: `https://www.youtube.com/embed/${PROMO_VIDEO_ID}`,
+  };
+  const json = JSON.stringify([app, video]).replace(/</g, "\\u003c");
   return <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: json }} />;
 }
 
@@ -75,9 +124,9 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <img className="hero-icon" src="/icon-192.png" alt="" width={76} height={76} />
             <h1>A podcast player I made for myself</h1>
             <p className="lede">
-              I used Overcast for years and Poddle is what I made to replace it. It's got one Up Next queue, speed-ups
-              that still sound like people talking, settings for each show and stats on how much I actually listen (a
-              lot, it turns out). Hopefully you like it too!
+              It's got one Up Next queue, speed-ups that still sound like people talking, settings for each show and
+              stats on how much I actually listen (a lot, it turns out). Now anyone can use it, so hopefully you like
+              it too!
             </p>
             {deleted && (
               <div className="notice" role="status">
@@ -103,6 +152,8 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
             <Phone shot={shots.nowPlaying} className="front" hero first />
           </div>
         </section>
+
+        <PromoVideo />
 
         <section className="features" aria-labelledby="features-title">
           <h2 id="features-title" className="section-title">What it does</h2>
@@ -132,14 +183,13 @@ export function Landing({ signedIn, deleted = false }: { signedIn: boolean; dele
 
           <article className="feature">
             <div className="feature-copy">
-              <h3>Bring everything over from Overcast</h3>
+              <h3>Bring your history with you</h3>
               <p>
-                If you're coming from Overcast like me, export "All data" from your Overcast account and Poddle brings
-                over your shows, what you've played, where you're up to, your starred episodes and your whole
-                listening history. So your stats start with everything you've already heard.
+                You can import your shows, what you've played, where you're up to, your starred episodes and your whole
+                listening history, so your stats start with everything you've already heard.
               </p>
             </div>
-            <div className="feature-media"><Phone shot={shots.importDone} /></div>
+            <div className="feature-media"><Phone shot={shots.podcast} /></div>
           </article>
 
           <article className="feature flip">

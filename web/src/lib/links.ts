@@ -28,6 +28,10 @@ export const CONTACT_EMAIL = "poddle@mikecann.app";
 
 export const GITHUB_URL = "https://github.com/mikecann/poddle";
 
+/** The promo video, unlisted on Mike's personal YouTube channel. */
+export const PROMO_VIDEO_ID = "cs5NGfffivc";
+export const PROMO_VIDEO_TITLE = "Poddle, a podcast player I made for myself";
+
 /** The site's public address, for canonical links and structured data. */
 export const SITE_URL = "https://poddle.mikecann.app";
 
