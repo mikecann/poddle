@@ -68,6 +68,61 @@ public enum DeletePlayed: String, Codable, Sendable, Hashable, CaseIterable {
     }
 }
 
+/// "Keep latest" (decisions.md, 25 Oct 2026): how many of a show's newest episodes stay in Up Next
+/// and on the device, like Overcast's episode limit. The server takes older unplayed ones out of
+/// Up Next when a new one lands or the setting changes; the download planner deletes older files.
+public enum KeepLatest: Sendable, Hashable {
+    /// No limit, the default.
+    case all
+    case latest(Int)
+
+    /// What the stepper offers: All, then 1 to 50. All sits below 1 so the usual choice for a
+    /// news show, 1, is one tap from the default.
+    public static let steps: [KeepLatest] = [.all] + (1...50).map(KeepLatest.latest)
+
+    /// The episode count, or nil for no limit.
+    public var count: Int? {
+        if case let .latest(n) = self { return n }
+        return nil
+    }
+
+    public var label: String {
+        switch self {
+        case .all: "All"
+        case .latest(1): "1 ep"
+        case let .latest(n): "\(n) eps"
+        }
+    }
+
+    /// One step along `steps`, stopping at the ends. A value that isn't on it (from another app or
+    /// a script) steps from the nearest one.
+    public func stepped(_ delta: Int) -> KeepLatest {
+        let i = Self.steps.firstIndex(of: self) ?? (count.map { min(max($0, 1), 50) } ?? 0)
+        return Self.steps[min(max(i + delta, 0), Self.steps.count - 1)]
+    }
+}
+
+extension KeepLatest: Codable {
+    // A number or "all", the same as the API. Caches written before "All" existed hold a plain
+    // number, so those still decode.
+    public init(from decoder: any Decoder) throws {
+        let c = try decoder.singleValueContainer()
+        if let n = try? c.decode(Int.self) { self = .latest(n) } else {
+            let s = try c.decode(String.self)
+            guard s == "all" else { throw DecodingError.dataCorruptedError(in: c, debugDescription: "Unknown keepLatest \(s)") }
+            self = .all
+        }
+    }
+
+    public func encode(to encoder: any Encoder) throws {
+        var c = encoder.singleValueContainer()
+        switch self {
+        case .all: try c.encode("all")
+        case let .latest(n): try c.encode(n)
+        }
+    }
+}
+
 /// One row with every default. Per-show values fall back to these live.
 public struct GlobalSettings: Codable, Sendable, Hashable {
     public var speed: Double
@@ -78,7 +133,8 @@ public struct GlobalSettings: Codable, Sendable, Hashable {
     public var skipOutro: Double
     public var autoAdd: AutoAdd
     public var autoDownload: Bool
-    public var keepLatest: Int
+    /// The default for every show (the API's global `keepLatest`).
+    public var keepLatest: KeepLatest
     public var notifications: Bool
     public var episodeOrder: EpisodeOrder
     public var autoArchive: AutoArchive
@@ -97,7 +153,7 @@ public struct GlobalSettings: Codable, Sendable, Hashable {
     public init(
         speed: Double = 1.0, smartSpeed: Bool = true, voiceBoost: Bool = true, timePitch: TimePitchAlgorithm = .timeDomain,
         skipIntro: Double = 0, skipOutro: Double = 0, autoAdd: AutoAdd = .inbox, autoDownload: Bool = true,
-        keepLatest: Int = 3, notifications: Bool = false, episodeOrder: EpisodeOrder = .newestFirst,
+        keepLatest: KeepLatest = .all, notifications: Bool = false, episodeOrder: EpisodeOrder = .newestFirst,
         autoArchive: AutoArchive = .never, skipBack: Double = 15, skipForward: Double = 30,
         headphoneMapping: HeadphoneMapping = .skip, autoRewind: Bool = true, autoAdvance: Bool = true,
         sleepFadeOut: Bool = true, shakeToRestartSleep: Bool = true, cellularDownloads: CellularDownloads = .wifiOnly,
@@ -126,7 +182,7 @@ public struct PodcastSettings: Codable, Sendable, Hashable {
     public var skipOutro: Double?
     public var autoAdd: AutoAdd?
     public var autoDownload: Bool?
-    public var keepLatest: Int?
+    public var keepLatest: KeepLatest?
     public var notifications: Bool?
     public var episodeOrder: EpisodeOrder?
     public var autoArchive: AutoArchive?
@@ -135,7 +191,7 @@ public struct PodcastSettings: Codable, Sendable, Hashable {
     public init(
         podcastId: String, speed: Double? = nil, smartSpeed: Bool? = nil, voiceBoost: Bool? = nil,
         timePitch: TimePitchAlgorithm? = nil, skipIntro: Double? = nil, skipOutro: Double? = nil,
-        autoAdd: AutoAdd? = nil, autoDownload: Bool? = nil, keepLatest: Int? = nil, notifications: Bool? = nil,
+        autoAdd: AutoAdd? = nil, autoDownload: Bool? = nil, keepLatest: KeepLatest? = nil, notifications: Bool? = nil,
         episodeOrder: EpisodeOrder? = nil, autoArchive: AutoArchive? = nil, skipChapterRules: [String]? = nil
     ) {
         self.podcastId = podcastId; self.speed = speed; self.smartSpeed = smartSpeed; self.voiceBoost = voiceBoost
@@ -174,7 +230,7 @@ public struct ResolvedSettings: Sendable, Hashable {
     public var skipOutro: Resolved<Double>
     public var autoAdd: Resolved<AutoAdd>
     public var autoDownload: Resolved<Bool>
-    public var keepLatest: Resolved<Int>
+    public var keepLatest: Resolved<KeepLatest>
     public var notifications: Resolved<Bool>
     public var episodeOrder: Resolved<EpisodeOrder>
     public var autoArchive: Resolved<AutoArchive>

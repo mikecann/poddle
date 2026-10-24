@@ -4,6 +4,7 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { asUser, type UserMutationCtx } from "./lib/auth";
 import { upsertEpisode, vIncomingEpisode, vIngestMode } from "./lib/ingest";
+import { trimToKeepLatest } from "./lib/keepLatest";
 import { hasSubscribers, subscribersOf } from "./lib/library";
 import { addToQueue } from "./lib/queue";
 import type { NewEpisodeRule } from "./lib/settings";
@@ -198,14 +199,17 @@ export const ingestEpisodes = internalMutation({
     for (const userId of subscribers) {
       const userCtx = asUser(ctx, userId);
       const settings = await resolvedSettingsFor(userCtx, a.podcastId);
+      let landed = false;
       for (const episode of qualifying) {
         if (!(await applyNewEpisodeRule(userCtx, episode, settings.newEpisodes, now))) continue;
         ruled.add(episode._id);
+        landed = true;
         // Only genuinely new episodes notify, never the first fetch of a show.
         if (a.mode === "normal" && settings.notifications) {
           await ctx.scheduler.runAfter(0, internal.apns.sendNewEpisodeAlert, { episodeId: episode._id, userId });
         }
       }
+      if (landed) await trimToKeepLatest(userCtx, a.podcastId, settings.keepLatestDownloaded, { system: systemAt(now) });
     }
 
     if (created || latest !== podcast.latestEpisodeAt) {
@@ -221,7 +225,8 @@ export const ingestEpisodes = internalMutation({
 
 /**
  * Spec §2.3 and decisions.md. `upNextTop` goes straight after the first item,
- * because the first item is what's playing and shouldn't be bumped.
+ * because the first item is what's playing and shouldn't be bumped. Callers then
+ * trim the show to its "Keep latest" (`trimToKeepLatest`), once for all the new episodes.
  */
 export async function applyNewEpisodeRule(
   ctx: UserMutationCtx,

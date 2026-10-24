@@ -435,6 +435,19 @@ enum SettingsMapping {
 
     static let gib = 1024.0 * 1024 * 1024
 
+    /// A number or "all". Anything else is "not set".
+    static func keepLatest(_ v: JSONValue?) -> KeepLatest? {
+        if let n = v?.number { return .latest(Int(n)) }
+        return v?.string == "all" ? .all : nil
+    }
+
+    static func api(_ k: KeepLatest) -> JSONValue {
+        switch k {
+        case .all: .string("all")
+        case let .latest(n): .number(Double(n))
+        }
+    }
+
     static func global(_ o: [String: JSONValue]) -> GlobalSettings {
         var g = GlobalSettings.defaults
         if let v = o["playbackSpeed"]?.number { g.speed = v }
@@ -445,7 +458,8 @@ enum SettingsMapping {
         if let v = o["skipOutroSeconds"]?.number { g.skipOutro = v }
         if let v = autoAdd(o["newEpisodes"]?.string) { g.autoAdd = v }
         if let v = o["autoDownload"]?.string { g.autoDownload = v != "never" }
-        if let v = o["keepLatestDownloaded"]?.number { g.keepLatest = Int(v) }
+        // Not the global row's `keepLatestDownloaded`: that's old apps' download count (decisions.md, 25 Oct).
+        if let v = keepLatest(o["keepLatest"]) { g.keepLatest = v }
         if let v = o["notifications"]?.bool { g.notifications = v }
         if let v = o["episodeOrder"]?.string.flatMap(EpisodeOrder.init(rawValue:)) { g.episodeOrder = v }
         if let v = autoArchive(o["autoArchiveUnplayedAfterDays"]?.number) { g.autoArchive = v }
@@ -472,7 +486,7 @@ enum SettingsMapping {
         s.skipOutro = o["skipOutroSeconds"]?.number
         s.autoAdd = autoAdd(o["newEpisodes"]?.string)
         s.autoDownload = o["autoDownload"]?.string.map { $0 != "never" }
-        s.keepLatest = o["keepLatestDownloaded"]?.number.map { Int($0) }
+        s.keepLatest = keepLatest(o["keepLatestDownloaded"])
         s.notifications = o["notifications"]?.bool
         s.episodeOrder = o["episodeOrder"]?.string.flatMap(EpisodeOrder.init(rawValue:))
         s.autoArchive = autoArchive(o["autoArchiveUnplayedAfterDays"]?.number)
@@ -491,7 +505,7 @@ enum SettingsMapping {
             "skipOutroSeconds": JSONValue(s.skipOutro),
             "newEpisodes": JSONValue(s.autoAdd.map(api)),
             "autoDownload": JSONValue(s.autoDownload.map { $0 ? "upNext" : "never" }),
-            "keepLatestDownloaded": JSONValue(s.keepLatest.map(Double.init)),
+            "keepLatestDownloaded": s.keepLatest.map(api) ?? .null,
             "notifications": JSONValue(s.notifications),
             "episodeOrder": JSONValue(s.episodeOrder?.rawValue),
             "autoArchiveUnplayedAfterDays": JSONValue(s.autoArchive.map(api)),
@@ -509,7 +523,7 @@ enum SettingsMapping {
             "skipOutroSeconds": .number(g.skipOutro),
             "newEpisodes": .string(api(g.autoAdd)),
             "autoDownload": .string(g.autoDownload ? "upNext" : "never"),
-            "keepLatestDownloaded": .number(Double(g.keepLatest)),
+            "keepLatest": api(g.keepLatest),
             "notifications": .bool(g.notifications),
             "episodeOrder": .string(g.episodeOrder.rawValue),
             "autoArchiveUnplayedAfterDays": .number(api(g.autoArchive)),

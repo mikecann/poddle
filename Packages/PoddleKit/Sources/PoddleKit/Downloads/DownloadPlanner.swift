@@ -21,6 +21,9 @@ public enum DownloadPlanner {
     public static let protectedQueueCount = 3
     /// How recent a priority show's episode has to be to count as new.
     public static let newEpisodeWindow: TimeInterval = 7 * 86_400
+    /// New episodes auto-downloaded from a priority show whose "Keep latest" is All: the old
+    /// default limit, so All means "don't trim", not "download a week of a daily news show".
+    public static let priorityDownloadsWithoutLimit = 3
 
     // MARK: Auto-download
 
@@ -40,9 +43,10 @@ public enum DownloadPlanner {
 
     /// The first `upNextCount` Up Next items, then new episodes from priority shows (the show's
     /// newest `keepLatest`, published in the last week). Only shows with auto-download on.
+    /// `keepLatest` nil is All: `priorityDownloadsWithoutLimit` of them.
     public static func autoDownloads(
         queue: [Candidate], episodes: [Candidate], upNextCount: Int = 10,
-        autoDownload: (String) -> Bool, isPriority: (String) -> Bool, keepLatest: (String) -> Int, now: Millis
+        autoDownload: (String) -> Bool, isPriority: (String) -> Bool, keepLatest: (String) -> Int?, now: Millis
     ) -> [String] {
         var wanted: [String] = []
         var seen = Set<String>()
@@ -58,7 +62,8 @@ public enum DownloadPlanner {
             c.hasEnclosure && !c.played && !c.archived && c.pubDate >= cutoff && isPriority(c.podcastId) && autoDownload(c.podcastId)
         }
         for (podcastId, eps) in Dictionary(grouping: fresh, by: \.podcastId).sorted(by: { $0.key < $1.key }) {
-            for c in eps.sorted(by: { $0.pubDate > $1.pubDate }).prefix(max(0, keepLatest(podcastId))) { add(c) }
+            let limit = keepLatest(podcastId) ?? priorityDownloadsWithoutLimit
+            for c in eps.sorted(by: { $0.pubDate > $1.pubDate }).prefix(max(0, limit)) { add(c) }
         }
         return wanted
     }
@@ -68,10 +73,11 @@ public enum DownloadPlanner {
     /// Files to delete, in the order the rules pick them:
     /// 1. Played episodes, `deletePlayedAfter` seconds after they were played (nil = never).
     /// 2. Per show, everything beyond its `keepLatest` newest. Up Next items don't count and are kept.
+    ///    A show with no limit (`keepLatest` nil, "All") skips this step.
     /// 3. If still over `capBytes`: files not in Up Next (played first, then oldest), then Up Next
     ///    from the bottom. The top `protectedQueueCount` items and whatever's playing are never deleted.
     public static func filesToDelete(
-        files: [DownloadedFile], queue: [String], playing: String?, keepLatest: (String) -> Int,
+        files: [DownloadedFile], queue: [String], playing: String?, keepLatest: (String) -> Int?,
         deletePlayedAfter: TimeInterval?, capBytes: Int64, now: Millis
     ) -> [String] {
         let queuePosition = Dictionary(queue.enumerated().map { ($1, $0) }, uniquingKeysWith: { a, _ in a })
@@ -92,7 +98,8 @@ public enum DownloadPlanner {
 
         let loose = files.filter { queuePosition[$0.episodeId] == nil && !doomedSet.contains($0.episodeId) }
         for (podcastId, showFiles) in Dictionary(grouping: loose, by: \.podcastId) {
-            for f in showFiles.sorted(by: { $0.pubDate > $1.pubDate }).dropFirst(max(0, keepLatest(podcastId))) { delete(f) }
+            guard let keep = keepLatest(podcastId) else { continue }
+            for f in showFiles.sorted(by: { $0.pubDate > $1.pubDate }).dropFirst(max(0, keep)) { delete(f) }
         }
 
         var used = files.filter { !doomedSet.contains($0.episodeId) }.reduce(Int64(0)) { $0 + $1.bytes }

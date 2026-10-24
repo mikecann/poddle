@@ -226,13 +226,13 @@ Per-show fields (each one "use default" or an explicit value):
 | `skipOutroSeconds` | Double | 0 |
 | `newEpisodes` | `"upNextBottom" \| "upNextTop" \| "none"` (`"inbox"` is deprecated: still accepted, stored as `upNextBottom` on write, and a stored one resolves to and behaves as `upNextBottom`) | `upNextBottom` |
 | `autoDownload` | `"never" \| "upNext" \| "allNew"` | `upNext` |
-| `keepLatestDownloaded` | Int | 3 |
+| `keepLatestDownloaded` | Int (1–50) or `"all"` | `"all"`, from the global `keepLatest` (not the global row's own `keepLatestDownloaded`, below). How many of the show's newest episodes stay in Up Next and downloaded: see "Keep latest" below. |
 | `notifications` | Bool | false |
 | `episodeOrder` | `"newestFirst" \| "oldestFirst"` | `newestFirst` |
 | `autoArchiveUnplayedAfterDays` | Int, 0 = never | 0 |
 | `skipChapterTitles` | [String] (case-insensitive substrings) | [] |
 
-Global-only fields: `skipBackSeconds` (15), `skipForwardSeconds` (30), `remoteNextPrevious` (`"skip" \| "chapter"`, `skip`), `autoRewind` (true), `advanceToNext` (true), `upNextAutoDownloadCount` (10), `cellularDownloads` (`"never" \| "ask" \| "always"`, `never`), `deletePlayedAfterHours` (24), `storageCapBytes` (5 GiB), `sleepFadeOut` (true), `shakeToRestartSleep` (true), `timeZone` (IANA, `"Australia/Sydney"`; stats bucket days in this zone when a session has no offset).
+Global-only fields: `keepLatest` (Int or `"all"`, `"all"`: the default for every show's `keepLatestDownloaded`), `skipBackSeconds` (15), `skipForwardSeconds` (30), `remoteNextPrevious` (`"skip" \| "chapter"`, `skip`), `autoRewind` (true), `advanceToNext` (true), `upNextAutoDownloadCount` (10), `cellularDownloads` (`"never" \| "ask" \| "always"`, `never`), `deletePlayedAfterHours` (24), `storageCapBytes` (5 GiB), `sleepFadeOut` (true), `shakeToRestartSleep` (true), `timeZone` (IANA, `"Australia/Sydney"`; stats bucket days in this zone when a session has no offset).
 
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|
@@ -243,6 +243,12 @@ Global-only fields: `skipBackSeconds` (15), `skipForwardSeconds` (30), `remoteNe
 | `settings:updatePodcast` | mutation | `podcastId`, `patch: { [field]?: value \| null }`, `at` | `[String]` fields applied. A value sets the override; `null` resets to "use default". |
 
 Both updates are LWW **per field**. The speed sheet's scope switch is client logic: write to `updatePodcast` or `updateGlobal` depending on scope.
+
+**Keep latest** (decisions.md, 25 Oct 2026) works like Overcast's episode limit: a show's resolved `keepLatestDownloaded` limits its episodes in Up Next as well as on the device.
+
+- **Up Next (server):** of the show's episodes in Up Next, the newest N by `pubDate` stay and the older ones come out, exactly as `queue:remove` would (a `deletions` tombstone; not played, not archived, still on the show's page). Some always stay: an episode that's been started (it has a saved position), played or starred, and the first item in Up Next (what's playing). `"all"` takes nothing out. It runs when a new episode of the show lands in Up Next (the poller's new-episode rule and the first fetch after subscribing, at server time minus 10 minutes but never before the item's own last change, so it always applies), when `updatePodcast` changes the show's `keepLatestDownloaded` (or resets it), and when `updateGlobal` changes `keepLatest` (every show in Up Next without its own value). The settings trims use the mutation's `at`, so an item moved or added after a replayed change stays. Adding an episode by hand never trims.
+- **Downloads (app):** a show set to N keeps its newest N files outside Up Next, as before. `"all"` deletes nothing by this rule (deleting played files and the storage cap still apply), and a priority show set to `"all"` auto-downloads its newest 3 from the last week (`DownloadPlanner.priorityDownloadsWithoutLimit`).
+- **Old apps** (1.0.0 and earlier) read this field with `.number`, so they see `"all"` as "not set" and fall back to their built-in 3, exactly what they did before. They also read and write the global row's own `keepLatestDownloaded` (default 3) as their download count. The server and new apps ignore that one: stored values were set when it only meant downloads, so it never trims Up Next. A per-show number from an old app does limit Up Next.
 
 ### Listening sessions (`sessions:*`)
 

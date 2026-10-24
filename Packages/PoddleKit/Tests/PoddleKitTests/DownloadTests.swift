@@ -155,6 +155,28 @@ private let sydney: Calendar = {
         #expect(doomed == ["played", "old"])
     }
 
+    @Test func keepLatestAllDeletesNothingButStillCleansUp() {
+        // "All" (nil): no show's extras go, but played files and the cap still apply.
+        let files = [
+            file("a1", gb: 1, daysOld: 1), file("a2", gb: 1, daysOld: 2), file("a3", gb: 1, daysOld: 3), file("a4", gb: 1, daysOld: 4),
+            file("played", gb: 1, daysOld: 5, playedHoursAgo: 25),
+        ]
+        let doomed = DownloadPlanner.filesToDelete(
+            files: files, queue: [], playing: nil, keepLatest: { _ in nil }, deletePlayedAfter: 86_400, capBytes: 5 * gb, now: nowMs)
+        #expect(doomed == ["played"])
+        let overCap = DownloadPlanner.filesToDelete(
+            files: files, queue: [], playing: nil, keepLatest: { _ in nil }, deletePlayedAfter: nil, capBytes: 3 * gb, now: nowMs)
+        #expect(overCap == ["played", "a4"])
+    }
+
+    @Test func priorityShowWithAllStillDownloadsOnlyTheNewestFew() {
+        let episodes = (1...6).map { DownloadPlanner.Candidate(episodeId: "p\($0)", podcastId: "prio", pubDate: nowMs - Double($0) * day / 2) }
+        let wanted = DownloadPlanner.autoDownloads(
+            queue: [], episodes: episodes, autoDownload: { _ in true }, isPriority: { _ in true }, keepLatest: { _ in nil }, now: nowMs)
+        #expect(wanted == ["p1", "p2", "p3"])
+        #expect(DownloadPlanner.priorityDownloadsWithoutLimit == 3)
+    }
+
     @Test func neverDeletesWhatsPlaying() {
         let files = [file("playing", playedHoursAgo: 48)]
         let doomed = DownloadPlanner.filesToDelete(

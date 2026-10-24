@@ -162,10 +162,11 @@ struct SettingsView: View {
                         downloadNetwork(downloader)
                     }
                     toggle("Auto-download Up Next", \.autoDownload, subtitle: "The first 10, plus new episodes from priority shows")
-                    Cell(title: "Keep latest") {
-                        WellStepper(text: "\(g.keepLatest) eps",
-                                    onDecrement: { store.updateGlobal { $0.keepLatest = max(1, $0.keepLatest - 1) } },
-                                    onIncrement: { store.updateGlobal { $0.keepLatest = min(50, $0.keepLatest + 1) } })
+                    Cell(title: "Keep latest", subtitle: "How many per show stay in Up Next and downloaded") {
+                        WellStepper(text: g.keepLatest.label,
+                                    onDecrement: { store.updateGlobal { $0.keepLatest = $0.keepLatest.stepped(-1) } },
+                                    onIncrement: { store.updateGlobal { $0.keepLatest = $0.keepLatest.stepped(1) } },
+                                    id: "settings.keepLatest")
                     }
                     picker("Delete played files", \.deletePlayed, DeletePlayed.allCases, \.label)
                     Cell(title: "Storage cap", subtitle: storageSubtitle) {

@@ -269,6 +269,8 @@ export default defineSchema({
   })
     .index("by_user_orderKey", ["userId", "orderKey"])
     .index("by_user_episode", ["userId", "episodeId"])
+    /** A show's episodes in Up Next, for its "Keep latest" limit (lib/keepLatest.ts). */
+    .index("by_user_podcast", ["userId", "podcastId"])
     .index("by_user_updatedAt", ["userId", "updatedAt"]),
 
   /** Tombstones so `sync:changes` can report deletions. */

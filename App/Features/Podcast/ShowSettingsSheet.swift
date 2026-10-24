@@ -69,9 +69,9 @@ struct ShowSettingsSheet: View {
                         label("Auto-download", isOverride: s.autoDownload != nil)
                     }
                     .toggleStyle(.poddle).padding(.horizontal, 16).frame(minHeight: 50)
-                    Cell(title: "Keep latest") {
-                        WellStepper(text: "\(r.keepLatest.value) eps", gold: s.keepLatest != nil,
-                                    onDecrement: { stepKeep(-1) }, onIncrement: { stepKeep(1) })
+                    Cell(title: "Keep latest", subtitle: "How many stay in Up Next and downloaded") {
+                        WellStepper(text: r.keepLatest.value.label, gold: s.keepLatest != nil,
+                                    onDecrement: { stepKeep(-1) }, onIncrement: { stepKeep(1) }, id: "showSettings.keepLatest")
                     }
                     enumMenu("Episode order", key: \.episodeOrder, all: EpisodeOrder.allCases, global: g.episodeOrder, label: \.label)
                     Toggle(isOn: Binding(get: { r.notifications.value }, set: { v in update { $0.notifications = v == g.notifications ? nil : v } })) {
@@ -140,7 +140,7 @@ struct ShowSettingsSheet: View {
 
     private func stepKeep(_ delta: Int) {
         update { s in
-            let next = min(50, max(1, (s.keepLatest ?? g.keepLatest) + delta))
+            let next = (s.keepLatest ?? g.keepLatest).stepped(delta)
             s.keepLatest = next == g.keepLatest ? nil : next
         }
     }
