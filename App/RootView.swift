@@ -55,6 +55,7 @@ private struct PhoneRoot: View {
     @Environment(AppModel.self) private var app
     @Environment(\.player) private var player
     @AppStorage(CompanionSettings.showKey) private var showPoddle = true
+    @State private var barHeight: CGFloat = 0
 
     var body: some View {
         @Bindable var app = app
@@ -68,7 +69,9 @@ private struct PhoneRoot: View {
                     .environment(\.companionActive, app.tab == tab && !covered)
             }
         }
-        .safeAreaInset(edge: .bottom, spacing: 0) {
+        .environment(\.bottomBarHeight, barHeight)
+        // An overlay that each screen makes room for (`bottomBarRoom`), not a `safeAreaInset`.
+        .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
                 UndoToastView().padding(.horizontal, 10)
                 MobileAllowanceChip()
@@ -91,6 +94,7 @@ private struct PhoneRoot: View {
             .environment(\.companionActive, !covered)
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: player.item?.id)
             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: app.undo.toast?.id)
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
         }
         .background(PaperBackground())
     }
@@ -99,6 +103,7 @@ private struct PhoneRoot: View {
 /// iPad and Mac: a sidebar with the same four sections, mini player under the detail.
 private struct SidebarRoot: View {
     @Environment(AppModel.self) private var app
+    @State private var barHeight: CGFloat = 0
 
     var body: some View {
         @Bindable var app = app
@@ -124,7 +129,8 @@ private struct SidebarRoot: View {
         } detail: {
             TabRoot(tab: app.tab)
                 .id(app.tab)
-                .safeAreaInset(edge: .bottom, spacing: 0) {
+                .environment(\.bottomBarHeight, barHeight)
+                .overlay(alignment: .bottom) {
                     VStack(spacing: 8) {
                         UndoToastView()
                         MobileAllowanceChip()
@@ -140,6 +146,7 @@ private struct SidebarRoot: View {
                         .frame(maxWidth: 560)
                         .padding(.horizontal, 12)
                         .padding(.bottom, 10)
+                        .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { barHeight = $0 }
                 }
                 .background(PaperBackground())
         }
@@ -174,10 +181,28 @@ struct TabRoot: View {
                 }
                 .background(Palette.paper.ignoresSafeArea())
                 .hidesSystemNavBar()
+                .bottomBarRoom()
             }
             .background(Palette.paper.ignoresSafeArea())
             .hidesSystemNavBar()
+            .bottomBarRoom()
         }
+    }
+}
+
+extension EnvironmentValues {
+    /// How tall the mini player, tab bar and Undo toast are, from the bottom of the safe area.
+    @Entry var bottomBarHeight: CGFloat = 0
+}
+
+/// Room at the bottom of a screen for the bar over it, so the last row scrolls clear of the mini
+/// player while rows still pass under the bar's fade on the way. It has to be applied inside the
+/// `NavigationStack`: the stack doesn't pass a `safeAreaInset` from outside it on to its screens,
+/// whose lists then only made room for the home indicator and kept their last rows under the bar.
+private struct BottomBarRoom: ViewModifier {
+    @Environment(\.bottomBarHeight) private var height
+    func body(content: Content) -> some View {
+        content.safeAreaPadding(.bottom, height)
     }
 }
 
@@ -205,6 +230,8 @@ extension View {
         toolbar(.hidden, for: .windowToolbar)
         #endif
     }
+
+    fileprivate func bottomBarRoom() -> some View { modifier(BottomBarRoom()) }
 
     /// Cream sheet with the grabber, matching the design's sheets.
     func poddleSheet(detents: Set<PresentationDetent> = [.large]) -> some View {
