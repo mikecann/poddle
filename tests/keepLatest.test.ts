@@ -102,6 +102,21 @@ describe("a new episode", () => {
     await publish(t, a.podcastId, 3, "A");
     expect(await upNextWithShows(t)).toEqual(["A Ep 0", "B Ep 0", "B Ep 1", "B Ep 2", "A Ep 3"]);
   });
+
+  test("a retried add from before the trim doesn't bring the episode back", async () => {
+    const t = setup();
+    await queuedShow(t, 1, "B");
+    const { podcastId, episodeIds } = await seedShow(t, 3, { title: "A" });
+    await keep(t, podcastId, 1);
+    // Added by hand moments ago, so its add is newer than the poller's system time.
+    const addedAt = Date.now();
+    await t.mutation(api.queue.add, { episodeId: episodeIds[0]!, position: "bottom", at: addedAt });
+    await publish(t, podcastId, 3, "A");
+    expect(await upNextWithShows(t)).toEqual(["B Ep 0", "A Ep 3"]);
+    // The phone never heard back about the add and sends it again: the trim still wins.
+    expect(await t.mutation(api.queue.add, { episodeId: episodeIds[0]!, position: "bottom", at: addedAt })).toBe(false);
+    expect(await upNextWithShows(t)).toEqual(["B Ep 0", "A Ep 3"]);
+  });
 });
 
 describe("All", () => {

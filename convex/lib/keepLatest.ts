@@ -16,7 +16,8 @@ import { globalSettingsDoc, overridesOf, podcastSettingsDoc, resolvedSettingsFor
  * Trims one show's Up Next to its limit and returns how many came out. `at` is the LWW time of
  * the removals: a settings change's own `at`, so anything queued or moved after it stays, or
  * `{ system: systemAt(now) }` when a new episode arrives. That one takes out whatever is there at
- * that moment, recorded no earlier than each item's last change so the removal always applies.
+ * that moment, recorded just after each item's last change so the removal always applies, and a
+ * retried add with that change's own time (the phone never heard back) still loses to it.
  */
 export async function trimToKeepLatest(
   ctx: MutationCtx,
@@ -52,7 +53,7 @@ export async function trimToKeepLatest(
       .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", item.episodeId))
       .unique();
     if (state && (state.position > 0 || state.played || state.starred)) continue;
-    const removeAt = typeof at === "number" ? at : Math.max(at.system, item.orderUpdatedAt);
+    const removeAt = typeof at === "number" ? at : Math.max(at.system, item.orderUpdatedAt + 1);
     if (await removeFromQueue(ctx, item.episodeId, removeAt)) removed++;
   }
   return removed;
