@@ -28,6 +28,15 @@ export const vAutoDownload = v.union(
 );
 export const vEpisodeOrder = v.union(v.literal("newestFirst"), v.literal("oldestFirst"));
 
+/**
+ * "Keep latest" (decisions.md, 25 Oct 2026): a show's newest N episodes stay in Up Next and on
+ * the device, like Overcast's episode limit, or `"all"` for no limit. Old apps read the field
+ * with `.number`, so `"all"` looks like "not set" to them and they keep their built-in 3. A
+ * number for "all" (0 or -1) would make them delete every download outside Up Next.
+ */
+export const vKeepLatest = v.union(v.number(), v.literal("all"));
+export type KeepLatest = Infer<typeof vKeepLatest>;
+
 /** Settings a show can override. Keys here are shared with the global row. */
 export const showSettingFields = {
   playbackSpeed: v.number(),
@@ -38,7 +47,8 @@ export const showSettingFields = {
   skipOutroSeconds: v.number(),
   newEpisodes: vNewEpisodeRule,
   autoDownload: vAutoDownload,
-  keepLatestDownloaded: v.number(),
+  /** Per show. The global default lives in `keepLatest`, not here: see `globalKeyFor`. */
+  keepLatestDownloaded: vKeepLatest,
   notifications: v.boolean(),
   episodeOrder: vEpisodeOrder,
   /** 0 means never. */
@@ -65,6 +75,8 @@ export const globalOnlyFields = {
   shakeToRestartSleep: v.boolean(),
   /** IANA zone used to bucket stats into local days, e.g. "Australia/Sydney". */
   timeZone: v.string(),
+  /** The default for every show's `keepLatestDownloaded`. */
+  keepLatest: vKeepLatest,
 };
 export const globalSettingFields = { ...showSettingFields, ...globalOnlyFields };
 export type GlobalSettings = {
@@ -82,6 +94,9 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   skipOutroSeconds: 0,
   newEpisodes: "upNextBottom",
   autoDownload: "upNext",
+  // Only old apps read the global row's `keepLatestDownloaded`, for their downloads. It used to
+  // be the default for every show, but stored values were set when it only meant downloads, so
+  // the default "Keep latest" moved to `keepLatest` (decisions.md, 25 Oct 2026).
   keepLatestDownloaded: 3,
   notifications: false,
   episodeOrder: "newestFirst",
@@ -99,7 +114,16 @@ export const DEFAULT_GLOBAL_SETTINGS: GlobalSettings = {
   sleepFadeOut: true,
   shakeToRestartSleep: true,
   timeZone: "Australia/Sydney",
+  keepLatest: "all",
 };
+
+/**
+ * Where a show setting's default comes from on the global row: the same key, except
+ * `keepLatestDownloaded`, whose default is `keepLatest` (see DEFAULT_GLOBAL_SETTINGS).
+ */
+export function globalKeyFor(key: ShowSettingKey): GlobalSettingKey {
+  return key === "keepLatestDownloaded" ? "keepLatest" : key;
+}
 
 /** Stored per-show overrides: absent = inherit. */
 export const podcastOverrideFields = Object.fromEntries(
@@ -136,7 +160,7 @@ export function resolveShowSettings(
   for (const key of showSettingKeys) {
     const o = overrides?.[key];
     if (o === undefined || o === null) {
-      out[key] = g[key];
+      out[key] = g[globalKeyFor(key)];
       inherited.push(key);
     } else {
       out[key] = key === "newEpisodes" ? effectiveRule(o as NewEpisodeRule) : o;

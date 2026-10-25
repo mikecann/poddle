@@ -225,7 +225,7 @@ public enum MockData {
             "pod_dwarkesh": PodcastSettings(podcastId: "pod_dwarkesh", speed: 1.4),
             "pod_conan": PodcastSettings(
                 podcastId: "pod_conan", speed: 1.2, voiceBoost: false, skipIntro: 45, autoAdd: .upNextBottom,
-                keepLatest: 5, notifications: false
+                keepLatest: .latest(5), notifications: false
             ),
             "pod_syntax": PodcastSettings(podcastId: "pod_syntax", autoAdd: .upNextTop),
             "pod_mike": PodcastSettings(podcastId: "pod_mike", autoAdd: .upNextTop, notifications: true),

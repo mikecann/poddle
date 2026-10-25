@@ -251,16 +251,21 @@ struct WellStepper: View {
     var gold = false
     var onDecrement: () -> Void
     var onIncrement: () -> Void
+    /// For UI tests: `<id>.less`, `<id>.value` and `<id>.more`.
+    var id: String? = nil
 
     var body: some View {
         HStack(spacing: 0) {
             RepeatButton(systemImage: "minus", label: "Less", action: onDecrement)
+                .accessibilityIdentifier(id.map { "\($0).less" } ?? "")
             Text(text)
                 .font(.rounded(14, .bold)).monospacedDigit()
                 .foregroundStyle(muted ? Palette.ink3 : gold ? Palette.goldInk : Palette.ink)
                 .frame(minWidth: 46)
                 .contentTransition(.numericText())
+                .accessibilityIdentifier(id.map { "\($0).value" } ?? "")
             RepeatButton(systemImage: "plus", label: "More", action: onIncrement)
+                .accessibilityIdentifier(id.map { "\($0).more" } ?? "")
         }
         .frame(height: 34)
         .well(Capsule())

@@ -10,6 +10,7 @@ import {
   resolveShowSettings,
   showSettingFields,
 } from "./lib/settings";
+import { trimInheritingShows, trimShowAfterChange } from "./lib/keepLatest";
 import { ensureLibraryRow } from "./lib/library";
 import { globalSettingsDoc, overridesOf, podcastSettingsDoc } from "./lib/settingsDb";
 
@@ -69,6 +70,9 @@ export const updateGlobal = userMutation({
     const now = Date.now();
     if (existing) await ctx.db.patch(existing._id, { ...values, fieldTimes: times, updatedAt: now });
     else await ctx.db.insert("globalSettings", { userId: ctx.userId, ...stripUndefined(values), fieldTimes: times, updatedAt: now });
+    // A new default "Keep latest" applies to Up Next straight away, not just when the next episode
+    // lands. Old apps' `keepLatestDownloaded` is only their download count and trims nothing.
+    if (applied.includes("keepLatest")) await trimInheritingShows(ctx, at);
     return applied;
   },
 });
@@ -86,6 +90,8 @@ export const updatePodcast = userMutation({
       await ensureLibraryRow(ctx, podcastId);
       await ctx.db.insert("podcastSettings", { userId: ctx.userId, podcastId, ...stripUndefined(values), fieldTimes: times, updatedAt: now });
     }
+    // Setting a show to keep 1 takes its older episodes out of Up Next now (decisions.md).
+    if (applied.includes("keepLatestDownloaded")) await trimShowAfterChange(ctx, podcastId, at);
     return applied;
   },
 });

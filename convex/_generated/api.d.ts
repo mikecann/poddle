@@ -29,6 +29,7 @@ import type * as lib_feedFetch from "../lib/feedFetch.js";
 import type * as lib_feedParser from "../lib/feedParser.js";
 import type * as lib_identity from "../lib/identity.js";
 import type * as lib_ingest from "../lib/ingest.js";
+import type * as lib_keepLatest from "../lib/keepLatest.js";
 import type * as lib_library from "../lib/library.js";
 import type * as lib_meta from "../lib/meta.js";
 import type * as lib_opml from "../lib/opml.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   "lib/feedParser": typeof lib_feedParser;
   "lib/identity": typeof lib_identity;
   "lib/ingest": typeof lib_ingest;
+  "lib/keepLatest": typeof lib_keepLatest;
   "lib/library": typeof lib_library;
   "lib/meta": typeof lib_meta;
   "lib/opml": typeof lib_opml;

@@ -52,7 +52,7 @@ It writes its addresses to `e2e/.runtime/world.json`, which both harnesses read.
 
 ### The world API
 
-Both harnesses arrange and inspect the backend through `POST <fixtures>/_world/<op>` (`e2e/world/worldApi.mjs`): `reset`, `signUp`, `follow` (with exactly the Up Next you ask for), `queue`, `publish` (a new episode in a fixture feed, fetched straight away), `setNewEpisodes`, `setGlobal`, `setPosition`, `overcastExport`, and lookups (`episode`, `podcast`, `upNext`, `library`, `pastShows`, `catalog`, `stats`, `user`). It acts through the public functions with the admin path, the way the scripts do. Shows and episodes are named by their fixture titles.
+Both harnesses arrange and inspect the backend through `POST <fixtures>/_world/<op>` (`e2e/world/worldApi.mjs`): `reset`, `signUp`, `follow` (with exactly the Up Next you ask for), `queue`, `publish` (a new episode in a fixture feed, fetched straight away), `setNewEpisodes`, `setShowSettings` (any of a show's own settings), `setGlobal`, `setPosition`, `overcastExport`, and lookups (`episode`, `podcast`, `upNext`, `library`, `pastShows`, `catalog`, `stats`, `user`). It acts through the public functions with the admin path, the way the scripts do. Shows and episodes are named by their fixture titles.
 
 ### Each scenario starts clean
 

@@ -5,12 +5,13 @@ import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { feedStateFor, ensureFeedState, applyNewEpisodeRule } from "./feeds";
 import { asUser, userMutation, userQuery, type UserMutationCtx, type UserQueryCtx } from "./lib/auth";
+import { trimToKeepLatest } from "./lib/keepLatest";
 import { ensureLibraryRow, hasSubscribers, podcastView, subscriptionFor } from "./lib/library";
 import { looksPrivate, normalizeFeedUrl } from "./lib/parse";
 import { resolveShowSettings, resolveGlobalSettings, showSettingFields } from "./lib/settings";
 import { globalSettingsDoc, overridesOf, podcastSettingsDoc, resolvedSettingsFor } from "./lib/settingsDb";
 import { episodeRows } from "./lib/rows";
-import { logEvent, setInbox, setPlayed } from "./lib/state";
+import { logEvent, setInbox, setPlayed, systemAt } from "./lib/state";
 import { vEpisodeRow, vPodcastDoc } from "./lib/validators";
 
 // Library: subscriptions, past shows, a show's page. Shows are shared; whether
@@ -212,7 +213,10 @@ async function ruleNewestEpisode(ctx: UserMutationCtx, podcastId: Id<"podcasts">
     .first();
   if (!newest || newest.isGhost) return;
   const settings = await resolvedSettingsFor(ctx, podcastId);
-  await applyNewEpisodeRule(ctx, newest, settings.newEpisodes, Date.now());
+  const now = Date.now();
+  if (await applyNewEpisodeRule(ctx, newest, settings.newEpisodes, now)) {
+    await trimToKeepLatest(ctx, podcastId, settings.keepLatestDownloaded, { system: systemAt(now) });
+  }
 }
 
 /** Unsubscribe. History, queue entries and stats are kept; its Inbox entries are cleared. */

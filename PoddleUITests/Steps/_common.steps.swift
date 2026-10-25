@@ -26,6 +26,7 @@ final class CommonSteps: StepModule {
         // MARK: What the server has
 
         s.then("Up Next on the server is {string}") { w, a in try serverUpNext(w, a.values) }
+        s.then("Up Next on the server is {string} and {string}") { w, a in try serverUpNext(w, a.values) }
         s.then("Up Next on the server is {string}, {string} and {string}") { w, a in try serverUpNext(w, a.values) }
         s.then("Up Next on the server is {string}, {string}, {string} and {string}") { w, a in try serverUpNext(w, a.values) }
         s.then("{string} is played") { w, a in try episodeState(w, a.string(0), "played", true) }

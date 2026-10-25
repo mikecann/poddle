@@ -170,6 +170,13 @@ export function worldApi({ convexUrl, adminToken, fixtures }) {
       return {};
     },
 
+    /** Any of a show's own settings, e.g. `{ keepLatestDownloaded: 1 }` (null = use default). */
+    async setShowSettings({ email, show, patch }) {
+      const podcastId = await podcastIdOf(email, show);
+      await client.mutation("settings:updatePodcast", { admin: admin(email), podcastId, patch, at: now() });
+      return {};
+    },
+
     async setGlobal({ email, patch }) {
       await client.mutation("settings:updateGlobal", { admin: admin(email), patch, at: now() });
       return {};

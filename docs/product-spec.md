@@ -221,7 +221,7 @@ Every setting is **Use default** (inherits the global value) or an explicit valu
 | Auto-add new episodes | Inbox |
 | Priority | Off |
 | Auto-download | On for Up Next items only |
-| Keep latest N downloaded | 3 |
+| Keep latest N (Up Next and downloads) | All (decisions.md, 25 Oct 2026) |
 | Notifications | Off (on for shows imported with `notifications="1"`) |
 | Episode order on podcast page | Newest first |
 | Auto-archive unplayed after | Never |
@@ -275,7 +275,9 @@ The ★ items are configurable. Leading swipe means left to right.
   - Download the first **10** Up Next items automatically.
   - Priority shows: download new episodes as they arrive.
   - Other shows: no download until queued.
-  - Per show: "keep latest N".
+  - Per show: "Keep latest N" (All, or 1 to 50; default All). Like Overcast's episode limit, it covers Up Next as well as downloads (decisions.md, 25 Oct 2026):
+    - **Up Next:** when a new episode of the show lands in Up Next, or the setting changes, the show's older unplayed episodes beyond its newest N come out of Up Next (the normal remove: not played, not archived). One that's been started or starred, and the first item (what's playing), always stay. Adding one by hand doesn't trim.
+    - **Downloads:** files beyond the newest N that aren't in Up Next are deleted. All deletes nothing by this rule. A priority show downloads its newest N new episodes, or 3 when it's set to All.
 - Streaming: allowed. Pressing play on a non-downloaded episode streams it and downloads at the same time (§2.4).
 - Cleanup:
   - Delete the file **24 h after it's marked played** (setting: immediately, 24 h, 1 week, never).

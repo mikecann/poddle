@@ -370,7 +370,7 @@ public final class PoddleStore {
         let wanted = DownloadPlanner.autoDownloads(
             queue: queueIds.compactMap(candidate), episodes: subscribed.compactMap { candidate($0.id) },
             autoDownload: { self.resolved($0).autoDownload.value }, isPriority: { self.resolved($0).isPriority },
-            keepLatest: { self.resolved($0).keepLatest.value }, now: nowMillis)
+            keepLatest: { self.resolved($0).keepLatest.value.count }, now: nowMillis)
         downloader.setOrder(queueIds)
         let used = downloader.storageUsed
         for id in wanted where downloader.download(for: id) == nil && used < capBytes {
@@ -385,7 +385,7 @@ public final class PoddleStore {
                                   playedAt: st.played ? (st.playedAt ?? st.updatedAt) : nil)
         }
         let doomed = DownloadPlanner.filesToDelete(
-            files: files, queue: queueIds, playing: playing, keepLatest: { self.resolved($0).keepLatest.value },
+            files: files, queue: queueIds, playing: playing, keepLatest: { self.resolved($0).keepLatest.value.count },
             deletePlayedAfter: g.deletePlayed.interval, capBytes: capBytes, now: nowMillis)
         for id in doomed { downloader.remove(id) }
     }
