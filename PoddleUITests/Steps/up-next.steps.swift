@@ -24,5 +24,33 @@ final class UpNextSteps: StepModule {
         s.when("they swipe {string} left to remove it") { w, a in try w.swipeRow(a.string(0), by: -130) }
 
         s.when("they swipe {string} all the way left to mark it played") { w, a in try w.swipeRow(a.string(0), by: -330) }
+
+        s.given("they've also queued every episode of {string}, {string} and {string}") { w, a in
+            // Following a show they already follow is fine: `follow` takes its episodes out of Up Next
+            // first, and they all go back on the end here.
+            for show in a.values {
+                let episodes = try w.call("follow", ["email": w.email, "show": show])["episodes"] as? [[String: String]] ?? []
+                try w.call("queue", ["email": w.email, "episodes": episodes.map { $0["title"]! }])
+            }
+        }
+
+        s.when("they scroll to the end of Up Next") { w, _ in
+            try w.goTo(tab: "upNext")
+            // The whole queue has synced: the last episode on the server has its row.
+            if let last = try w.upNextOnServer().last {
+                try w.eventually("\(last) in Up Next", timeout: 20) { try w.rowParts(last).firstMatch.exists }
+            }
+            try w.scrollToEnd(watching: w.element("upNext.end"))
+        }
+
+        s.then("{string} and the end of the list sit above the mini player") { w, a in
+            let mini = try w.waitFor("miniPlayer", timeout: 20).frame
+            let row = try w.rowParts(a.string(0)).allElementsBoundByIndex.filter { $0.exists }.map(\.frame).reduce(CGRect.null) { $0.union($1) }
+            let end = w.element("upNext.end")
+            guard !row.isNull, end.exists else { throw World.Failure("\(a.string(0)) or the end of the list isn't on screen") }
+            for (what, frame) in [(a.string(0), row), ("The end of the list", end.frame)] {
+                XCTAssertLessThanOrEqual(frame.maxY, mini.minY, "\(what) (\(frame)) is behind the mini player (\(mini))")
+            }
+        }
     }
 }

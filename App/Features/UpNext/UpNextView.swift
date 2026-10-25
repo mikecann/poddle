@@ -155,6 +155,7 @@ struct UpNextView: View {
                 .font(.text(13.5, .semibold)).foregroundStyle(Palette.ink3)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 16)
+                .accessibilityIdentifier("upNext.end")
         }
     }
 

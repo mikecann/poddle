@@ -47,6 +47,18 @@ extension World {
         if !e.isHittable { throw Failure("Couldn't scroll \(what) into view") }
     }
 
+    /// Flicks up until `marker` stops moving: the scroll view is at its end.
+    func scrollToEnd(watching marker: XCUIElement) throws {
+        var last = CGRect.null
+        for _ in 0..<12 {
+            app.windows.firstMatch.swipeUp(velocity: .fast)
+            let frame = marker.exists ? marker.frame : .null
+            if !frame.isNull, frame == last { return }
+            last = frame
+        }
+        throw Failure("Never reached the end of the list")
+    }
+
     /// Polls `check` until it's true.
     func eventually(_ what: String, timeout: TimeInterval = 25, _ check: () throws -> Bool) throws {
         let until = Date().addingTimeInterval(timeout)

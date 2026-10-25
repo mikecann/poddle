@@ -37,3 +37,8 @@ Feature: Up Next
     When they press Undo
     Then Up Next lists "Breakfast in C", "Commute in D" then "Dusk"
     And "Breakfast in C" isn't played
+
+  Scenario: The end of a long Up Next scrolls clear of the mini player
+    Given they've also queued every episode of "Priority Pings", "Chapter Chimes" and "Evening Echoes"
+    When they scroll to the end of Up Next
+    Then "Twilight" and the end of the list sit above the mini player
