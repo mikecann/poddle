@@ -2,6 +2,15 @@ import { spawnSync } from "node:child_process";
 import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync, chmodSync } from "node:fs";
 import path from "node:path";
 
+// Playwright caches each compiled test file, and its source map, in the system temp folder by
+// default. macOS deletes temp files nobody has opened for a few days, and on tinker-desk that
+// took the .map beside a cached spec but left the .js, which Playwright kept using: its tests
+// got the compiled line numbers, playwright-bdd couldn't match them to the feature, and every
+// share page scenario failed with "bddTestData not found" (docs/testing.md). So the web suite
+// keeps the cache in its own git-ignored folder. Also inline in package.json's test:e2e:web.
+export const PLAYWRIGHT_CACHE_DIR = "e2e/.runtime/playwright-transform-cache";
+export const webE2eEnv = (env, root = process.cwd()) => ({ ...env, PWTEST_CACHE_DIR: path.resolve(root, PLAYWRIGHT_CACHE_DIR) });
+
 export const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
 export const readJson = (file) => JSON.parse(readFileSync(file, "utf8"));
 export function command(cmd, args, options = {}) {

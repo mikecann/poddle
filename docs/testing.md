@@ -91,6 +91,12 @@ Remote overrides: `E2E_REMOTE_HOST` (or `--host`), `E2E_REMOTE_ROOT`, `E2E_REMOT
 
 The ports are 3410 (backend), 3411 (site) and 3412 (fixtures); set `E2E_CONVEX_PORT`, `E2E_SITE_PORT` and `E2E_FIXTURE_PORT` to move them for local runs. Only one run at a time per set of ports.
 
+### Playwright's transform cache
+
+Playwright keeps every compiled test file, and its source map, in a cache. By default that's in the system temp folder, and macOS deletes temp files nobody has opened for about three days. On tinker-desk it took the `.map` beside the cached share pages spec (cached 22 Oct, gone by 26 Oct) and left the `.js`, which Playwright kept using without noticing. Its tests then reported compiled line numbers (`:13`, `:39`, `:57`, `:77` instead of `:10`, `:18`, `:24`, `:30`), playwright-bdd couldn't match them to the feature, and all four share page scenarios failed in 0 ms with `bddTestData not found` while the rest of the suite passed. `npx playwright test --list` showed the wrong lines straight away.
+
+So the web suite keeps the cache in `e2e/.runtime/playwright-transform-cache` (`PWTEST_CACHE_DIR`, set by `npm run test:e2e:web` and `scripts/run-e2e.mjs`; `tests/e2eRemote.test.ts` checks both). If `bddTestData not found` turns up anyway, compare the `--list` lines with the `pwTestLine` values in `e2e/.features-gen/`, and delete the cache folder.
+
 ### Nightly and GitHub reporting
 
 A user crontab entry tagged `# poddle-e2e-nightly` runs at **03:00 in tinker-desk's local time zone**. It's cron rather than a launch agent because nobody logs in to tinker-desk's desktop, and launchd never fires calendar jobs in the Background user domain without a GUI login. tinker-desk never sleeps (`pmset sleep 0`), so a missed run isn't caught up. It fetches `origin/main`, skips a SHA already reported, takes the shared render/e2e lock, and runs both suites. If the lock is busy, that night is skipped and the SHA stays eligible for the next launch. It waits for the remote-runner changes to land on main before its first suite run.

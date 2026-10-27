@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
 import path from "node:path";
-import { copyNightlyScreenshots, packagePins, scenarioResults, quote, relocatePackages } from "../scripts/e2e-remote-lib.mjs";
+import { copyNightlyScreenshots, packagePins, scenarioResults, quote, relocatePackages, PLAYWRIGHT_CACHE_DIR, webE2eEnv } from "../scripts/e2e-remote-lib.mjs";
 
 const scratch = path.resolve("e2e/.runtime/remote-tests");
 const folders: string[] = [];
@@ -12,6 +12,22 @@ function temp() {
   return folder;
 }
 afterEach(() => { for (const folder of folders.splice(0)) rmSync(folder, { recursive: true, force: true }); });
+
+describe("the web suite's Playwright cache", () => {
+  // macOS deletes files in the system temp folder that haven't been opened for a few days.
+  // It took the .map beside a cached share-pages spec on tinker-desk, and Playwright kept
+  // using the .js without it, so every test there got the wrong line and failed with
+  // "bddTestData not found". The cache has to live somewhere macOS leaves alone.
+  it("lives under e2e/.runtime, not the system temp folder", () => {
+    expect(PLAYWRIGHT_CACHE_DIR.startsWith("e2e/.runtime/")).toBe(true);
+    expect(webE2eEnv({ HOME: "/x" })).toEqual({ HOME: "/x", PWTEST_CACHE_DIR: path.resolve(PLAYWRIGHT_CACHE_DIR) });
+  });
+  it("is used by every way of running the web suite", () => {
+    const pkg = JSON.parse(readFileSync("package.json", "utf8"));
+    expect(pkg.scripts["test:e2e:web"]).toContain(`PWTEST_CACHE_DIR=${PLAYWRIGHT_CACHE_DIR} playwright test`);
+    expect(readFileSync("scripts/run-e2e.mjs", "utf8")).toContain("webE2eEnv(");
+  });
+});
 
 describe("remote e2e reporting", () => {
   it("keeps web and app failures alongside passing and skipped scenarios", () => {
