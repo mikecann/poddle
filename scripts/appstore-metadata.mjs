@@ -142,8 +142,11 @@ async function main() {
   console.log(`App: ${app.attributes.name} (${app.attributes.bundleId}), primary locale ${app.attributes.primaryLocale}`);
   await patchAttrs("apps", app.id, "app", app.attributes, { contentRightsDeclaration: meta.contentRightsDeclaration });
 
-  await appInfo(app);
+  // The version first: creating a new one is what opens a new editable app info. Before it, the
+  // live version's app info refuses changes (409), so an age rating answer Apple added since the
+  // last release couldn't be sent.
   const version = await appStoreVersion(app);
+  await appInfo(app);
   await reviewDetails(version);
   await price(app);
   await availability(app);
