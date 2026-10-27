@@ -6,7 +6,7 @@
 
 Poddle is a podcast player I made for myself. I listen to a lot of podcasts and wanted a player that looks, works and feels exactly the way I want it to. It's got one Up Next queue, speed-ups that still sound like people talking and stats on how much I actually listen (a lot, it turns out). Now anyone can use it, so hopefully you like it too!
 
-It's free on iPhone, and there's no ads or tracking. It's waiting on Apple's review right now so it isn't on the App Store just yet, but there's more about it on [poddle.mikecann.app](https://poddle.mikecann.app).
+It's free on iPhone, and there's no ads or tracking. You can get it on the [App Store](https://apps.apple.com/app/id6825613455), and there's more about it on [poddle.mikecann.app](https://poddle.mikecann.app).
 
 <p align="center">
   <img src="web/public/screens/up-next.webp" width="160" alt="The Up Next queue">

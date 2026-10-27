@@ -283,7 +283,7 @@ function Hero({ deleted }: { deleted: boolean }) {
 
         <div className="mt-8 flex flex-col items-center gap-4 lg:items-start">
           <AppStoreBadge />
-          {/* The proof signal. Poddle isn't out yet, so there are no reviews, ratings or user
+          {/* The proof signal. Poddle's only just out, so there are no reviews, ratings or user
               counts to show. The open code is true; a real testimonial or the App Store rating
               belongs here after launch. "Free, no ads, no tracking" is said once, at the closing
               call to action, rather than here as well. */}
@@ -570,7 +570,7 @@ function HowItWorks() {
 // ---------------------------------------------------------------------------------------
 
 /**
- * The skill wants testimonials or a case study here. Poddle isn't out, so there are none,
+ * The skill wants testimonials or a case study here. Poddle's only just out, so there are none,
  * and inventing them isn't on. What's true instead: every screen of the real app, and the
  * code, which anyone can read. GAP: real quotes or the App Store rating go here after launch.
  */
@@ -611,11 +611,25 @@ function Proof() {
 // ---------------------------------------------------------------------------------------
 
 const faq: { q: string; a: ReactNode; text: string }[] = [
-  {
-    q: "When can I get it?",
-    text: "Soon. Poddle is on its way to the App Store, and the badge on this page becomes a download link the day it's out.",
-    a: "Soon. Poddle is on its way to the App Store, and the badge on this page becomes a download link the day it's out.",
-  },
+  APP_STORE_LIVE
+    ? {
+        q: "Where do I get it?",
+        text: "It's out now, and free on the App Store.",
+        a: (
+          <>
+            It's out now, and free on the{" "}
+            <a href={APP_STORE_URL} className={`rounded-sm font-medium text-tomato-d underline underline-offset-4 hover:text-ink ${PRESSABLE}`}>
+              App Store
+            </a>
+            .
+          </>
+        ),
+      }
+    : {
+        q: "When can I get it?",
+        text: "Soon. Poddle is on its way to the App Store, and the badge on this page becomes a download link the day it's out.",
+        a: "Soon. Poddle is on its way to the App Store, and the badge on this page becomes a download link the day it's out.",
+      },
   {
     q: "Which devices does it run on?",
     text: "iPhone, on iOS 18 or later. iPad and Mac versions are planned but aren't out yet.",

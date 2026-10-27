@@ -41,7 +41,7 @@ export const HOME_TITLE = "Poddle · A podcast player for iPhone";
 export const APP_STORE_URL = "https://apps.apple.com/app/id6825613455";
 
 /**
- * Flip to true once Poddle is out on the App Store. Until then every App Store
- * badge on the site says "Coming soon" and isn't a link.
+ * Poddle went out on the App Store on 27 Oct 2026. Set this to false and every
+ * App Store badge on the site says "Coming soon" and isn't a link.
  */
-export const APP_STORE_LIVE = false;
+export const APP_STORE_LIVE = true;
