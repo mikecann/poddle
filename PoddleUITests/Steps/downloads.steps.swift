@@ -25,7 +25,6 @@ final class DownloadsSteps: StepModule {
         s.then("{string} shows as not downloaded") { w, a in
             let parts = try w.rowParts(a.string(0))
             try w.eventually("\(a.string(0)) to say Not downloaded", timeout: 15) { label(parts, "Not downloaded").exists }
-            XCTAssertFalse(label(parts, "Downloaded").exists)
         }
     }
 
@@ -34,10 +33,14 @@ final class DownloadsSteps: StepModule {
         parts.matching(NSPredicate(format: "label == %@", text)).firstMatch
     }
 
+    /// A downloaded episode shows no download icon at all, so it's downloaded once the row is there
+    /// with nothing saying otherwise.
     @MainActor static func downloaded(_ w: World, _ title: String) throws {
         let parts = try w.rowParts(title)
+        let notYet = NSPredicate(format: "label IN %@ OR label BEGINSWITH 'Downloading'",
+                                 ["Not downloaded", "Waiting for Wi-Fi", "Download failed"])
         try w.eventually("\(title) to be downloaded", timeout: 30) {
-            label(parts, "Downloaded").exists && !label(parts, "Not downloaded").exists
+            parts.firstMatch.exists && !parts.matching(notYet).firstMatch.exists
         }
     }
 }

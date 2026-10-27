@@ -40,13 +40,14 @@ struct NewDot: View {
     var body: some View { Circle().fill(Palette.tomato).frame(width: 7, height: 7) }
 }
 
+/// Only shows when something's off the happy path (Mike, 27 Oct 2026): downloaded shows nothing,
+/// not downloaded is an empty ring, and that ring fills while it downloads.
 struct DownloadGlyph: View {
     @Environment(PoddleStore.self) private var store
     var item: EpisodeItem
     var body: some View {
         if item.isDownloaded {
-            Image(systemName: "arrow.down.circle.fill").font(.system(size: 14)).foregroundStyle(Palette.fern)
-                .accessibilityLabel("Downloaded")
+            EmptyView()
         } else if item.isWaitingForWifi {
             Image(systemName: "wifi").font(.system(size: 12, weight: .semibold)).foregroundStyle(Palette.ink3)
                 .accessibilityLabel("Waiting for Wi-Fi")
@@ -56,7 +57,10 @@ struct DownloadGlyph: View {
             Image(systemName: "exclamationmark.circle").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.tomato)
                 .accessibilityLabel("Download failed")
         } else {
-            Image(systemName: "icloud.and.arrow.down").font(.system(size: 13, weight: .medium)).foregroundStyle(Palette.ink3)
+            // The same ring as downloading, at nothing yet.
+            ProgressView(value: 0)
+                .progressViewStyle(RingProgressStyle())
+                .frame(width: 14, height: 14)
                 .accessibilityLabel("Not downloaded")
         }
     }
