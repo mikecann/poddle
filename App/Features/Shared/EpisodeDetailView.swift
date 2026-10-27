@@ -39,7 +39,6 @@ struct EpisodeDetailView: View {
                             Text("\(Format.relativeDate(item.episode.pubDate)) · \(Format.duration(item.duration))")
                                 .font(.text(13, .medium)).foregroundStyle(Palette.ink2)
                             HStack(spacing: 6) {
-                                if item.speed.isOverride { OverridePin(text: Format.speed(item.speed.value)) }
                                 DownloadGlyph(item: item)
                                 if item.isStarred { Image(systemName: "star.fill").foregroundStyle(Palette.mustard).font(.system(size: 12)) }
                             }
@@ -54,7 +53,7 @@ struct EpisodeDetailView: View {
                     if item.isInProgress {
                         HStack(spacing: 8) {
                             ProgressBar(value: item.progress, width: 80)
-                            Text(item.timeLabel).font(.text(13, .semibold)).foregroundStyle(Palette.ink)
+                            Text(item.lengthLabel).font(.text(13, .semibold)).foregroundStyle(Palette.ink)
                         }
                         .padding(.horizontal, 20).padding(.top, 8)
                     }
