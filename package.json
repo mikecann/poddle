@@ -24,7 +24,7 @@
     "test:bdd-check": "node scripts/verify-bdd-pairing.mjs && node scripts/bdd-drift.mjs",
     "test:e2e:remote": "node scripts/e2e-remote.mjs",
     "test:e2e": "node scripts/run-e2e.mjs",
-    "test:e2e:web": "node scripts/verify-bdd-pairing.mjs && bddgen && playwright test",
+    "test:e2e:web": "node scripts/verify-bdd-pairing.mjs && bddgen && PWTEST_CACHE_DIR=e2e/.runtime/playwright-transform-cache playwright test",
     "test:e2e:ios": "node scripts/verify-bdd-pairing.mjs && node scripts/run-e2e-ios.mjs",
     "e2e:world": "node e2e/world/world.mjs --website"
   },

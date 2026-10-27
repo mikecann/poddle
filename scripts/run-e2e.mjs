@@ -10,6 +10,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { startWorld } from "../e2e/world/world.mjs";
 import { runIos } from "./run-e2e-ios.mjs";
+import { webE2eEnv } from "./e2e-remote-lib.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const started = Date.now();
@@ -32,7 +33,7 @@ const world = await startWorld({ website: true });
 let webOk = false;
 let iosOk = false;
 try {
-  const env = { ...process.env, PODDLE_E2E_WORLD: "1" };
+  const env = webE2eEnv({ ...process.env, PODDLE_E2E_WORLD: "1" }, root);
   const t = Date.now();
   webOk = (await run("npx", ["bddgen"], env)) && (await run("npx", ["playwright", "test", ...webArgs], env));
   console.log(`[e2e] web ${webOk ? "passed" : "FAILED"} in ${secs(t)}`);
