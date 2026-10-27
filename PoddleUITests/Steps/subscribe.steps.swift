@@ -60,6 +60,43 @@ final class SubscribeSteps: StepModule {
             XCTAssertEqual(said, a.string(0))
         }
 
+        s.given("they follow every other public show too") { w, _ in
+            let shows = try w.call("shows")["shows"] as? [[String: Any]] ?? []
+            let followed = try w.call("library", ["email": w.email])["shows"] as? [String] ?? []
+            for case let title as String in shows.filter({ $0["private"] as? Bool != true }).map({ $0["title"] }) where !followed.contains(title) {
+                try w.call("follow", ["email": w.email, "show": title])
+            }
+        }
+
+        s.when("they scroll to the end of the Library as a {word}") { w, a in
+            try w.goTo(tab: "library")
+            let count = (try w.call("library", ["email": w.email])["shows"] as? [String] ?? []).count
+            try w.eventually("the Library to say \(count) shows", timeout: 20) {
+                w.app.staticTexts.matching(NSPredicate(format: "label BEGINSWITH %@", "\(count) shows")).firstMatch.exists
+            }
+            // The Grid / List switch in the top bar.
+            let layout = w.app.buttons[a.string(0).capitalized].firstMatch
+            guard layout.waitForExistence(timeout: 10) else { throw World.Failure("No \(a.string(0)) button") }
+            layout.tap()
+            try w.waitFor("library.\(a.string(0))", timeout: 10)
+            // Flick up until the lowest show on screen stops moving.
+            var last = CGRect.null
+            for _ in 0..<12 {
+                w.app.windows.firstMatch.swipeUp(velocity: .fast)
+                let frame = lowestShow(w)
+                if !frame.isNull, frame == last { return }
+                last = frame
+            }
+            throw World.Failure("Never reached the end of the Library")
+        }
+
+        s.then("the last show in the Library sits above the mini player") { w, _ in
+            let mini = try w.waitFor("miniPlayer", timeout: 20).frame
+            let show = lowestShow(w)
+            guard !show.isNull else { throw World.Failure("No show on screen") }
+            XCTAssertLessThanOrEqual(show.maxY, mini.minY, "The last show (\(show)) is behind the mini player (\(mini))")
+        }
+
         s.when("they open the page for {string}") { w, a in try w.openShow(a.string(0)) }
 
         s.when("they tap \"< Library\"") { w, _ in try w.tap("back") }
@@ -89,5 +126,18 @@ final class SubscribeSteps: StepModule {
             }
             try w.eventually("the page to say Following") { w.element("podcast.follow").label.contains("Following") }
         }
+    }
+
+    /// The frame of the lowest show tile or row on screen (rows a lazy grid or list keeps
+    /// off screen don't count).
+    @MainActor private static func lowestShow(_ w: World) -> CGRect {
+        let window = w.app.windows.firstMatch.frame
+        return w.app.descendants(matching: .any)
+            .matching(NSPredicate(format: "identifier BEGINSWITH 'library.show.'"))
+            .allElementsBoundByIndex
+            .filter { $0.exists }
+            .map(\.frame)
+            .filter { !$0.isEmpty && $0.minY < window.maxY }
+            .max { $0.maxY < $1.maxY } ?? .null
     }
 }
