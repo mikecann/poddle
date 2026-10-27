@@ -8,7 +8,6 @@ import {
   Headphones,
   MagnifyingGlass,
   Play,
-  ShieldCheck,
   SlidersHorizontal,
   Waveform,
 } from "@phosphor-icons/react/ssr";
@@ -259,7 +258,7 @@ function Hero({ deleted }: { deleted: boolean }) {
           without the chipmunks
         </h1>
         <p className="mt-6 text-lg text-pretty text-body">
-          Poddle is a free podcast player for iPhone, made for people who listen a lot. I built it for my own
+          Poddle is a podcast player for iPhone, made for people who listen a lot. I built it for my own
           listening: one Up Next queue, playback that stays natural at 2x, and settings for every show.
         </p>
 
@@ -276,13 +275,10 @@ function Hero({ deleted }: { deleted: boolean }) {
         <div className="mt-8 flex flex-col items-center gap-4 lg:items-start">
           <AppStoreBadge />
           {/* The proof signal. Poddle isn't out yet, so there are no reviews, ratings or user
-              counts to show. These two are true; a real testimonial or the App Store rating
-              belongs here after launch. */}
+              counts to show. The open code is true; a real testimonial or the App Store rating
+              belongs here after launch. "Free, no ads, no tracking" is said once, at the closing
+              call to action, rather than here as well. */}
           <ul className="flex list-none flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-ink-2 lg:justify-start">
-            <li className="flex items-center gap-2">
-              <ShieldCheck size={20} weight="duotone" className="text-tomato-d" />
-              Free, with no ads or tracking
-            </li>
             <li className="flex items-center gap-2">
               <GithubLogo size={20} weight="duotone" className="text-tomato-d" />
               <a href={GITHUB_URL} target="_blank" rel="noopener noreferrer" className={`rounded-sm text-ink-2 underline decoration-ink/20 underline-offset-4 hover:text-ink hover:decoration-ink ${PRESSABLE}`}>
@@ -606,11 +602,6 @@ function Proof() {
 
 const faq: { q: string; a: ReactNode; text: string }[] = [
   {
-    q: "How much does Poddle cost?",
-    text: "Nothing. Poddle is free, with no ads, no subscription and no tracking.",
-    a: "Nothing. Poddle is free, with no ads, no subscription and no tracking.",
-  },
-  {
     q: "When can I get it?",
     text: "Soon. Poddle is on its way to the App Store, and the badge on this page becomes a download link the day it's out.",
     a: "Soon. Poddle is on its way to the App Store, and the badge on this page becomes a download link the day it's out.",
@@ -700,7 +691,7 @@ function FinalCta() {
           without the chipmunks
         </h2>
         <p className="mt-4 max-w-xl text-lg text-pretty text-card/70">
-          Free on iPhone. iPad and Mac are planned for later.
+          Coming to iPhone first, with iPad and Mac planned for later.
         </p>
         <div className="mt-8">
           <AppStoreBadge />
