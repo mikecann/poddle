@@ -25,6 +25,11 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 - **Up Next screen, trimmed (Mike, 27 Oct 2026).** Rows show each episode's real length, not the sped-up time, and no "at 1.8×". The All / Downloaded / Under 20 min chips and the big "Up Next" title are gone. He liked knowing how long the queue takes "at your speeds", so that total moved to the end of the list, under "That's the lot."
   - **No speed next to times elsewhere either** ("We don't need to show that"): the mini player, Now Playing's queue sheet, a show's episode rows and the episode page show real time left, and rows lose the gold "1.2×" own-speed badge. "Shortest first" sorts by real length to match. Now Playing itself keeps "52m left at 1.4×", and Library still marks shows with their own speed.
   - **Download icons only off the happy path** (same day): "I think we only need to show something if it's not in the happy path." A downloaded episode shows no icon. One that isn't downloaded shows an empty ring, which fills while it downloads. Waiting for Wi-Fi and a failed download keep their icons.
+- **One episode without following (Mike, 27 Oct 2026, Chef request #2).** Someone wanted a single Risky Business Features episode without following the show, and to find episodes by name.
+  - Tapping a show in Discover opens its page without following it (the spec always said so; it was never built). The page has Follow, and each episode can be queued, played or downloaded.
+  - Discover's results have an "Episodes" section under the shows, from Apple's episode search. Tapping one opens its page, with Play, Queue and a Download button. The show stays unfollowed.
+  - Downloading an episode from a show you don't follow also puts it at the bottom of Up Next. There's no list of downloads, so otherwise it would be stranded.
+  - "Add by URL" still follows straight away. Pasting an episode's web page (risky.biz's points at a combined feed of all their shows) is a separate job.
 - **Tabs:** Up Next, Library, Discover, Stats, Profile (22 Oct). Profile holds the account (name, email, sign out) and then the global settings and Overcast import, which used to sit behind a gear on Library.
 - **Now Playing has three pages,** like Overcast. Swipe between them; page dots show where you are.
   - **Left page (swipe right):** show notes and chapters.

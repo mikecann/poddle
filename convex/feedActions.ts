@@ -43,6 +43,43 @@ export const refreshNow = userAction({
   },
 });
 
+/**
+ * Open a show from Discover without following it (decisions.md, 27 Oct 2026).
+ * Creates the shared show if it's new and fetches it, so its page can list the
+ * episodes, which `podcasts:get` and `podcasts:episodes` then return. With an
+ * episode from `directory:searchEpisodes` (its guid, audio URL, title and date),
+ * also finds that episode. Nothing personal is written: queueing or downloading
+ * one of its episodes is what puts the show in your library, unfollowed.
+ */
+export const openFeed = userAction({
+  args: {
+    feedUrl: v.string(),
+    title: v.optional(v.string()),
+    author: v.optional(v.string()),
+    artworkUrl: v.optional(v.string()),
+    appleId: v.optional(v.number()),
+    episodeGuid: v.optional(v.string()),
+    enclosureUrl: v.optional(v.string()),
+    episodeTitle: v.optional(v.string()),
+    pubDate: v.optional(v.number()),
+  },
+  returns: v.object({ podcastId: v.id("podcasts"), episodeId: v.optional(v.id("episodes")) }),
+  handler: async (ctx, { episodeGuid, enclosureUrl, episodeTitle, pubDate, ...show }) => {
+    const podcastId: Id<"podcasts"> = await ctx.runMutation(internal.podcasts.ensurePodcast, show);
+    // A conditional GET, so a show other people follow (and so is polled) costs a 304.
+    const result = await refreshPodcast(ctx, podcastId, { force: false });
+    const opened: { episodeCount: number; episodeId: Id<"episodes"> | null } = await ctx.runQuery(internal.podcasts.feedOpened, {
+      podcastId,
+      guid: episodeGuid,
+      enclosureUrl,
+      title: episodeTitle,
+      pubDate,
+    });
+    if (result.status === "error" && opened.episodeCount === 0) throw new Error(result.error ?? "Couldn't load that show");
+    return { podcastId, episodeId: opened.episodeId ?? undefined };
+  },
+});
+
 const PREVIEW_EPISODES = 20;
 
 /**

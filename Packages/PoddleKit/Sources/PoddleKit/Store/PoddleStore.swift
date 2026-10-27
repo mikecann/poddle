@@ -318,6 +318,11 @@ public final class PoddleStore {
     @discardableResult
     public func download(_ episodeId: String) -> DownloadManager.RequestResult {
         guard download(for: episodeId)?.state != .done else { return .alreadyDownloaded }
+        // There's no list of downloads, so an episode from a show you don't follow would have
+        // nowhere to be found again. It goes to the bottom of Up Next too (decisions.md, 27 Oct 2026).
+        if let episode = episode(episodeId), snapshot.podcasts[episode.podcastId]?.subscribed != true, !queuedIds.contains(episodeId) {
+            queueLast(episodeId)
+        }
         if let downloader {
             guard let url = episode(episodeId).flatMap({ URL(string: $0.enclosureURL) }) else { return .started }
             return downloader.request(episodeId, url: url)
@@ -443,7 +448,24 @@ public final class PoddleStore {
         showNotes[episodeId] = html
     }
 
-    public func search(_ term: String) async throws -> SearchResponse { try await dataSource.search(term) }
+    /// Shows, and episodes by name. The episode search failing never costs the show results.
+    public func search(_ term: String) async throws -> SearchResponse {
+        async let episodes = try? dataSource.searchEpisodes(term)
+        var response = try await dataSource.search(term)
+        response.episodes = await episodes ?? []
+        return response
+    }
+
+    /// Discover's way to a show you don't follow, or one episode of it (decisions.md, 27 Oct 2026):
+    /// the server fetches it without subscribing, then it's loaded like a shared link. Nil if it
+    /// couldn't be loaded. An episode the feed doesn't have (Apple's index can be ahead or behind)
+    /// falls back to its show.
+    public func open(_ target: DiscoverTarget) async -> OpenedFeed? {
+        if case let .show(result) = target, let id = podcastId(feedURL: result.feedURL) { return OpenedFeed(podcastId: id) }
+        guard let opened = try? await dataSource.open(target) else { return nil }
+        if let episodeId = opened.episodeId, await loadShared(.episode(id: episodeId, startAt: nil)) { return opened }
+        return await loadShared(.show(id: opened.podcastId)) ? OpenedFeed(podcastId: opened.podcastId) : nil
+    }
     public func resolve(url: String) async throws -> SearchResult? { try await dataSource.resolve(url: url) }
 
     public func chapters(for episodeId: String) async -> [Chapter] {

@@ -170,6 +170,32 @@ struct DirectoryResultDoc: Decodable, Sendable {
     }
 }
 
+struct DirectoryEpisodeDoc: Decodable, Sendable {
+    var appleId: Double?
+    var title: String
+    var showTitle: String
+    var author: String?
+    var artworkUrl: String?
+    var feedUrl: String
+    var guid: String?
+    var audioUrl: String?
+    var pubDate: Double?
+    var duration: Double?
+
+    var model: EpisodeSearchResult {
+        EpisodeSearchResult(
+            id: appleId.map { String(Int($0)) } ?? guid ?? "\(feedUrl)#\(title)", title: title, showTitle: showTitle,
+            author: author ?? "", feedURL: feedUrl, guid: guid, audioURL: audioUrl, pubDate: pubDate, duration: duration,
+            artworkURL: artworkUrl
+        )
+    }
+}
+
+struct OpenedFeedDoc: Decodable, Sendable {
+    var podcastId: String
+    var episodeId: String?
+}
+
 struct FeedPreviewDoc: Decodable, Sendable {
     var feedUrl: String
     var podcastId: String?

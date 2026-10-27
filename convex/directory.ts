@@ -8,7 +8,7 @@ import { userAction } from "./lib/auth";
 import { directoryBase } from "./lib/e2e";
 import { fetchWithTimeout, USER_AGENT } from "./lib/feedFetch";
 import { parseAppleId } from "./lib/parse";
-import { type DirectoryResult, vDirectoryResult } from "./lib/validators";
+import { type DirectoryEpisode, type DirectoryResult, vDirectoryEpisode, vDirectoryResult } from "./lib/validators";
 
 // Apple Podcasts directory (iTunes Search API), spec §2.1. The e2e suites point
 // it at their fixture server instead (lib/e2e.ts).
@@ -24,6 +24,11 @@ type ItunesItem = {
   feedUrl?: string;
   primaryGenreName?: string;
   trackCount?: number;
+  // Episode results (entity=podcastEpisode) also have these.
+  episodeGuid?: string;
+  episodeUrl?: string;
+  releaseDate?: string;
+  trackTimeMillis?: number;
 };
 
 async function itunesJson(ctx: ActionCtx, url: string): Promise<ItunesItem[]> {
@@ -67,6 +72,40 @@ export const search = userAction({
     const n = Math.min(Math.max(limit ?? 50, 1), 200);
     const url = `${directoryBase()}/search?term=${encodeURIComponent(t.toLowerCase())}&media=podcast&entity=podcast&country=AU&limit=${n}`;
     return await toResults(ctx, await itunesJson(ctx, url));
+  },
+});
+
+/**
+ * Search Apple's directory for episodes by name (decisions.md, 27 Oct 2026), so
+ * one episode can be found and played without following its show. Results
+ * without a feed are left out, since there'd be nothing to open. Cached 24 h.
+ */
+export const searchEpisodes = userAction({
+  args: { term: v.string(), limit: v.optional(v.number()) },
+  returns: v.array(vDirectoryEpisode),
+  handler: async (ctx, { term, limit }) => {
+    const t = term.trim();
+    if (!t) return [];
+    const n = Math.min(Math.max(limit ?? 25, 1), 200);
+    const url = `${directoryBase()}/search?term=${encodeURIComponent(t.toLowerCase())}&media=podcast&entity=podcastEpisode&country=AU&limit=${n}`;
+    return (await itunesJson(ctx, url)).flatMap((i): DirectoryEpisode[] => {
+      if (!i.feedUrl || !i.trackName) return [];
+      const released = i.releaseDate ? Date.parse(i.releaseDate) : NaN;
+      return [
+        {
+          appleId: i.trackId,
+          title: i.trackName,
+          showTitle: i.collectionName ?? "Untitled",
+          author: i.artistName,
+          artworkUrl: i.artworkUrl600 ?? i.artworkUrl100,
+          feedUrl: i.feedUrl,
+          guid: i.episodeGuid,
+          audioUrl: i.episodeUrl,
+          pubDate: Number.isNaN(released) ? undefined : released,
+          duration: i.trackTimeMillis ? Math.round(i.trackTimeMillis / 1000) : undefined,
+        },
+      ];
+    });
   },
 });
 

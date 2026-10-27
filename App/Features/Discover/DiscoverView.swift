@@ -1,7 +1,8 @@
 import SwiftUI
 import PoddleKit
 
-/// Search the Apple Podcasts directory, or add any feed by URL (offered straight from the clipboard).
+/// Search the Apple Podcasts directory for shows and episodes, or add any feed by URL (offered
+/// straight from the clipboard). Shows and episodes open without following (decisions.md, 27 Oct 2026).
 struct DiscoverView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(AppModel.self) private var app
@@ -14,6 +15,8 @@ struct DiscoverView: View {
     @State private var showManual = false
     @State private var toast: String?
     @State private var followed = 0
+    /// The result being fetched so its page can open, for its spinner.
+    @State private var opening: String?
     @FocusState private var focused: Bool
 
     enum ClipboardState: Equatable {
@@ -110,15 +113,12 @@ struct DiscoverView: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityIdentifier("discover.retry")
         } else if let response, !query.isEmpty {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Apple Podcasts").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
-                Spacer()
-                Text(searching ? "Searching…" : "\(response.totalCount) results").font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
+            if response.results.isEmpty && response.episodes.isEmpty {
+                BrandPlaceholder(pose: .searching, title: "Nothing found",
+                                 message: "Nothing for \"\(query)\". Try a show's or an episode's name, or paste a feed URL above.")
             }
-            .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
-            if response.results.isEmpty {
-                BrandPlaceholder(pose: .searching, title: "No shows found",
-                                 message: "Nothing for \"\(query)\". Try a show's name, or paste its feed URL above.")
+            if !response.results.isEmpty {
+                sectionHeader("Apple Podcasts", count: "\(response.totalCount) results")
             }
             LazyVStack(spacing: 8) {
                 ForEach(response.results) { r in
@@ -128,6 +128,20 @@ struct DiscoverView: View {
                         // A container, so the Follow button keeps its own identifier.
                         .accessibilityElement(children: .contain)
                         .accessibilityIdentifier("discover.result.\(r.id)")
+                }
+            }
+            if !response.episodes.isEmpty {
+                sectionHeader("Episodes", count: response.episodes.count == 1 ? "1 episode" : "\(response.episodes.count) episodes")
+                    .accessibilityIdentifier("discover.episodes")
+                LazyVStack(spacing: 8) {
+                    ForEach(response.episodes) { e in
+                        episodeRow(e)
+                            .cloudCard()
+                            .padding(.horizontal, 12)
+                            .accessibilityElement(children: .combine)
+                            .accessibilityAddTraits(.isButton)
+                            .accessibilityIdentifier("discover.episode.\(e.id)")
+                    }
                 }
             }
             Color.clear.frame(height: 20)
@@ -143,6 +157,52 @@ struct DiscoverView: View {
         }
     }
 
+    private func sectionHeader(_ title: String, count: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
+            Spacer()
+            Text(count).font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
+        }
+        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
+    }
+
+    private func episodeRow(_ e: EpisodeSearchResult) -> some View {
+        let details = [e.showTitle, e.pubDate.map { Format.relativeDate($0) }, e.duration.map { Format.duration($0) }].compactMap { $0 }
+        return HStack(spacing: 12) {
+            ArtworkView(title: e.showTitle, artworkURL: e.artworkURL, size: 48, cornerRadius: 10)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(e.title).font(.text(15.5, .bold)).foregroundStyle(Palette.ink).lineLimit(2)
+                Text(details.joined(separator: " · ")).font(.text(13)).foregroundStyle(Palette.ink2).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            if opening == e.id {
+                ProgressView().tint(Palette.tomato)
+            } else {
+                Image(systemName: "chevron.right").font(.system(size: 13, weight: .semibold)).foregroundStyle(Palette.ink3)
+            }
+        }
+        .padding(.leading, 12).padding(.trailing, 14).padding(.vertical, 10)
+        .contentShape(Rectangle())
+        .onTapGesture { Task { await open(.episode(e), id: e.id) } }
+    }
+
+    /// Shows and episodes you don't follow are fetched first, then open like any other page.
+    private func open(_ target: DiscoverTarget, id: String) async {
+        guard opening == nil else { return }
+        opening = id
+        defer { opening = nil }
+        guard let opened = await store.open(target) else {
+            if case .episode = target { show("Couldn't open that episode") } else { show("Couldn't open that show") }
+            return
+        }
+        focused = false
+        if let episodeId = opened.episodeId {
+            app.push(.episode(episodeId))
+        } else {
+            app.push(.podcast(opened.podcastId))
+        }
+    }
+
     private func resultRow(_ r: SearchResult) -> some View {
         let following = store.isFollowing(feedURL: r.feedURL)
         return HStack(spacing: 12) {
@@ -153,6 +213,7 @@ struct DiscoverView: View {
                     .font(.text(13)).foregroundStyle(Palette.ink2).lineLimit(1)
             }
             Spacer(minLength: 4)
+            if opening == r.id { ProgressView().tint(Palette.tomato) }
             Button {
                 if following {
                     if let id = store.podcastId(feedURL: r.feedURL) { app.push(.podcast(id)) }
@@ -176,7 +237,7 @@ struct DiscoverView: View {
         }
         .padding(.leading, 12).padding(.trailing, 12).padding(.vertical, 10)
         .contentShape(Rectangle())
-        .onTapGesture { if let id = store.podcastId(feedURL: r.feedURL) { app.push(.podcast(id)) } }
+        .onTapGesture { Task { await open(.show(r), id: r.id) } }
     }
 
     // MARK: Add by URL

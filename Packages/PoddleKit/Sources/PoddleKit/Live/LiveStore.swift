@@ -903,6 +903,30 @@ public actor LiveStore: PoddleDataSource {
         return SearchResponse(results: results, totalCount: results.count)
     }
 
+    public func searchEpisodes(_ term: String) async throws -> [EpisodeSearchResult] {
+        let data = try await transport.action("directory:searchEpisodes", ["term": .string(term), "limit": 25])
+        return try JSONDecoder().decode([DirectoryEpisodeDoc].self, from: data).map(\.model)
+    }
+
+    public func open(_ target: DiscoverTarget) async throws -> OpenedFeed {
+        var args: [String: JSONValue]
+        func set(_ key: String, _ value: String?) { if let value, !value.isEmpty { args[key] = .string(value) } }
+        switch target {
+        case let .show(r):
+            args = ["feedUrl": .string(r.feedURL)]
+            set("title", r.title); set("author", r.author); set("artworkUrl", r.artworkURL)
+            if let apple = r.appleId.flatMap(Double.init) { args["appleId"] = .number(apple) }
+        case let .episode(e):
+            args = ["feedUrl": .string(e.feedURL)]
+            set("title", e.showTitle); set("author", e.author); set("artworkUrl", e.artworkURL)
+            set("episodeGuid", e.guid); set("enclosureUrl", e.audioURL); set("episodeTitle", e.title)
+            if let pubDate = e.pubDate { args["pubDate"] = .number(pubDate) }
+        }
+        let data = try await transport.action("feedActions:openFeed", args)
+        let doc = try JSONDecoder().decode(OpenedFeedDoc.self, from: data)
+        return OpenedFeed(podcastId: doc.podcastId, episodeId: doc.episodeId)
+    }
+
     /// Apple and Overcast links go through the directory; anything else is fetched as a feed
     /// (or a website with a feed link) by `feedActions:previewFeed`.
     public func resolve(url: String) async throws -> SearchResult? {
