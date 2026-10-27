@@ -51,15 +51,30 @@ export function providerToken(cfg: ApnsConfig, nowMs = Date.now()): string {
 
 type SendResult = { token: string; status: number; reason?: string };
 
-function sendOne(session: http2.ClientHttp2Session, cfg: ApnsConfig, jwt: string, token: string, payload: string): Promise<SendResult> {
+/**
+ * An alert someone sees, or a silent background push that wakes the app.
+ * Apple wants background pushes at priority 5; 10 gets them refused.
+ */
+type PushKind = { type: "alert"; priority: "10" } | { type: "background"; priority: "5" };
+const ALERT: PushKind = { type: "alert", priority: "10" };
+const BACKGROUND: PushKind = { type: "background", priority: "5" };
+
+function sendOne(
+  session: http2.ClientHttp2Session,
+  cfg: ApnsConfig,
+  jwt: string,
+  token: string,
+  payload: string,
+  kind: PushKind,
+): Promise<SendResult> {
   return new Promise((resolve) => {
     const req = session.request({
       ":method": "POST",
       ":path": `/3/device/${token}`,
       authorization: `bearer ${jwt}`,
       "apns-topic": cfg.topic,
-      "apns-push-type": "alert",
-      "apns-priority": "10",
+      "apns-push-type": kind.type,
+      "apns-priority": kind.priority,
       "content-type": "application/json",
     });
     let status = 0;
@@ -85,22 +100,36 @@ function sendOne(session: http2.ClientHttp2Session, cfg: ApnsConfig, jwt: string
   });
 }
 
+type SendSummary = { sent: number; failed: number; skipped?: string };
+
 async function sendAlertToUser(
   ctx: ActionCtx,
   userId: Id<"users">,
   alert: { title: string; body: string; threadId?: string; data?: Record<string, string> },
-): Promise<{ sent: number; failed: number; skipped?: string }> {
+): Promise<SendSummary> {
+  const payload = {
+    aps: { alert: { title: alert.title, body: alert.body }, sound: "default", "thread-id": alert.threadId },
+    ...alert.data,
+  };
+  return await sendToUser(ctx, userId, payload, ALERT, `${alert.title}: ${alert.body}`);
+}
+
+/** Sends one payload to every device the person is signed in on. `label` is for the logs. */
+async function sendToUser(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+  body: Record<string, unknown>,
+  kind: PushKind,
+  label: string,
+): Promise<SendSummary> {
   const cfg = apnsConfig();
   if (!cfg) {
-    console.log(`[apns] not configured, skipping: ${alert.title}: ${alert.body}`);
+    console.log(`[apns] not configured, skipping: ${label}`);
     return { sent: 0, failed: 0, skipped: "unconfigured" };
   }
   const targets: { token: string; environment?: "sandbox" | "production" }[] = await ctx.runQuery(internal.devices.pushTargets, { userId });
   if (!targets.length) return { sent: 0, failed: 0, skipped: "noDevices" };
-  const payload = JSON.stringify({
-    aps: { alert: { title: alert.title, body: alert.body }, sound: "default", "thread-id": alert.threadId },
-    ...alert.data,
-  });
+  const payload = JSON.stringify(body);
   const jwt = providerToken(cfg);
   let sent = 0;
   let failed = 0;
@@ -111,7 +140,7 @@ async function sendAlertToUser(
     const session = http2.connect(host);
     session.on("error", (e) => console.error(`[apns] session error: ${e.message}`));
     try {
-      const results = await Promise.all(tokens.map((t) => sendOne(session, cfg, jwt, t, payload)));
+      const results = await Promise.all(tokens.map((t) => sendOne(session, cfg, jwt, t, payload, kind)));
       for (const r of results) {
         if (r.status === 200) sent++;
         else {
@@ -134,7 +163,7 @@ const vSendResult = v.object({ sent: v.number(), failed: v.number(), skipped: v.
 export const sendNewEpisodeAlert = internalAction({
   args: { episodeId: v.id("episodes"), userId: v.id("users") },
   returns: vSendResult,
-  handler: async (ctx, { episodeId, userId }): Promise<{ sent: number; failed: number; skipped?: string }> => {
+  handler: async (ctx, { episodeId, userId }): Promise<SendSummary> => {
     const alert: { title: string; body: string; podcastId: string } | null = await ctx.runQuery(
       internal.devices.alertForEpisode,
       { episodeId },
@@ -147,6 +176,18 @@ export const sendNewEpisodeAlert = internalAction({
       data: { episodeId, podcastId: alert.podcastId },
     });
   },
+});
+
+/**
+ * A silent push that wakes the app in the background to sync Up Next and start
+ * its downloads (`devices.scheduleSyncWake`). It needs no notification
+ * permission, but iOS decides whether and when to deliver it.
+ */
+export const sendSyncWake = internalAction({
+  args: { userId: v.id("users") },
+  returns: vSendResult,
+  handler: async (ctx, { userId }): Promise<SendSummary> =>
+    await sendToUser(ctx, userId, { aps: { "content-available": 1 }, sync: "upNext" }, BACKGROUND, "sync wake"),
 });
 
 /** Send a test notification to every device you're signed in on. */

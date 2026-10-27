@@ -2,6 +2,7 @@ import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { scheduleSyncWake } from "./devices";
 import { asUser, type UserMutationCtx } from "./lib/auth";
 import { upsertEpisode, vIncomingEpisode, vIngestMode } from "./lib/ingest";
 import { trimToKeepLatest } from "./lib/keepLatest";
@@ -209,7 +210,10 @@ export const ingestEpisodes = internalMutation({
           await ctx.scheduler.runAfter(0, internal.apns.sendNewEpisodeAlert, { episodeId: episode._id, userId });
         }
       }
-      if (landed) await trimToKeepLatest(userCtx, a.podcastId, settings.keepLatestDownloaded, { system: systemAt(now) });
+      if (!landed) continue;
+      await trimToKeepLatest(userCtx, a.podcastId, settings.keepLatestDownloaded, { system: systemAt(now) });
+      // Their phone hears about it now, not the next time they open Poddle.
+      if (a.mode === "normal") await scheduleSyncWake(ctx, userId, now);
     }
 
     if (created || latest !== podcast.latestEpisodeAt) {

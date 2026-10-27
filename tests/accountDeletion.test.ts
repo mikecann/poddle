@@ -86,6 +86,7 @@ async function seedPerson(t: T, ids: { podcastId: Id<"podcasts">; episodeId: Id<
         userId, deviceId: `${userId}-d${i}`, name: "Phone", platform: "iOS", apnsToken: `${userId}-tok${i}`,
         lastSeenAt: at, updatedAt: at,
       });
+      await ctx.db.insert("syncWakes", { userId, dueAt: at });
       const stats = { wall: 60, content: 60, speedSaved: 0, smartSaved: 0, sessions: 1 };
       const rollup = { ...stats, rateContent: 60, estimatedWall: 0, episodesStarted: 1, episodesCompleted: 0 };
       await ctx.db.insert("statsDays", { userId, day: `2025-10-1${i}`, ...rollup, liveHours: [] });

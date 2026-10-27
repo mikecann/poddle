@@ -1,5 +1,7 @@
 import { v } from "convex/values";
-import { internalMutation, internalQuery } from "./_generated/server";
+import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { userMutation, userQuery } from "./lib/auth";
 import { vDeviceDoc } from "./lib/validators";
 
@@ -92,3 +94,27 @@ export const alertForEpisode = internalQuery({
     return { title: podcast.title, body: episode.title, podcastId: podcast._id };
   },
 });
+
+/**
+ * How long a sync push waits after the first new episode, so the rest of the
+ * poll (every feed is fetched at once, every 15 minutes) lands first and they
+ * all go in one push.
+ */
+export const SYNC_WAKE_DELAY = 2 * 60_000;
+
+/**
+ * New episodes landed in this person's Up Next: wake their phones in the
+ * background to sync and download them (`apns:sendSyncWake`), unless a push is
+ * already on its way.
+ */
+export async function scheduleSyncWake(ctx: MutationCtx, userId: Id<"users">, now: number): Promise<void> {
+  const row = await ctx.db
+    .query("syncWakes")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+  if (row && row.dueAt > now) return;
+  const dueAt = now + SYNC_WAKE_DELAY;
+  if (row) await ctx.db.patch(row._id, { dueAt });
+  else await ctx.db.insert("syncWakes", { userId, dueAt });
+  await ctx.scheduler.runAfter(SYNC_WAKE_DELAY, internal.apns.sendSyncWake, { userId });
+}

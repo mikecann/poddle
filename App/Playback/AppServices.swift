@@ -66,6 +66,24 @@ final class AppServices {
         }
     }
 
+    /// Woken in the background by a sync push (`apns:sendSyncWake`) or background app refresh:
+    /// pull what's changed and start the downloads it needs, so new episodes are in Up Next and on
+    /// the phone before Poddle's opened. `recheckFeeds` also asks Convex to re-check every feed, as
+    /// coming to the foreground does. True if Up Next changed.
+    func syncInBackground(recheckFeeds: Bool) async -> Bool {
+        guard let live = store.dataSource as? LiveStore, await live.userId != nil else { return false }
+        let before = store.queue.map(\.id)
+        if recheckFeeds { await store.refresh() }
+        await live.syncNow()
+        // The new snapshot reaches the store through its stream a moment later (LiveStore's
+        // emit delay, then a hop to the main actor).
+        try? await Task.sleep(for: .milliseconds(500))
+        runHousekeeping()
+        // The next launch reads Up Next from the cache, so it's there before the connection is.
+        await live.flush()
+        return store.queue.map(\.id) != before
+    }
+
     /// Integrated loudness for Voice Boost, measured once per download off the main thread.
     nonisolated static func measureLoudness(_ url: URL, then store: @escaping @MainActor (Double) -> Void) {
         Task.detached(priority: .utility) {

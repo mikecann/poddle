@@ -366,6 +366,14 @@ export default defineSchema({
     .index("by_deviceId", ["deviceId"])
     .index("by_apnsToken", ["apnsToken"]),
 
+  // One row per person: when their next background sync push is due. New
+  // episodes from a whole poll land within a minute or two of each other, and
+  // iOS throttles apps that send lots of silent pushes, so they share one.
+  syncWakes: defineTable({
+    userId: v.id("users"),
+    dueAt: v.number(),
+  }).index("by_user", ["userId"]),
+
   importBatches: defineTable({
     userId: vOwner,
     source: v.literal("overcast"),

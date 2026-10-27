@@ -299,6 +299,7 @@ The ★ items are configurable. Leading swipe means left to right.
 - When a new item appears, it writes the episode to the database and sends an APNs alert ("Show: Episode title") if notifications are on for that show. It can also send a background push (`content-available`) to trigger the download, though iOS throttles these as well **[inferred]**.
 - Sending APNs from Convex needs HTTP/2 and a JWT signed with a `.p8` key. I haven't checked that Convex's runtime does HTTP/2 to APNs. If it doesn't, use a small relay (a Cloudflare Worker) **[unverified risk]**.
 - On device: refresh all feeds when the app comes to the foreground and on pull to refresh, and keep a `BGAppRefreshTask` as best effort.
+- **Built (27 Oct 2026, Chef request "Make it update in background"):** new episodes that land in someone's Up Next send their devices one silent sync push (2 minutes later, so a whole poll shares it). The app syncs, starts the downloads the rules ask for and saves its cache, all without being opened. Background app refresh does the same and also asks Convex to re-check feeds. Details in `docs/api.md`, "Devices and push".
 - Parsing everywhere: RSS 2.0 with the iTunes and Podcasting 2.0 namespaces, plus Atom. Episode identity: GUID, then enclosure URL, then title + date.
 
 ### 2.9 Stats
