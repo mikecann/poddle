@@ -25,7 +25,7 @@ export function command(cmd, args, options = {}) {
 export function packagePins(repo) {
   const pins = readJson(path.join(repo, "Packages/PoddleKit/Package.resolved")).pins;
   const project = readFileSync(path.join(repo, "Poddle.xcodeproj/project.pbxproj"), "utf8");
-  const chef = pins.find((p) => p.identity === "feedback-chef");
+  const chef = pins.find((p) => p.identity === "chef-cloud");
   if (!chef || !project.includes(`revision = ${chef.state.revision};`)) throw new Error("ChefKit project revision and Package.resolved disagree");
   return pins;
 }

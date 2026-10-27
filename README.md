@@ -30,7 +30,7 @@ If you find a bug or have an idea for it, open an issue here, email me at [poddl
 
 ## Working on the code
 
-If you want a nose around, it's a SwiftUI app with a [Convex](https://convex.dev) backend, and the website is React on Convex's static hosting. The app builds for iPad and Mac too, they just aren't on the App Store yet. It's set up for me, so to run your own copy you'll need your own Convex deployment and your own Apple and Google sign-in keys (all covered below). The app also pulls in ChefKit, the feedback board's Swift package, from a private repo (`sethconvex/feedback-chef`), so for now Xcode can't build it without access to that.
+If you want a nose around, it's a SwiftUI app with a [Convex](https://convex.dev) backend, and the website is React on Convex's static hosting. The app builds for iPad and Mac too, they just aren't on the App Store yet. It's set up for me, so to run your own copy you'll need your own Convex deployment and your own Apple and Google sign-in keys (all covered below). The app also pulls in ChefKit, the feedback board's Swift package, from a private repo (`convex/chef-cloud`), so for now Xcode can't build it without access to that.
 
 These are the best places to start:
 
@@ -162,7 +162,7 @@ Regenerate the processed PNGs with `swift scripts/prepare-brand.swift` (and `pre
 
 ### Chef (feature requests)
 
-Settings > Feedback > "Suggest a feature" opens Chef, Seth Raphael's feedback board (`@convex-dev/feedback`, private and pre-release, from `sethconvex/feedback-chef`). People type a request, or send a screenshot with a voice note, follow it through and vote on other people's. There's no floating button. The admin (Mike) approves or rejects requests in Chef's admin sheet. At this commit ChefKit never loads its approval queue, though: `ChefApprovalsSection` binds `awaitingApproval` in a `.task` on a `Group` that's empty until the list loads, so the task never runs. Until that's fixed in ChefKit, Mike approves from Chef's web panel. It's on the website's `/me`, for the admin only (`web/src/components/ChefAdminPanel.tsx`).
+Settings > Feedback > "Suggest a feature" opens Chef, Seth Raphael's feedback board (`@convex-dev/feedback`, private and pre-release, from `convex/chef-cloud`). People type a request, or send a screenshot with a voice note, follow it through and vote on other people's. There's no floating button. The admin (Mike) approves or rejects requests in Chef's admin sheet. At this commit ChefKit never loads its approval queue, though: `ChefApprovalsSection` binds `awaitingApproval` in a `.task` on a `Group` that's empty until the list loads, so the task never runs. Until that's fixed in ChefKit, Mike approves from Chef's web panel. It's on the website's `/me`, for the admin only (`web/src/components/ChefAdminPanel.tsx`).
 
 It's the board alone, as `npx chef init --no-cloud` sets it up: no cloud builds (`docs/decisions.md`). An approved request waits for Mike to build it himself. The panel says "Cloud builds are off" next to approved requests, and that's expected.
 
