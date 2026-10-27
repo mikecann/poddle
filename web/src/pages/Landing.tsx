@@ -266,7 +266,7 @@ function Hero({ deleted }: { deleted: boolean }) {
           <div role="status" className="mt-8 flex items-start gap-3 rounded-2xl border border-ink/10 bg-card p-4 text-left">
             <CheckCircle size={24} weight="duotone" className="shrink-0 text-tomato-d" />
             <p className="text-sm text-body">
-              <b className="block text-base font-semibold text-ink">Your account is deleted</b>
+              <b className="block text-base font-semibold text-ink">Your account's deleted</b>
               You're signed out, and the rest of your data is being removed now. Thanks for giving Poddle a go.
             </p>
           </div>
