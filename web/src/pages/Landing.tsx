@@ -164,6 +164,15 @@ function Nav({ signedIn, active }: { signedIn: boolean; active: string | null })
     };
   }, [open]);
 
+  // The panel only exists below md. If the screen widens past it while the menu's open (an
+  // iPhone turned to landscape), close it, or the scroll lock would stay with no way to undo it.
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 48rem)");
+    const onChange = () => desktop.matches && setOpen(false);
+    desktop.addEventListener("change", onChange);
+    return () => desktop.removeEventListener("change", onChange);
+  }, []);
+
   const account = signedIn ? "Dashboard" : "Sign in";
 
   return (

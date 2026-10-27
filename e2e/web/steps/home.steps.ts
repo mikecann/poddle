@@ -16,3 +16,14 @@ Then("the home page shows Poddle with an App Store badge", async ({ page }) => {
 When("they choose to sign in from the home page", async ({ page }) => {
   await page.getByRole("banner").getByRole("link", { name: "Sign in" }).click();
 });
+
+When("a visitor opens the home page on a phone", async ({ page }) => {
+  // Below the md breakpoint the nav's links move into a full height menu (Landing.tsx Nav).
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/");
+});
+
+When("they open the menu and choose to sign in", async ({ page }) => {
+  await page.getByRole("button", { name: "Open the menu" }).click();
+  await page.locator("#menu").getByRole("link", { name: "Sign in" }).click();
+});
