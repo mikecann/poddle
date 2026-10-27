@@ -27,3 +27,10 @@ When("they open the menu and choose to sign in", async ({ page }) => {
   await page.getByRole("button", { name: "Open the menu" }).click();
   await page.locator("#menu").getByRole("link", { name: "Sign in" }).click();
 });
+
+Then("the home page fits the phone's screen", async ({ page }) => {
+  // Anything wider than the screen makes a phone zoom the whole page out (the floating nav
+  // went off centre on the live site that way), so nothing may stick out sideways.
+  const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  expect(overflow).toBeLessThanOrEqual(0);
+});
