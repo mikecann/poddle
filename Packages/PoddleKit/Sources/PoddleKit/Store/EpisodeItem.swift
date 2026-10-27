@@ -28,4 +28,10 @@ public struct EpisodeItem: Sendable, Hashable, Identifiable {
     public var timeLabel: String {
         isInProgress ? Format.timeLeft(remaining, rate: speed.value) : Format.atSpeed(remaining, rate: speed.value)
     }
+
+    /// "1h 8m left" for something started, "1h 14m" otherwise: the episode's real length, not sped up.
+    /// Up Next rows show this (Mike, 27 Oct 2026); the sped-up total sits at the end of the list.
+    public var lengthLabel: String {
+        isInProgress ? "\(Format.duration(remaining)) left" : Format.duration(remaining)
+    }
 }

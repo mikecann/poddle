@@ -1,7 +1,7 @@
 import SwiftUI
 import PoddleKit
 
-/// An Up Next row: artwork, show line, title and the time/speed line.
+/// An Up Next row: artwork, show line, title and the length/download line.
 struct EpisodeRow: View {
     @Environment(PoddleStore.self) private var store
     var item: EpisodeItem
@@ -57,13 +57,8 @@ struct EpisodeRow: View {
 
     @ViewBuilder private var metaLine: some View {
         HStack(spacing: 7) {
-            if item.isInProgress {
-                ProgressBar(value: item.progress)
-                Text(Format.duration(item.wallRemaining) + " left").fontWeight(.semibold).foregroundStyle(Palette.ink)
-            } else {
-                Text(Format.duration(item.wallRemaining)).fontWeight(.semibold).foregroundStyle(Palette.ink)
-            }
-            Text("at \(Format.speed(item.speed.value))").foregroundStyle(Palette.ink2)
+            if item.isInProgress { ProgressBar(value: item.progress) }
+            Text(item.lengthLabel).fontWeight(.semibold).foregroundStyle(Palette.ink)
             DownloadGlyph(item: item)
             if item.isWaitingForWifi {
                 Text("Waiting for Wi-Fi").foregroundStyle(Palette.ink3)

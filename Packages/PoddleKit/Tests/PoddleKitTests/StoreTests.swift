@@ -17,7 +17,9 @@ import Testing
         #expect(conan?.timeLabel == "52m at 1.2×")
         #expect(conan?.speed.isOverride == true)
         #expect(upNext.filter(\.isDownloaded).count == 5)
-        #expect(upNext.filter { $0.wallRemaining < 20 * 60 }.count == 1)
+        // Up Next rows show real lengths: 68.4 minutes left of Syntax, the whole 62.4 of Conan.
+        #expect(upNext.first?.lengthLabel == "1h 8m left")
+        #expect(conan?.lengthLabel == "1h 2m")
         #expect(store.item(MockData.playingEpisodeId)?.timeLabel == "52m left at 1.4×")
         #expect(store.podcast("pod_mike")?.isPrivate == true)
         #expect(store.cadence("pod_syntax") == "3 a week")

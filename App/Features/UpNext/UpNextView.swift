@@ -5,7 +5,6 @@ struct UpNextView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(\.player) private var player
     @Environment(AppModel.self) private var app
-    @State private var filter: Filter = .all
     @State private var confirmClear = false
     /// Pull-to-refresh is running: Poddle trots across the top.
     @State private var refreshing = false
@@ -13,28 +12,17 @@ struct UpNextView: View {
     @State private var editMode: EditMode = .inactive
     #endif
 
-    enum Filter: Hashable { case all, downloaded, short }
-
     private var items: [EpisodeItem] { store.upNext(excluding: player.currentEpisodeId) }
-
-    private func filtered(_ items: [EpisodeItem]) -> [EpisodeItem] {
-        switch filter {
-        case .all: items
-        case .downloaded: items.filter(\.isDownloaded)
-        case .short: items.filter { $0.wallRemaining < 20 * 60 }
-        }
-    }
 
     var body: some View {
         let items = items
-        let shown = filtered(items)
         let actions = EpisodeActions(store: store, player: player, app: app)
         List {
             header(items)
                 .plainListRow()
                 .moveDisabled(true)
 
-            ForEach(shown) { item in
+            ForEach(items) { item in
                 EpisodeRow(item: item, showGrip: true)
                     .cloudCard()
                     .padding(.vertical, 4)
@@ -53,9 +41,8 @@ struct UpNextView: View {
                     .plainListRow()
             }
             .onMove { from, to in
-                store.moveQueue(ids: shown.map(\.id), from: from, to: to)
+                store.moveQueue(ids: items.map(\.id), from: from, to: to)
             }
-            .moveDisabled(filter != .all)
 
             footer(items)
                 .plainListRow()
@@ -70,7 +57,7 @@ struct UpNextView: View {
         }
         .contentMargins(.top, 0, for: .scrollContent)
         .accessibilityIdentifier("upNext.list")
-        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: shown.map(\.id))
+        .animation(.spring(response: 0.35, dampingFraction: 0.85), value: items.map(\.id))
         #if os(iOS)
         .environment(\.editMode, $editMode)
         #endif
@@ -115,29 +102,14 @@ struct UpNextView: View {
                 #endif
             }
             .frame(height: 52)
-            LargeTitle(title: "Up Next", subtitle: Format.queueSummary(count: items.count, wallSeconds: store.wallTime(items)))
-                .padding(.top, 2)
+            // No "Up Next" title or filter chips (Mike, 27 Oct 2026): the tab already says where you
+            // are, and the queue's total moved to the end of the list.
             if refreshing || isFirstSync(items) {
                 TrotStrip(message: refreshing ? "Checking your shows…" : "Fetching your shows…", height: 48)
                     .padding(.top, 8)
                     .transition(.opacity)
             }
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    Chip(title: "All", count: items.count, isOn: filter == .all) { filter = .all }
-                        .accessibilityIdentifier("upNext.filter.all")
-                    Chip(title: "Downloaded", count: items.filter(\.isDownloaded).count, isOn: filter == .downloaded) { filter = .downloaded }
-                        .accessibilityIdentifier("upNext.filter.downloaded")
-                    Chip(title: "Under 20 min", count: items.filter { $0.wallRemaining < 20 * 60 }.count, isOn: filter == .short) { filter = .short }
-                        .accessibilityIdentifier("upNext.filter.short")
-                }
-                .padding(.horizontal, 20)
-                .padding(.vertical, 8)
-            }
-            .scrollClipDisabled()
-            .padding(.top, 4)
         }
-        .animation(.default, value: filter)
     }
 
     /// Signed in on a fresh install: nothing cached and the first sync hasn't landed yet.
@@ -151,11 +123,19 @@ struct UpNextView: View {
             BrandPlaceholder(pose: .empty, title: "Nothing to listen to",
                              message: "New episodes from your shows land here. Swipe right on any episode in a show to add it.")
         } else if !items.isEmpty {
-            Text("That's the lot.")
-                .font(.text(13.5, .semibold)).foregroundStyle(Palette.ink3)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .accessibilityIdentifier("upNext.end")
+            VStack(spacing: 3) {
+                Text("That's the lot.")
+                    .font(.text(13.5, .semibold)).foregroundStyle(Palette.ink3)
+                // How long the whole queue takes at each show's speed. The rows show real lengths.
+                Text(Format.queueSummary(count: items.count, wallSeconds: store.wallTime(items)))
+                    .font(.text(12.5, .semibold)).foregroundStyle(Palette.ink3)
+                    .contentTransition(.numericText())
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            // One element, so the "sits above the mini player" check covers both lines.
+            .accessibilityElement(children: .combine)
+            .accessibilityIdentifier("upNext.end")
         }
     }
 

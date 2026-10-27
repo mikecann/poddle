@@ -22,6 +22,7 @@ Mike's calls so far (21 Oct 2026). `product-spec.md` is the detailed behaviour s
 
 - **Queue:** a single ordered Up Next queue. There's no Inbox (Mike dropped it on 22 Oct: "what's the point in having an inbox anyway?"), and no Overcast-style playlists in v1.
 - **New episodes, per show:** `Up Next bottom` (default), `Up Next top` or `Don't add`. Shows set to `Up Next top` are the "priority" shows. Episodes sitting in the old Inbox move to the bottom of Up Next, oldest first.
+- **Up Next screen, trimmed (Mike, 27 Oct 2026).** Rows show each episode's real length, not the sped-up time, and no "at 1.8×". The All / Downloaded / Under 20 min chips and the big "Up Next" title are gone. He liked knowing how long the queue takes "at your speeds", so that total moved to the end of the list, under "That's the lot." A show's own-speed badge (e.g. "1.2×" on Conan) stays.
 - **Tabs:** Up Next, Library, Discover, Stats, Profile (22 Oct). Profile holds the account (name, email, sign out) and then the global settings and Overcast import, which used to sit behind a gear on Library.
 - **Now Playing has three pages,** like Overcast. Swipe between them; page dots show where you are.
   - **Left page (swipe right):** show notes and chapters.
