@@ -32,11 +32,6 @@ public enum Format {
         "\(duration(remaining / rate)) left at \(speed(rate))"
     }
 
-    /// "41m at 1.8×" for something not started yet.
-    public static func atSpeed(_ content: Double, rate: Double) -> String {
-        "\(duration(content / rate)) at \(speed(rate))"
-    }
-
     /// "41:08", "1:12:40".
     public static func clock(_ seconds: Double) -> String {
         let total = Int(max(0, seconds).rounded(.down))

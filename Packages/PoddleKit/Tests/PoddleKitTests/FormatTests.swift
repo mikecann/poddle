@@ -25,7 +25,6 @@ import Testing
     @Test func timeLeftUsesWallClock() {
         // 68.4 minutes of content at 1.8× is 38 minutes on the clock.
         #expect(Format.timeLeft(68.4 * 60, rate: 1.8) == "38m left at 1.8×")
-        #expect(Format.atSpeed(62.4 * 60, rate: 1.2) == "52m at 1.2×")
         // Dwarkesh in Now Playing: 1:12:40 left at 1.4×.
         #expect(Format.timeLeft(72 * 60 + 40, rate: 1.4) == "52m left at 1.4×")
     }

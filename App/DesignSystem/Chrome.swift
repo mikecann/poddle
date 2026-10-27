@@ -35,13 +35,11 @@ struct MiniPlayer: View {
             ArtworkView(podcast: item.podcast, size: 46, cornerRadius: 12)
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.episode.title).font(.text(15.5, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
-                HStack(spacing: 5) {
-                    Text(Format.timeLeft(player.remaining, rate: player.rate)).monospacedDigit()
-                    if item.speed.isOverride { OverridePin(text: nil) }
-                }
-                .font(.text(13, .semibold))
-                .foregroundStyle(Palette.ink2)
-                .lineLimit(1)
+                // Real time left, no speed (Mike, 27 Oct 2026). Now Playing still shows the sped-up time.
+                Text("\(Format.duration(player.remaining)) left").monospacedDigit()
+                    .font(.text(13, .semibold))
+                    .foregroundStyle(Palette.ink2)
+                    .lineLimit(1)
                 CurlProgressBar(value: player.progress, height: 7)
                     .padding(.top, 3)
                     .padding(.trailing, 8)

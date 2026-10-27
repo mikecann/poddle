@@ -35,7 +35,7 @@ struct QueueSheet: View {
                         ArtworkView(podcast: item.podcast, size: 46, cornerRadius: 12)
                         VStack(alignment: .leading, spacing: 2) {
                             Text(item.episode.title).font(.text(15.5, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
-                            Text(item.timeLabel).font(.text(13, .semibold)).foregroundStyle(Palette.ink2)
+                            Text(item.lengthLabel).font(.text(13, .semibold)).foregroundStyle(Palette.ink2)
                         }
                         Spacer()
                         Image(systemName: "line.3.horizontal").foregroundStyle(Palette.ink3)

@@ -77,7 +77,7 @@ struct UpNextView: View {
             } trailing: {
                 Menu {
                     Section("Sort the queue once") {
-                        Button { sort(items, by: { $0.wallRemaining < $1.wallRemaining }) } label: { Label("Shortest first", systemImage: "timer") }
+                        Button { sort(items, by: { $0.remaining < $1.remaining }) } label: { Label("Shortest first", systemImage: "timer") }
                         Button { sort(items, by: { $0.episode.pubDate > $1.episode.pubDate }) } label: { Label("Newest first", systemImage: "calendar") }
                         Button { sort(items, by: { $0.episode.pubDate < $1.episode.pubDate }) } label: { Label("Oldest first", systemImage: "calendar.badge.clock") }
                     }

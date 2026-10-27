@@ -232,14 +232,13 @@ private struct PodcastEpisodeRow: View {
                 HStack(spacing: 7) {
                     if item.isInProgress {
                         ProgressBar(value: item.progress)
-                        Text("\(Format.duration(item.wallRemaining)) left").fontWeight(.semibold).foregroundStyle(Palette.ink)
-                    } else if !item.state.played {
-                        Text("\(Format.duration(item.wallRemaining)) at \(Format.speed(item.speed.value)) ·")
-                    } else {
+                        Text(item.lengthLabel).fontWeight(.semibold).foregroundStyle(Palette.ink)
+                    } else if item.state.played {
                         Text("Played")
                     }
+                    // No sped-up time for a fresh episode: the date line above has its length.
                     if item.isQueued {
-                        Text("· In Up Next")
+                        Text(item.isInProgress || item.state.played ? "· In Up Next" : "In Up Next")
                     } else if !item.state.played {
                         DownloadGlyph(item: item)
                     }

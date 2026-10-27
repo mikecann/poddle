@@ -12,15 +12,13 @@ import Testing
         let upNext = store.upNext(excluding: MockData.playingEpisodeId)
         #expect(upNext.count == 6)
         #expect(Format.queueSummary(count: upNext.count, wallSeconds: store.wallTime(upNext)) == "6 episodes · 4h 42m at your speeds")
-        #expect(upNext.first?.timeLabel == "38m left at 1.8×")
         let conan = upNext.first { $0.podcast.id == "pod_conan" }
-        #expect(conan?.timeLabel == "52m at 1.2×")
         #expect(conan?.speed.isOverride == true)
         #expect(upNext.filter(\.isDownloaded).count == 5)
         // Up Next rows show real lengths: 68.4 minutes left of Syntax, the whole 62.4 of Conan.
         #expect(upNext.first?.lengthLabel == "1h 8m left")
         #expect(conan?.lengthLabel == "1h 2m")
-        #expect(store.item(MockData.playingEpisodeId)?.timeLabel == "52m left at 1.4×")
+        #expect(store.item(MockData.playingEpisodeId)?.lengthLabel == "1h 13m left")
         #expect(store.podcast("pod_mike")?.isPrivate == true)
         #expect(store.cadence("pod_syntax") == "3 a week")
     }

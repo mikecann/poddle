@@ -246,7 +246,7 @@ The ★ items are configurable. Leading swipe means left to right.
 - Leading swipe: **Move to top**. Trailing short swipe: **Remove from queue**. Trailing long swipe: **Mark played** ★.
 - Long press: Play now, Move to top, Move to bottom, Download or remove download, Star, Mark played, Share, Go to show.
 - Top bar: sort once and Clear queue (with confirmation). No big title and no filter chips.
-- Rows show each episode's real length ("1h 8m left", "1h 14m"), not sped up and with no speed on them. The end of the list says how long the whole queue takes at your speeds (decisions.md, 27 Oct 2026).
+- Rows show each episode's real length ("1h 8m left", "1h 14m"), not sped up and with no speed or own-speed badge on them. The mini player and the queue sheet do the same. The end of the list says how long the whole queue takes at your speeds (decisions.md, 27 Oct 2026).
 
 **Podcast page**
 - Episode rows behave like the Inbox, minus Archive, plus "Mark all older as played" in the long-press menu.

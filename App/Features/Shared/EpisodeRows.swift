@@ -51,7 +51,6 @@ struct EpisodeRow: View {
                 .foregroundStyle(Palette.ink2)
                 .lineLimit(1)
             if item.podcast.isPrivate { PrivateBadge() }
-            if item.speed.isOverride { OverridePin(text: Format.speed(item.speed.value)) }
         }
     }
 
