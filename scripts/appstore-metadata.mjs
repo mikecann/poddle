@@ -226,6 +226,8 @@ async function appStoreVersion(app) {
   const want = {
     description: meta.description, keywords: meta.keywords, promotionalText: meta.promotionalText,
     supportUrl: meta.supportUrl, marketingUrl: meta.marketingUrl,
+    // "What's New in This Version". Apple only takes it on updates, so 1.0.0 had none.
+    whatsNew: meta.whatsNew,
   };
   if (loc) await patchAttrs("appStoreVersionLocalizations", loc.id, `version[${meta.locale}]`, loc.attributes, want);
   else {

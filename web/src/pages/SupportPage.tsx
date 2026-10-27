@@ -31,8 +31,8 @@ export function SupportPage() {
         <p>
           Tap the speed button on the Now Playing screen to speed up (or slow down). Poddle's "Speech-tuned" speed-up is
           made for voices, so people sound like themselves rather than chipmunks. <b>Poodle Trim</b> trims the silences
-          between words, and <b>Even Volume</b> evens out the volume so quiet hosts are easier to hear. (In Poddle 1.0
-          they're still called Smart Speed and Voice Boost, and they'll get their new names in the next update.) Swipe left on Now
+          between words, and <b>Even Volume</b> evens out the volume so quiet hosts are easier to hear. (Poddle
+          1.0.0 still calls them Smart Speed and Voice Boost. They have their new names from 1.0.1.) Swipe left on Now
           Playing to change these, and turn on <b>Customize for</b> that show if you want different settings for one
           show.
         </p>

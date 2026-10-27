@@ -135,7 +135,7 @@ struct YearInReviewView: View {
     }
 
     private func shareText(_ r: YearInReview) -> String {
-        "I listened to \(Format.hours(r.listenedSeconds)) of podcasts in \(r.year) and got \(Format.hours(r.savedSeconds)) back with speed and Smart Speed."
+        "I listened to \(Format.hours(r.listenedSeconds)) of podcasts in \(r.year) and got \(Format.hours(r.savedSeconds)) back with speed and Poodle Trim."
     }
 }
 
@@ -269,7 +269,7 @@ private struct ReceiptCard: View {
             dash
             line("TOTAL LISTENED", Format.hours(review.listenedSeconds)).font(.mono(14, .heavy))
             line("SAVED BY SPEED", "−" + Format.hours(review.savedBySpeedSeconds)).foregroundStyle(Color(hex: 0xB9411F))
-            line("SAVED BY SMART SPEED", "−" + Format.hours(review.savedBySmartSpeedSeconds)).foregroundStyle(Color(hex: 0xB9411F))
+            line("SAVED BY POODLE TRIM", "−" + Format.hours(review.savedBySmartSpeedSeconds)).foregroundStyle(Color(hex: 0xB9411F))
             dash
             line("USUAL SPEED", Format.speed(review.usualSpeed))
             line("PEAK HOUR", review.peakHourLabel.uppercased())

@@ -99,6 +99,17 @@ On the 1.0.0 version page and App Information, check:
 
 **Add for Review** at the top right of the version page, answer anything it still asks, then **Submit for Review** (or **Submit to App Review**). The status goes to "Waiting for Review". That's it: "Submitted for review".
 
+## Shipping an update (1.0.1 onwards)
+
+1.0.0 went out on 27 Oct 2026. For each update after that:
+
+1. Bump `MARKETING_VERSION` in `Poddle.xcodeproj/project.pbxproj` (all four lines, app and UI tests) and `version` in `appstore/metadata.json`, and write `whatsNew` there ("What's New in This Version", required for updates). Keep Overcast's names out of it.
+2. Check the build still works against prod's backend and the other way round: prod keeps serving the old version until people update, so a Convex change the new app needs has to be deployed first, and it mustn't break the old app.
+3. `node scripts/appstore-metadata.mjs --dry-run`, then without `--dry-run`. With nothing being prepared it creates the new version. App Store Connect copies the previous version's description, keywords, review details and screenshots into it, but not the promotional text, which the script fills in.
+4. If the screens changed, retake the screenshots (step 6) and upload them with `node scripts/appstore-screenshots.mjs <pngs in order>`, which replaces the set.
+5. `UPLOAD=1 scripts/appstore-upload.sh`, then `node scripts/appstore-submit.mjs <build> --submit`.
+6. Once it's approved, release it (App Store Connect, or `POST /v1/appStoreVersionReleaseRequests` with the version's id).
+
 ## If it's rejected
 
 Read the message in App Store Connect > Resolution Center. Fix it, bump nothing (the version stays 1.0.0), upload a new build with `UPLOAD=1 scripts/appstore-upload.sh` (it gets a new build number), choose it in step 8, and resubmit. Listing-only fixes just need the metadata script again and a resubmit.

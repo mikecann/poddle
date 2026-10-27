@@ -78,7 +78,7 @@ struct StatsView: View {
                 .padding(.vertical, 6)
                 HStack(alignment: .top, spacing: 10) {
                     legend("Speed", Format.hours(s.savedBySpeedSeconds), Palette.tomato)
-                    legend("Smart", Format.hours(s.savedBySmartSpeedSeconds), Palette.mustard)
+                    legend("Poodle Trim", Format.hours(s.savedBySmartSpeedSeconds), Palette.mustard)
                 }
             }
         }

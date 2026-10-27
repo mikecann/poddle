@@ -481,7 +481,7 @@ private struct Transport: View {
     }
 }
 
-/// Speed, sleep timer, AirPlay and the queue, on puffy cream tiles. Smart Speed, Voice Boost and
+/// Speed, sleep timer, AirPlay and the queue, on puffy cream tiles. Poodle Trim, Even Volume and
 /// the rest live on the settings page; tapping the speed goes there.
 private struct UtilityRow: View {
     var item: EpisodeItem

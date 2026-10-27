@@ -160,13 +160,13 @@ struct PlaybackSettingsPage: View {
     private var toggles: some View {
         GroupCard {
             Toggle(isOn: Binding(get: { r.smartSpeed.value }, set: { v in edit({ $0.smartSpeed = v }, { $0.smartSpeed = v }) })) {
-                cellLabel("Smart Speed", "Trims silences · \(Format.saved(player.smartSaved)) saved this episode", icon: "waveform.path", tint: Palette.mustard)
+                cellLabel("Poodle Trim", "Trims silences · \(Format.saved(player.smartSaved)) saved this episode", icon: "waveform.path", tint: Palette.mustard)
             }
             .toggleStyle(.poddle)
             .accessibilityIdentifier("playbackSettings.smartSpeed")
             .padding(.horizontal, 16).frame(minHeight: 60)
             Toggle(isOn: Binding(get: { r.voiceBoost.value }, set: { v in edit({ $0.voiceBoost = v }, { $0.voiceBoost = v }) })) {
-                cellLabel("Voice Boost", "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
+                cellLabel("Even Volume", "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
             }
             .toggleStyle(.poddle)
             .accessibilityIdentifier("playbackSettings.voiceBoost")
