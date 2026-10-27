@@ -413,8 +413,8 @@ const benefits: Benefit[] = [
     body: "How long you've listened, how much time faster playback and Poodle Trim saved, your top shows and your streaks. At the end of the year there's a Year in Review to share.",
     media: (
       <div className="flex items-start gap-4">
-        <Phone shot={shots.stats} className="w-40 sm:w-48" />
-        <Phone shot={shots.yearInReview} className="mt-6 w-40 sm:w-48" />
+        <Phone shot={shots.stats} className="w-32 sm:w-48" />
+        <Phone shot={shots.yearInReview} className="mt-6 w-32 sm:w-48" />
       </div>
     ),
     tint: "bg-[#F6DCCD]",
@@ -451,7 +451,8 @@ function Benefits() {
 // ---------------------------------------------------------------------------------------
 
 // Lines, then phrases within each line. A narrow screen may wrap a line, but only between
-// phrases, so it never splits "at its own speed" (skill B5 and B11: break where the thought breaks).
+// phrases from sm up, so it never splits "at its own speed" (skill B5 and B11: break where the
+// thought breaks). On a phone a phrase can be wider than the screen, so there it may wrap.
 const TAGLINE = [
   ["Every show", "at its own speed."],
   ["One queue", "for all of them."],
@@ -501,7 +502,7 @@ function TaglineReveal() {
         {TAGLINE.map((line, li) => (
           <span key={li} className="block">
             {line.map((phrase, pi) => (
-              <span key={pi} className="whitespace-nowrap">
+              <span key={pi} className="sm:whitespace-nowrap">
                 {phrase.split(" ").map((word, wi, all) => {
                   const index = n++;
                   return (

@@ -11,5 +11,6 @@ Feature: The home page
 
   Scenario: On a phone, sign in is in the menu
     When a visitor opens the home page on a phone
-    And they open the menu and choose to sign in
+    Then the home page fits the phone's screen
+    When they open the menu and choose to sign in
     Then the website asks them to sign in
