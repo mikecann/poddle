@@ -11,11 +11,11 @@
       }
     },
     {
-      "identity" : "feedback-chef",
+      "identity" : "chef-cloud",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/sethconvex/feedback-chef",
+      "location" : "https://github.com/convex/chef-cloud",
       "state" : {
-        "revision" : "dc9056d4bfb52cac5719d29f39d5bf61c211ac21"
+        "revision" : "7f3eb9a40621d52ee2408f7fb9e48069ec07982e"
       }
     }
   ],

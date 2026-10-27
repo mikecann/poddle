@@ -83,7 +83,7 @@ describe("remote e2e reporting", () => {
     const repo = temp();
     mkdirSync(path.join(repo, "Packages/PoddleKit"), { recursive: true });
     mkdirSync(path.join(repo, "Poddle.xcodeproj"));
-    writeFileSync(path.join(repo, "Packages/PoddleKit/Package.resolved"), JSON.stringify({ pins: [{ identity: "feedback-chef", state: { revision: "abc" } }] }));
+    writeFileSync(path.join(repo, "Packages/PoddleKit/Package.resolved"), JSON.stringify({ pins: [{ identity: "chef-cloud", state: { revision: "abc" } }] }));
     writeFileSync(path.join(repo, "Poddle.xcodeproj/project.pbxproj"), "revision = def;");
     expect(() => packagePins(repo)).toThrow("disagree");
   });
