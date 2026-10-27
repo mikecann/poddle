@@ -1,4 +1,5 @@
 import react from "@vitejs/plugin-react";
+import tailwindcss from "@tailwindcss/vite";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -48,7 +49,7 @@ function prerenderLanding(): Plugin {
 // (`npm run web:upload:dev`, README "Website").
 export default defineConfig({
   root: import.meta.dirname,
-  plugins: [react(), prerenderLanding()],
+  plugins: [react(), tailwindcss(), prerenderLanding()],
   build: { outDir: "dist", emptyOutDir: true },
   server: { port: 5174 },
 });

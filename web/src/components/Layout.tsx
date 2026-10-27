@@ -33,7 +33,7 @@ export function SiteHeader({ signedIn }: { signedIn: boolean }) {
  * corner triangles as video-to-markdown.com. They sit in the page (not fixed) so they
  * scroll away rather than covering the content.
  */
-function Corners() {
+export function Corners() {
   return (
     <>
       <a className="corner convex" href="https://convex.dev" target="_blank" rel="noopener noreferrer" aria-label="Made with Convex" title="Made with Convex">
