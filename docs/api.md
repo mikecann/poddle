@@ -327,6 +327,8 @@ Re-running is safe: shows match by Overcast ID or feed URL, sessions and events 
 
 New-episode alerts: `{ aps: { alert: { title: <show>, body: <episode> }, sound: "default", "thread-id": <podcastId> }, episodeId, podcastId }`. Sent for genuinely new episodes (not a show's first fetch, not imports) to each subscriber whose resolved `notifications` is on for that show, on that person's devices only. Dead tokens (410 / `BadDeviceToken`) are dropped.
 
+Sync pushes: `{ aps: { "content-available": 1 }, sync: "upNext" }`, sent silently (`apns-push-type: background`, priority 5) whatever the notification setting, so the app can sync and start downloads while it's in the background or closed. One goes to each of a person's devices 2 minutes after a genuinely new episode lands in their Up Next (`apns:sendSyncWake`), and everything else that lands before it goes out shares it (`syncWakes` holds when it's due). iOS decides whether and when to deliver them, so the app also runs background app refresh (`com.mikecann.poddle.refresh`) as a backstop.
+
 ### Sync (`sync:*`)
 
 | Function | Kind | Args | Returns |

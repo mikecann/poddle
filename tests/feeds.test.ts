@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
+import { SYNC_WAKE_DELAY } from "../convex/devices";
 import { nextCheckDelay } from "../convex/feeds";
 import { drain, fixture, mockFetch, setup, type T } from "./helpers";
 
@@ -170,6 +171,55 @@ describe("refreshing", () => {
     await drain(t);
     expect(log.mock.calls.flat().join("\n")).toContain("[apns] not configured, skipping: The Odd Show: Episode 5: Fresh");
     log.mockRestore();
+  });
+
+  /** Background sync pushes waiting to go out. */
+  async function pendingWakes(t: T) {
+    return await t.run(async (ctx) =>
+      (await ctx.db.system.query("_scheduled_functions").collect()).filter(
+        (f) => f.name.includes("sendSyncWake") && f.state.kind === "pending",
+      ),
+    );
+  }
+
+  test("new episodes in Up Next wake the phone in the background, once for the whole poll", async () => {
+    const t = setup();
+    const podcastId = await withQueue(t);
+    // Subscribing happens with the app open, so it wakes nothing.
+    expect(await pendingWakes(t)).toHaveLength(0);
+
+    await publishFresh(t, podcastId);
+    const [wake] = await pendingWakes(t);
+    expect(wake?.args).toEqual([{ userId: await t.userId() }]);
+    // Two minutes out, so the rest of the poll lands first.
+    expect(wake!.scheduledTime - NOW).toBeGreaterThanOrEqual(SYNC_WAKE_DELAY);
+    expect(wake!.scheduledTime - NOW).toBeLessThan(SYNC_WAKE_DELAY + 1000);
+
+    // More of the same poll, a minute later: it rides along on the same push.
+    vi.setSystemTime(NOW + 60_000);
+    mockFetch({ [FEED]: withNewItems(newItem(6, "Wed, 15 Oct 2025 00:01:00 GMT"), newItem(5, "Wed, 15 Oct 2025 00:00:00 GMT")) });
+    await t.action(api.feedActions.refreshNow, { podcastId });
+    expect(await queueTitles(t)).toEqual(["Playing", "Queued", "Episode 5: Fresh", "Episode 6: Fresh"]);
+    expect(await pendingWakes(t)).toHaveLength(1);
+
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+    await drain(t);
+    expect(log.mock.calls.flat().join("\n")).toContain("[apns] not configured, skipping: sync wake");
+    log.mockRestore();
+
+    // The next poll's episodes get a push of their own.
+    vi.setSystemTime(NOW + 20 * 60_000);
+    mockFetch({ [FEED]: withNewItems(newItem(7, "Wed, 15 Oct 2025 00:20:00 GMT"), newItem(6, "Wed, 15 Oct 2025 00:01:00 GMT"), newItem(5, "Wed, 15 Oct 2025 00:00:00 GMT")) });
+    await t.action(api.feedActions.refreshNow, { podcastId });
+    expect(await pendingWakes(t)).toHaveLength(1);
+  });
+
+  test("a show set to Don't add wakes nothing", async () => {
+    const t = setup();
+    const podcastId = await withQueue(t);
+    await t.mutation(api.settings.updatePodcast, { podcastId, patch: { newEpisodes: "none" }, at: Date.now() });
+    await publishFresh(t, podcastId);
+    expect(await pendingWakes(t)).toHaveLength(0);
   });
 });
 

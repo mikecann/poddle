@@ -352,6 +352,22 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         #expect(episodeQueries.last?.args["since"] == 250)
         #expect(episodeQueries.allSatisfy { $0.args["token"] == nil })
     }
+
+    /// A background wake lands while the connection's own catch-up is still running. `catchUp`
+    /// would return straight away, before anything the wake was for is in the cache.
+    @Test func syncNowWaitsForAPassInFlightThenRunsItsOwn() async throws {
+        let fake = FakeTransport()
+        fake.queryDelay = .milliseconds(20)
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        let inFlight = Task { await store.catchUp() }
+        try await Task.sleep(for: .milliseconds(5))
+        await store.syncNow()
+        let passes = fake.queries.filter { $0.name == "sync:changes" }.count
+        #expect(passes == 2 * LiveStore.syncTables.count)
+        await inFlight.value
+    }
 }
 
 

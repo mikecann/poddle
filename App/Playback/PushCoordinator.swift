@@ -126,6 +126,14 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         AppServices.current?.push.didFailToRegister(error)
     }
 
+    /// A sync push (`{ aps: { content-available: 1 }, sync: "upNext" }`, docs/api.md): new episodes
+    /// landed in Up Next while Poddle was in the background or closed, so sync and start their
+    /// downloads now rather than when it's next opened.
+    func application(_ application: UIApplication, didReceiveRemoteNotification userInfo: [AnyHashable: Any]) async -> UIBackgroundFetchResult {
+        guard userInfo["sync"] != nil, let services = AppServices.current else { return .noData }
+        return await services.syncInBackground(recheckFeeds: false) ? .newData : .noData
+    }
+
     /// Downloads finished while the app was suspended or gone: the system relaunched it to hear about them.
     func application(_ application: UIApplication, handleEventsForBackgroundURLSession identifier: String, completionHandler: @escaping () -> Void) {
         guard identifier == DownloadManager.sessionIdentifier, let downloads = AppServices.current?.downloads else {

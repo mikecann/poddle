@@ -40,9 +40,14 @@ final class FakeTransport: ConvexTransport, @unchecked Sendable {
     var auth: (any AuthTokenSource)? { locked { _auth } }
     func setAuth(_ source: (any AuthTokenSource)?) async { locked { _auth = source } }
 
+    /// How long each query takes, to keep a sync pass in flight.
+    var queryDelay: Duration { get { locked { _queryDelay } } set { locked { _queryDelay = newValue } } }
+    private var _queryDelay: Duration = .zero
+
     func query(_ name: String, _ args: [String: JSONValue]) async throws -> Data {
         guard online else { throw TransportError.network("offline") }
         locked { _queries.append(Call(name: name, args: args)) }
+        if queryDelay > .zero { try await Task.sleep(for: queryDelay) }
         return respond(name, args)
     }
 

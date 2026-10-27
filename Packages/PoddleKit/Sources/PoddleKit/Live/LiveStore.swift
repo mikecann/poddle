@@ -450,6 +450,14 @@ public actor LiveStore: PoddleDataSource {
         }
     }
 
+    /// A background wake (a sync push or background app refresh): waits out a pass that's already
+    /// running, which `catchUp` would skip, then runs a fresh one. Whatever was on the server
+    /// before the call is in the cache when it returns.
+    public func syncNow() async {
+        while syncing { try? await Task.sleep(for: .milliseconds(50)) }
+        await catchUp()
+    }
+
     private struct SyncPageOf<T: Decodable & Sendable>: Decodable, Sendable {
         var page: [T]
         var isDone: Bool

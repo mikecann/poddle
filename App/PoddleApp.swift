@@ -205,11 +205,19 @@ struct PoddleApp: App {
                     switch phase {
                     // Foreground: ask Convex to re-check feeds not checked in the last 2 minutes.
                     case .active: if account?.isSignedIn != false { Task { await store.refresh() } }
-                    case .background: if let live = store.dataSource as? LiveStore { Task { await live.flush() } }
+                    case .background:
+                        if let live = store.dataSource as? LiveStore { Task { await live.flush() } }
+                        #if os(iOS)
+                        BackgroundRefresh.schedule()
+                        #endif
                     default: break
                     }
                 }
         }
+        #if os(iOS)
+        // Syncs and downloads new episodes while Poddle's closed (BackgroundRefresh).
+        .backgroundTask(.appRefresh(BackgroundRefresh.identifier)) { await BackgroundRefresh.run() }
+        #endif
         #if os(macOS)
         .defaultSize(width: 1100, height: 780)
         .commands { PlaybackCommands(player: player, store: store) }
