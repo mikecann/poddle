@@ -107,7 +107,7 @@ On the 1.0.0 version page and App Information, check:
 2. Check the build still works against prod's backend and the other way round: prod keeps serving the old version until people update, so a Convex change the new app needs has to be deployed first, and it mustn't break the old app.
 3. `node scripts/appstore-metadata.mjs --dry-run`, then without `--dry-run`. With nothing being prepared it creates the new version. App Store Connect copies the previous version's description, keywords, review details and screenshots into it, but not the promotional text, which the script fills in.
 4. If the screens changed, retake the screenshots (step 6) and upload them with `node scripts/appstore-screenshots.mjs <pngs in order>`, which replaces the set.
-5. `UPLOAD=1 scripts/appstore-upload.sh`, then `node scripts/appstore-submit.mjs <build> --submit`.
+5. `UPLOAD=1 scripts/appstore-upload.sh`, then `node scripts/appstore-submit.mjs <build> --submit`. If Apple refuses it with a 409, the lines above the raw error say what's missing. For 1.0.1 it was a new age rating question (`socialMedia`), answered in `metadata.json` and sent with the metadata script.
 6. Once it's approved, release it (App Store Connect, or `POST /v1/appStoreVersionReleaseRequests` with the version's id).
 
 ## If it's rejected

@@ -42,7 +42,16 @@ async function api(method, path, body) {
     headers: { Authorization: `Bearer ${token()}`, "Content-Type": "application/json" },
     body: body ? JSON.stringify(body) : undefined,
   });
-  if (!res.ok) throw new Error(`${method} ${path}: ${res.status} ${(await res.text()).slice(0, 600)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    // A 409 on submitting hides what's missing in associatedErrors, past where a short slice cuts off
+    // (on 27 Oct 2026 it was a new age rating question, socialMedia), so spell those out first.
+    let missing = [];
+    try {
+      missing = JSON.parse(text).errors.flatMap((e) => Object.values(e.meta?.associatedErrors ?? {}).flat()).map((e) => e.detail);
+    } catch {}
+    throw new Error(`${method} ${path}: ${res.status}${missing.length ? `\n  ${missing.join("\n  ")}\n` : " "}${text.slice(0, 600)}`);
+  }
   return res.status === 204 ? null : res.json();
 }
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));

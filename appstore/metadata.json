@@ -41,6 +41,7 @@
     "parentalControls": false,
     "ageAssurance": false,
     "userGeneratedContent": false,
+    "socialMedia": false,
     "advertising": false,
     "healthOrWellnessTopics": false
   },
