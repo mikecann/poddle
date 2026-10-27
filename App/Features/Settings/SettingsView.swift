@@ -108,9 +108,9 @@ struct SettingsView: View {
                                     onDecrement: { store.setSpeed(g.speed - 0.05, scope: .allPodcasts) },
                                     onIncrement: { store.setSpeed(g.speed + 0.05, scope: .allPodcasts) })
                     }
-                    toggle("Smart Speed", \.smartSpeed, subtitle: "Trims silences", icon: "waveform.path", tint: Palette.mustard)
+                    toggle("Poodle Trim", \.smartSpeed, subtitle: "Trims silences", icon: "waveform.path", tint: Palette.mustard)
                         .accessibilityIdentifier("settings.smartSpeed")
-                    toggle("Voice Boost", \.voiceBoost, subtitle: "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
+                    toggle("Even Volume", \.voiceBoost, subtitle: "Evens out loud and quiet voices", icon: "speaker.wave.2", tint: Palette.fern)
                         .accessibilityIdentifier("settings.voiceBoost")
                     picker("Speed-up method", \.timePitch, TimePitchAlgorithm.allCases, \.label)
                 }

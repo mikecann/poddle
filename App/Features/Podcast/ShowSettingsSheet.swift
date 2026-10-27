@@ -33,8 +33,8 @@ struct ShowSettingsSheet: View {
                             update { $0.speed = v }
                         }
                     }
-                    boolMenu("Smart Speed", key: \.smartSpeed, global: g.smartSpeed)
-                    boolMenu("Voice Boost", key: \.voiceBoost, global: g.voiceBoost)
+                    boolMenu("Poodle Trim", key: \.smartSpeed, global: g.smartSpeed)
+                    boolMenu("Even Volume", key: \.voiceBoost, global: g.voiceBoost)
                     enumMenu("Speed-up method", key: \.timePitch, all: TimePitchAlgorithm.allCases, global: g.timePitch, label: \.label)
                 }
 
