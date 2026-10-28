@@ -81,6 +81,17 @@ The e2e suites are slow (the app's takes about 17 minutes), so the full suite ru
 
 Remote results come back to `e2e/.remote-results/<sha>/`. Local failures leave screenshots, accessibility trees, traces and logs in `e2e/.runtime/` (both git-ignored). `docs/testing.md` says what's where.
 
+## Pushing to main (Mike, 28 Oct 2026)
+
+While Poddle has no users, push straight to `main` rather than opening a PR. Merging to `main` doesn't deploy anything: the backend reaches prod with a Convex deploy and the app with an App Store release, and those stay separate steps.
+
+- Before pushing: `npm run check`, the unit tests for what you touched, and the e2e features it touches (the cadence above). Commit only your own files.
+- For anything visible, put screenshots in the thread instead of a PR description.
+- If another thread has pushed meanwhile, rebase onto `origin/main` and check again. Never force-push `main`.
+- The nightly full suite and its `e2e-failure` issue catch knock-on breakage. Look at that issue before starting something new.
+- Open a PR only when Mike asks for one, or for a big risky change he'd want to see first: auth, data migrations, account deletion.
+- Chef requests: build on a branch, show Mike screenshots in the thread, and push to `main` when he says go.
+
 ## Rules that bite
 
 - **Off the main thread:** the app target defaults to MainActor isolation, and SwiftUI may resolve colours and shapes off the main thread. Keep that code `nonisolated` / `@Sendable`.
