@@ -300,13 +300,16 @@ Maths: speed saving = content × (1 − 1/rate); Smart Speed saving = smartRemov
 `YearInReview`:
 ```
 { year, availableFrom: "YYYY-12-01", totals, episodesCompleted: Int,
-  topShows (top 5), topEpisode | null, longestStreak, biggestDay | null, busiestMonth | null,
+  topShows (top 5),
+  otherShowCount: Int,                                    // shows with listening that year beyond topShows (private ones it leaves out count here)
+  topEpisode | null, longestStreak, biggestDay | null, busiestMonth | null,
   personality: { key, label, percent: Int } | null,      // e.g. "Night owl: 41% after 9 pm"; keys nightOwl, earlyBird, commuter, weekender, allDay
   firstEpisode: { episodeId, title, podcast, at } | null, lastEpisode: same | null,
   newShows: [PodcastSummary],                             // subscribedAt in that year
-  heatmap, months, includesEstimated: Bool, estimatedBefore: ms | null }
+  heatmap, months, includesEstimated: Bool, estimatedBefore: ms | null,
+  listenerName: String | null }                           // the account's name; Apple only sends one on first sign-in, so it can be null
 ```
-Private shows are left out of `topShows`, `topEpisode`, `first/lastEpisode` and `newShows` unless `includePrivate` is true. Totals still include them.
+Private shows are left out of `topShows`, `topEpisode`, `first/lastEpisode` and `newShows` unless `includePrivate` is true. Totals still include them. `otherShowCount` and `listenerName` arrived after app 1.0.3, so the app treats them as optional (0 and "You") in case it meets an older backend; older apps ignore them.
 
 ### Overcast import (`overcastImport:*`)
 

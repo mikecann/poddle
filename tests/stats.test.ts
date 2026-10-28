@@ -213,6 +213,41 @@ describe("stats queries", () => {
     const withPrivate = await t.query(api.stats.yearInReview, { year: 2025, includePrivate: true });
     expect(withPrivate.topShows).toHaveLength(1);
   });
+
+  test("year in review counts the other shows listened to that year, private top shows included", async () => {
+    const t = setup();
+    // Seven shows: the most-listened is private, so without includePrivate it
+    // drops out of the top five and counts as an "other" show.
+    const shows: Awaited<ReturnType<typeof seedShow>>[] = [];
+    for (let i = 0; i < 7; i++) shows.push(await seedShow(t, 1, { title: `show${i}` }));
+    await t.run(async (ctx) => ctx.db.patch(shows[0]!.podcastId, { isPrivate: true }));
+    for (const [i, s] of shows.entries()) {
+      await record(t, { id: `s${i}`, ep: s.episodeIds[0]!, start: syd(2025, 3, 1 + i, 8), mins: 70 - i * 5, rate: 1 });
+    }
+    // A show only heard the year before doesn't count.
+    const old = await seedShow(t, 1, { title: "old" });
+    await record(t, { id: "old", ep: old.episodeIds[0]!, start: syd(2024, 6, 1, 8), mins: 30, rate: 1 });
+
+    const y = await t.query(api.stats.yearInReview, { year: 2025 });
+    expect(y.topShows.map((s) => s.podcast.title)).toEqual(["show1", "show2", "show3", "show4", "show5"]);
+    expect(y.otherShowCount).toBe(2); // show6, plus the private show0
+    const withPrivate = await t.query(api.stats.yearInReview, { year: 2025, includePrivate: true });
+    expect(withPrivate.topShows.map((s) => s.podcast.title)).toEqual(["show0", "show1", "show2", "show3", "show4"]);
+    expect(withPrivate.otherShowCount).toBe(2); // show5 and show6
+
+    const few = await t.query(api.stats.yearInReview, { year: 2024 });
+    expect(few.topShows).toHaveLength(1);
+    expect(few.otherShowCount).toBe(0);
+  });
+
+  test("year in review carries the account's name, or null without one", async () => {
+    const t = setup();
+    const userId = await t.userId();
+    await t.run(async (ctx) => ctx.db.patch(userId, { name: "Ada Lovelace" }));
+    expect((await t.query(api.stats.yearInReview, { year: 2025 })).listenerName).toBe("Ada Lovelace");
+    await t.run(async (ctx) => ctx.db.patch(userId, { name: undefined }));
+    expect((await t.query(api.stats.yearInReview, { year: 2025 })).listenerName).toBeNull();
+  });
 });
 
 // ---- Top episodes: rank first, look up only what can make the list ----

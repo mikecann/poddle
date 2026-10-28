@@ -54,6 +54,12 @@ public enum Format {
     /// "612h".
     public static func hours(_ seconds: Double) -> String { "\(Int((seconds / 3600).rounded()))h" }
 
+    /// The year-in-review receipt's "+ 3 OTHER SHOWS" line, or nil when there are none to list.
+    public static func otherShows(_ count: Int) -> String? {
+        guard count > 0 else { return nil }
+        return "+ \(count) OTHER SHOW\(count == 1 ? "" : "S")"
+    }
+
     /// "3,412".
     public static func count(_ n: Int) -> String {
         n.formatted(.number.grouping(.automatic).locale(Locale(identifier: "en_AU")))

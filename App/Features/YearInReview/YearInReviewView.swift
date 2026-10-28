@@ -265,7 +265,10 @@ private struct ReceiptCard: View {
             ForEach(shows.top) { show in
                 line(show.title.uppercased().replacingOccurrences(of: " PODCAST", with: "") + (show.isPrivate ? " (PRIVATE)" : ""), Format.hours(show.seconds))
             }
-            line("+ \(shows.otherCount) OTHER SHOWS", Format.hours(shows.otherSeconds)).foregroundStyle(muted)
+            // Hidden when every show you heard is already listed above.
+            if let others = Format.otherShows(shows.otherCount) {
+                line(others, Format.hours(shows.otherSeconds)).foregroundStyle(muted)
+            }
             dash
             line("TOTAL LISTENED", Format.hours(review.listenedSeconds)).font(.mono(14, .heavy))
             line("SAVED BY SPEED", "−" + Format.hours(review.savedBySpeedSeconds)).foregroundStyle(Color(hex: 0xB9411F))

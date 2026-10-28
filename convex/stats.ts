@@ -123,6 +123,10 @@ async function todayFor(ctx: QueryCtx): Promise<string> {
   return localDay(now, zoneOffsetMinutes(tz, now));
 }
 
+/**
+ * The `limit` shows with the most wall time, plus `listened`: how many shows had
+ * any (over half a second) in the period, for year in review's "+ N other shows".
+ */
 async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay: string, limit: number) {
   const byShow = new Map<Id<"podcasts">, { wall: number; content: number; sessions: number }>();
   const rows =
@@ -152,7 +156,7 @@ async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay:
     const podcast = await show(podcastId);
     if (podcast) out.push({ podcast: podcastSummary(podcast), ...acc });
   }
-  return out;
+  return { top: out, listened: ranked.length };
 }
 
 const MAX_SESSIONS_READ = 8000;
@@ -257,6 +261,7 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
     for (const m of months) heatmap = heatmap.map((x, i) => x + (m.heatmap[i] ?? 0));
   }
 
+  const shows = await topShows(ctx, period, startDay, endDay, limit);
   const busiestDay = days.reduce<{ day: string; wall: number } | null>(
     (best, d) => (d.wall > (best?.wall ?? 0) ? { day: d.day, wall: d.wall } : best),
     null,
@@ -275,7 +280,9 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
     endDay,
     totals,
     completion,
-    topShows: await topShows(ctx, period, startDay, endDay, limit),
+    topShows: shows.top,
+    /** Not in `vSummary`: only year in review uses it, and `summary` drops it. */
+    showsListened: shows.listened,
     topEpisodes: await topEpisodes(ctx, period, startDay, endDay, limit),
     longestStreak: longestStreak(days),
     currentStreak: await currentStreakFrom(ctx, today),
@@ -300,7 +307,10 @@ export async function computeTotals(ctx: QueryCtx, period: Period, anchorDay: st
 export const summary = userQuery({
   args: { period: vPeriod, anchorDay: v.optional(v.string()) },
   returns: vSummary,
-  handler: async (ctx, { period, anchorDay }) => await computeSummary(ctx, period, anchorDay),
+  handler: async (ctx, { period, anchorDay }) => {
+    const { showsListened: _, ...summary } = await computeSummary(ctx, period, anchorDay);
+    return summary;
+  },
 });
 
 /**
@@ -360,6 +370,12 @@ export const yearInReview = userQuery({
     totals: vTotals,
     episodesCompleted: v.number(),
     topShows: v.array(vTopShow),
+    /**
+     * Shows listened to that year that aren't in `topShows` (private ones it
+     * leaves out count here), for the receipt's "+ N other shows". Added after
+     * 1.0.3; older apps ignore it.
+     */
+    otherShowCount: v.number(),
     topEpisode: v.union(vTopEpisode, v.null()),
     longestStreak: vStreak,
     biggestDay: v.union(v.object({ day: v.string(), wall: v.number() }), v.null()),
@@ -373,6 +389,8 @@ export const yearInReview = userQuery({
     includesEstimated: v.boolean(),
     /** When the most recent import finished, for "includes estimated history before …". */
     estimatedBefore: v.union(v.number(), v.null()),
+    /** The account's name (Apple only sends it on first sign-in, so it can be missing). Added after 1.0.3. */
+    listenerName: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { year, includePrivate }) => {
     const anchor = `${year}-06-01`;
@@ -413,12 +431,16 @@ export const yearInReview = userQuery({
       .order("desc")
       .first();
 
+    const top = s.topShows.filter((t) => keep(t.podcast)).slice(0, 5);
+    const user = await ctx.db.get(ctx.userId);
+
     return {
       year,
       availableFrom: `${year}-12-01`,
       totals: s.totals,
       episodesCompleted: s.completion.completed,
-      topShows: s.topShows.filter((t) => keep(t.podcast)).slice(0, 5),
+      topShows: top,
+      otherShowCount: Math.max(0, s.showsListened - top.length),
       topEpisode: s.topEpisodes.find((e) => keep(e.podcast)) ?? null,
       longestStreak: s.longestStreak,
       biggestDay: s.busiestDay,
@@ -431,6 +453,7 @@ export const yearInReview = userQuery({
       months: s.months,
       includesEstimated: s.includesEstimated,
       estimatedBefore: s.includesEstimated ? (lastImport?.finishedAt ?? lastImport?.startedAt ?? null) : null,
+      listenerName: user?.name ?? null,
     };
   },
 });

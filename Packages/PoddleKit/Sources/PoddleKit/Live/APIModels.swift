@@ -301,6 +301,10 @@ struct YearInReviewDoc: Decodable, Sendable {
     var heatmap: [Double]
     var includesEstimated: Bool
     var estimatedBefore: Double?
+    /// Shows heard that year beyond `topShows`. Optional: backends from before October 2026 don't send it.
+    var otherShowCount: Double?
+    /// The account's name. Optional for older backends, and null when Apple never gave one.
+    var listenerName: String?
 }
 
 enum StatsMapping {
@@ -359,6 +363,15 @@ enum StatsMapping {
         return years.sorted(by: >)
     }
 
+    /// Who the card says listened: the first word of the account's name ("Mike Cann" → "Mike"),
+    /// or "You" when there isn't a usable one. Test accounts are named after their email, so
+    /// anything with an @ falls back too.
+    static func listenerName(_ name: String?) -> String {
+        let first = name?.split(whereSeparator: \.isWhitespace).first.map(String.init)
+        guard let first, !first.contains("@") else { return "You" }
+        return first
+    }
+
     static func yearInReview(_ r: YearInReviewDoc) -> YearInReview {
         let top = r.topShows.map(\.model)
         let topSeconds = top.reduce(0) { $0 + $1.seconds }
@@ -376,9 +389,9 @@ enum StatsMapping {
             return "\(f.string(from: date)) · \(Format.hours(d.wall))"
         } ?? "—"
         return YearInReview(
-            year: Int(r.year), listenerName: "Mike", serial: Int(r.totals.sessions) % 10_000,
+            year: Int(r.year), listenerName: listenerName(r.listenerName), serial: Int(r.totals.sessions) % 10_000,
             listenedSeconds: r.totals.wall, savedBySpeedSeconds: r.totals.speedSaved,
-            savedBySmartSpeedSeconds: r.totals.smartSaved, topShows: top, otherShowCount: 0,
+            savedBySmartSpeedSeconds: r.totals.smartSaved, topShows: top, otherShowCount: Int(r.otherShowCount ?? 0),
             otherShowsSeconds: max(0, r.totals.wall - topSeconds), usualSpeed: r.totals.averageSpeed ?? 1,
             peakHourLabel: peakHour(r.heatmap), longestStreakDays: Int(r.longestStreak.length),
             episodesCompleted: Int(r.episodesCompleted), biggestDayLabel: biggest, busiestMonth: monthName,
