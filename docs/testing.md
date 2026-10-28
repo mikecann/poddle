@@ -62,7 +62,7 @@ Both harnesses arrange and inspect the backend through `POST <fixtures>/_world/<
 
 ## Running
 
-Full runs go to **tinker-desk**, Mike's spare Mac, over SSH (`E2E_REMOTE_HOST` or `--host` points them at another Mac). Use local runs only for the scenarios you touched. `npm run check` remains the cheap check on every change.
+e2e runs go to **tinker-desk**, Mike's spare Mac, over SSH (`E2E_REMOTE_HOST` or `--host` points them at another Mac). A change runs only the features it touches; the full suite runs nightly and before an App Store build (AGENTS.md, "End-to-end cadence"). Use local runs only for the scenarios you touched. `npm run check` remains the cheap check on every change.
 
 ```sh
 npm run test:e2e:remote                           # both suites, one isolated world
