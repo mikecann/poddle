@@ -26,9 +26,19 @@ Feature: Following shows
     When they press Undo
     Then they follow "Morning Tones" again
 
-
   Scenario: Back from a show's page returns to the Library
     Given the listener follows "Morning Tones"
     When they open the page for "Morning Tones"
     And they tap "< Library"
     Then they're back on the Library with "Morning Tones"
+
+  Scenario Outline: The end of a long Library scrolls clear of the mini player
+    Given the listener follows "Morning Tones" with "Sunrise in A" in Up Next
+    And they follow every other public show too
+    When they scroll to the end of the Library as a <layout>
+    Then the last show in the Library sits above the mini player
+
+    Examples:
+      | layout |
+      | grid   |
+      | list   |

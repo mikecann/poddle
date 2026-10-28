@@ -8,7 +8,7 @@ const DAY = 24 * HOUR;
 /**
  * slug → show. `path` is the feed's path on the fixture server (with any query),
  * `episodes` oldest first; `ago` is how long before the world started each one
- * was published.
+ * was published. `art` names another show's artwork to borrow (default: its own).
  */
 export const SHOWS = {
   morning: {
@@ -79,7 +79,33 @@ export const SHOWS = {
     private: true,
     episodes: [{ guid: "secret-1", title: "Members Only", audio: "tone-30s", ago: 2 * DAY }],
   },
+  ...shelf(),
 };
+
+/**
+ * Seven plain one-episode shows that are only there to make a Library long enough to
+ * scroll ("The end of a long Library scrolls clear of the mini player"). They have no
+ * `appleId`, so the fake directory never offers them in Discover, and they borrow the
+ * other shows' artwork.
+ */
+function shelf() {
+  const titles = ["Kettle Hum", "Lantern Light", "Puddle Jumps", "Quiet Quarry", "Rooftop Rain", "Tidal Tick", "Velvet Valve"];
+  const art = ["morning", "pings", "chimes", "evening"];
+  return Object.fromEntries(
+    titles.map((title, i) => {
+      const slug = title.split(" ")[0].toLowerCase();
+      return [slug, {
+        title,
+        author: "Poddle Fixtures",
+        genre: "Shelf",
+        description: "Filler for a long Library.",
+        path: `/feeds/${slug}.xml`,
+        art: art[i % art.length],
+        episodes: [{ guid: `${slug}-1`, title: `${title} 1`, audio: "tone-30s", ago: (8 + i) * DAY }],
+      }];
+    }),
+  );
+}
 
 export const AUDIO_SECONDS = { "tone-30s": 30, "tone-40s": 40, "tone-45s": 45, "tone-60s": 60 };
 

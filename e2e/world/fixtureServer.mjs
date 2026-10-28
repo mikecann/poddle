@@ -56,7 +56,7 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
         return sendFile(req, res, path.join(fixtures, "audio", `${m[1]}.mp3`), "audio/mpeg");
       }
       if ((m = /^\/art\/([a-z]+)\.png$/.exec(url.pathname)) && SHOWS[m[1]]) {
-        return sendFile(req, res, path.join(fixtures, "art", `${m[1]}.png`), "image/png");
+        return sendFile(req, res, path.join(fixtures, "art", `${SHOWS[m[1]].art ?? m[1]}.png`), "image/png");
       }
       if ((m = /^\/chapters\/([a-z0-9-]+)\.json$/.exec(url.pathname))) {
         const episode = Object.keys(SHOWS).flatMap(episodesOf).find((e) => e.guid === m[1]);
