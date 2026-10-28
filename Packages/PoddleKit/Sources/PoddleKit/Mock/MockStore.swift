@@ -106,6 +106,38 @@ public actor MockStore: PoddleDataSource {
         return MockData.search(term)
     }
 
+    /// Episodes in the sample library whose titles match every word.
+    public func searchEpisodes(_ term: String) async throws -> [EpisodeSearchResult] {
+        await pause(250)
+        let tokens = term.lowercased().split(whereSeparator: { !$0.isLetter && !$0.isNumber })
+        guard !tokens.isEmpty else { return [] }
+        return server.episodes.values
+            .filter { e in tokens.allSatisfy { e.title.lowercased().contains($0) } }
+            .sorted { $0.pubDate > $1.pubDate }
+            .prefix(10)
+            .compactMap { e in
+                guard let show = server.podcasts[e.podcastId] else { return nil }
+                return EpisodeSearchResult(
+                    id: "apple_\(e.id)", title: e.title, showTitle: show.title, author: show.author, feedURL: show.feedURL,
+                    guid: e.guid, audioURL: e.enclosureURL, pubDate: e.pubDate, duration: e.duration, artworkURL: show.artworkURL
+                )
+            }
+    }
+
+    /// Only shows the sample data already has: there's no feed to fetch.
+    public func open(_ target: DiscoverTarget) async throws -> OpenedFeed {
+        await pause(300)
+        let feedURL: String
+        var guid: String?
+        switch target {
+        case let .show(r): feedURL = r.feedURL
+        case let .episode(e): feedURL = e.feedURL; guid = e.guid
+        }
+        guard let show = server.podcasts.values.first(where: { $0.feedURL == feedURL }) else { throw CancellationError() }
+        let episode = guid.flatMap { g in server.episodes.values.first { $0.podcastId == show.id && $0.guid == g } }
+        return OpenedFeed(podcastId: show.id, episodeId: episode?.id)
+    }
+
     public func resolve(url: String) async throws -> SearchResult? {
         await pause(300)
         let trimmed = url.trimmingCharacters(in: .whitespacesAndNewlines)

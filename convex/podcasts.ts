@@ -2,7 +2,7 @@ import { paginationOptsValidator, paginationResultValidator } from "convex/serve
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { feedStateFor, ensureFeedState, applyNewEpisodeRule } from "./feeds";
 import { asUser, userMutation, userQuery, type UserMutationCtx, type UserQueryCtx } from "./lib/auth";
 import { trimToKeepLatest } from "./lib/keepLatest";
@@ -10,6 +10,7 @@ import { ensureLibraryRow, hasSubscribers, podcastView, subscriptionFor } from "
 import { looksPrivate, normalizeFeedUrl } from "./lib/parse";
 import { resolveShowSettings, resolveGlobalSettings, showSettingFields } from "./lib/settings";
 import { globalSettingsDoc, overridesOf, podcastSettingsDoc, resolvedSettingsFor } from "./lib/settingsDb";
+import { findByEnclosure, findByGuid, findByTitleDate } from "./lib/ingest";
 import { episodeRows } from "./lib/rows";
 import { logEvent, setInbox, setPlayed, systemAt } from "./lib/state";
 import { vEpisodeRow, vPodcastDoc } from "./lib/validators";
@@ -151,6 +152,45 @@ export async function getOrCreatePodcast(
   });
   return (await ctx.db.get(id))!;
 }
+
+/**
+ * The shared show for `feedOpened` (feedActions:openFeed), created if it's new.
+ * Nobody is subscribed, so nothing personal is written and it isn't polled.
+ */
+export const ensurePodcast = internalMutation({
+  args: {
+    feedUrl: v.string(),
+    title: v.optional(v.string()),
+    author: v.optional(v.string()),
+    artworkUrl: v.optional(v.string()),
+    appleId: v.optional(v.number()),
+  },
+  returns: v.id("podcasts"),
+  handler: async (ctx, input) => (await getOrCreatePodcast(ctx, input))._id,
+});
+
+/** After `openFeed`'s fetch: how many episodes the show has, and the one Apple's search pointed at, if it's there. */
+export const feedOpened = internalQuery({
+  args: {
+    podcastId: v.id("podcasts"),
+    guid: v.optional(v.string()),
+    enclosureUrl: v.optional(v.string()),
+    title: v.optional(v.string()),
+    pubDate: v.optional(v.number()),
+  },
+  returns: v.object({ episodeCount: v.number(), episodeId: v.union(v.id("episodes"), v.null()) }),
+  handler: async (ctx, { podcastId, ...match }) => {
+    const podcast = await ctx.db.get(podcastId);
+    const wanted = match.guid !== undefined || match.enclosureUrl !== undefined || match.title !== undefined;
+    // Same order as matching a feed's items: guid, then audio URL, then title and date.
+    const episode = !wanted
+      ? null
+      : ((await findByGuid(ctx, podcastId, match.guid)) ??
+        (await findByEnclosure(ctx, podcastId, match)) ??
+        (await findByTitleDate(ctx, podcastId, match)));
+    return { episodeCount: podcast?.episodeCount ?? 0, episodeId: episode?._id ?? null };
+  },
+});
 
 /**
  * Subscribe or unsubscribe this person, LWW on `at`. Polling follows whether

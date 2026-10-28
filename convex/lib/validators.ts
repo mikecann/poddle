@@ -54,3 +54,20 @@ export const vDirectoryResult = v.object({
   subscribed: v.boolean(),
 });
 export type DirectoryResult = Infer<typeof vDirectoryResult>;
+
+/** One episode from Apple's episode search (`directory:searchEpisodes`). Open it with `feedActions:openFeed`. */
+export const vDirectoryEpisode = v.object({
+  appleId: v.optional(v.number()),
+  title: v.string(),
+  showTitle: v.string(),
+  author: v.optional(v.string()),
+  artworkUrl: v.optional(v.string()),
+  feedUrl: v.string(),
+  /** The feed item's `<guid>`, as Apple saw it. */
+  guid: v.optional(v.string()),
+  audioUrl: v.optional(v.string()),
+  pubDate: v.optional(v.number()),
+  /** Seconds. */
+  duration: v.optional(v.number()),
+});
+export type DirectoryEpisode = Infer<typeof vDirectoryEpisode>;

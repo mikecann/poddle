@@ -37,6 +37,11 @@ public protocol PoddleDataSource: Sendable {
     /// A shared link's episode or show (`episodes:get` / `podcasts:get`), added to the snapshot even
     /// when it isn't in the library. False if there's no such thing (or no connection).
     func loadShared(_ target: ShareLinks.Target) async -> Bool
+    /// Apple's episode search (`directory:searchEpisodes`).
+    func searchEpisodes(_ term: String) async throws -> [EpisodeSearchResult]
+    /// Puts a Discover result's show on the server without following it and fetches its feed
+    /// (`feedActions:openFeed`), so it can be loaded like a shared link.
+    func open(_ target: DiscoverTarget) async throws -> OpenedFeed
     func connectionStatus() async -> AsyncStream<ConnectionStatus>
 
     /// Listening sessions for stats (`sessions:record`). The same `sessionId` is re-sent every 30 s
@@ -69,6 +74,8 @@ extension PoddleDataSource {
     public func observePodcast(_ podcastId: String) async {}
     public func showNotes(episodeId: String) async -> String? { nil }
     public func loadShared(_ target: ShareLinks.Target) async -> Bool { false }
+    public func searchEpisodes(_ term: String) async throws -> [EpisodeSearchResult] { [] }
+    public func open(_ target: DiscoverTarget) async throws -> OpenedFeed { throw CancellationError() }
     public func connectionStatus() async -> AsyncStream<ConnectionStatus> { AsyncStream { $0.finish() } }
 }
 

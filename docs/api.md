@@ -129,6 +129,7 @@ Tombstones for `sync:changes`. `_id`, `table` (currently `queueItems`), `docId` 
 
 - **EpisodeRow** = `{ episode: Episode, state: EpisodeState | null, podcast: PodcastSummary }`
 - **PodcastSummary** = `{ _id, title, author?, artworkUrl?, isPrivate }`
+- **DirectoryEpisode** = `{ appleId?: Int, title, showTitle, author?, artworkUrl?, feedUrl, guid?, audioUrl?, pubDate?, duration? }`. `guid` is the feed item's guid as Apple has it; `duration` is seconds.
 - **DirectoryResult** = `{ appleId?: Int, title, author?, artworkUrl?, feedUrl?, genre?, episodeCount?: Int, podcastId?: Id, subscribed: Bool }`. `podcastId` is set when the feed is already in the library.
 - **Paginated<T>** = `{ page: [T], isDone: Bool, continueCursor: String }` (plus Convex's optional `splitCursor`, `pageStatus`). Pass `paginationOpts: { numItems: Int, cursor: String | null }`.
 
@@ -182,7 +183,9 @@ Every function below acts for the signed-in caller (and also takes the optional 
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|
 | `directory:search` | action | `term`, `limit?` (1–200, default 50) | `[DirectoryResult]` from the iTunes Search API (`media=podcast&entity=podcast&country=AU`). Cached 24 h server-side. Debounce 400 ms on the client; Apple allows ~20 calls a minute. |
+| `directory:searchEpisodes` | action | `term`, `limit?` (1–200, default 25) | `[DirectoryEpisode]` from Apple's episode search (`entity=podcastEpisode`). Results without a feed URL are left out. Cached 24 h server-side, like `search`. |
 | `directory:lookup` | action | `appleIdOrUrl` | `DirectoryResult \| null`. Accepts `617416468`, `https://podcasts.apple.com/au/podcast/…/id617416468`, `https://overcast.fm/itunes617416468/…`. |
+| `feedActions:openFeed` | action | `feedUrl`, `title?`, `author?`, `artworkUrl?`, `appleId?: Int`, and for an episode result `episodeGuid?`, `enclosureUrl?`, `episodeTitle?`, `pubDate?` | `{ podcastId, episodeId? }`. Opens a show without following it (decisions.md, 27 Oct 2026): creates the shared show if it's new and fetches it (a conditional GET), so `podcasts:get` and `podcasts:episodes` can show it. With episode fields it also finds that episode, by guid, then audio URL, then title within a day of `pubDate`; `episodeId` is absent if the feed doesn't have it. Writes nothing personal: queueing or downloading one of its episodes is what puts the show in your library, unfollowed. Throws if the feed can't be fetched and the show has no episodes. |
 | `feedActions:previewFeed` | action | `url` | `{ feedUrl, podcastId?, subscribed, title, author?, description?, artworkUrl?, link?, episodeCount: Int, episodes: [{ title, pubDate?, duration?, summary?, enclosureUrl, artworkUrl? }] }` (newest 20). Accepts a feed URL, a website (finds `<link rel="alternate">`), or an Apple / Overcast link. Writes nothing. Subscribe with the returned `feedUrl`. |
 | `feedActions:refreshNow` | action | `podcastId?` | `{ scheduled: Int, result?: { status, newEpisodes: Int, error? } }`. With `podcastId`: fetches that show and waits (pull-to-refresh on a show page). Without: schedules every subscribed feed not checked in the last 2 min and returns at once (app foreground, Up Next pull-to-refresh); results arrive through your live queries. `status` is `updated`, `notModified` (304), `unchanged` (same body), `busy` (a fetch is already running) or `error`. |
 
@@ -370,7 +373,7 @@ For the e2e suites' throwaway local backend only (`docs/testing.md`). Each takes
 - Queue items remember their last add/move time, and removals leave a tombstone. So a stale "add" or "move" can't resurrect or reorder an item that another device has since removed or moved. `queue:clear` only removes items added before it.
 - Sessions are keyed by the client `sessionId`, so re-sending is idempotent.
 - `podcasts:subscribe` is keyed by feed URL, and `devices:register` by `deviceId`.
-- Actions (`refreshNow`, `search`, `previewFeed`) are online-only. Don't queue them.
+- Actions (`refreshNow`, `search`, `searchEpisodes`, `openFeed`, `previewFeed`) are online-only. Don't queue them.
 - Server-side changes (auto-adding a new episode to Up Next, auto-archive) are stamped 10 minutes in the past, so a user action from a device whose clock runs a little slow still wins.
 
 ## Behaviour notes for the app

@@ -28,7 +28,8 @@ struct PodcastView: View {
         return List {
             VStack(alignment: .leading, spacing: 0) {
                 TopBar {
-                    BackButton(title: "Library")
+                    // Discover opens shows too, ones you don't follow included.
+                    BackButton(title: app.tab == .discover ? "Discover" : "Library")
                 } trailing: {
                     // The website's page for the show; private feeds have none.
                     if ShareLinks.canShare(podcast) {

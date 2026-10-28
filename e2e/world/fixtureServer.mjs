@@ -9,7 +9,8 @@
 // GET  /audio/<name>.mp3           a tone, Range-aware
 // GET  /art/<slug>.png             artwork
 // GET  /chapters/<guid>.json       Podcasting 2.0 chapters
-// GET  /itunes/search?term=…       Apple's search API, over the public shows
+// GET  /itunes/search?term=…       Apple's search API, over the public shows (or their episodes,
+//                                  with entity=podcastEpisode)
 // GET  /itunes/lookup?id=…         Apple's lookup API
 // POST /_control/reset             back to the shows in shows.mjs
 // POST /_control/episodes          { show: "<title>", title, audio? } adds a newest episode
@@ -157,10 +158,31 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
 
   function search(url) {
     const term = (url.searchParams.get("term") ?? "").toLowerCase();
+    if (url.searchParams.get("entity") === "podcastEpisode") return searchEpisodes(term);
     const results = Object.entries(SHOWS)
       .filter(([, s]) => !s.private && s.appleId)
       .filter(([, s]) => `${s.title} ${s.author} ${s.genre}`.toLowerCase().includes(term))
       .map(([slug]) => directoryEntry(slug));
+    return { resultCount: results.length, results };
+  }
+
+  // Apple's episode results: the show's fields plus the item's own, matched on the episode title.
+  function searchEpisodes(term) {
+    const results = Object.entries(SHOWS)
+      .filter(([, s]) => !s.private && s.appleId)
+      .flatMap(([slug]) =>
+        episodesOf(slug)
+          .filter((e) => e.title.toLowerCase().includes(term))
+          .map((e, i) => ({
+            ...directoryEntry(slug),
+            trackId: SHOWS[slug].appleId * 100 + i,
+            trackName: e.title,
+            episodeGuid: e.guid,
+            episodeUrl: `${base}/audio/${e.audio}.mp3`,
+            releaseDate: new Date(e.pubDate ?? startedAt - e.ago).toISOString(),
+            trackTimeMillis: AUDIO_SECONDS[e.audio] * 1000,
+          })),
+      );
     return { resultCount: results.length, results };
   }
 

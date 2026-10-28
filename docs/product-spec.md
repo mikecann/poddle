@@ -37,7 +37,8 @@ Claims marked **[verified]** were checked against a source listed at the end. Cl
 - Each result's `feedUrl` gives the RSS feed. Subscribe by fetching that feed directly, and never use the API's episode lists, which top out at 200 **[verified via third-party benchmark, not Apple docs]**.
 - Lookup by ID (`/lookup?id=…`) for pasted `podcasts.apple.com/…/id123456` links.
 - The rate limit is about 20 calls a minute **[verified]**. Debounce search by 400 ms and cache results for 24 h.
-- Search UI: results come as you type. Each row shows artwork, title, author and a subscribe (+) button. Tap opens a preview of the feed before you subscribe.
+- Search UI: results come as you type. Each row shows artwork, title, author and a subscribe (+) button. Tap opens the show's page without subscribing (`feedActions:openFeed`).
+- Episodes by name: `entity=podcastEpisode` on the same search API. Results sit under the shows; tapping one opens that episode's page without following its show (decisions.md, 27 Oct 2026).
 
 **Podcast Index (later)**
 - It's free with an API key and adds Podcasting 2.0 metadata and shows that aren't on Apple **[inferred; their docs page wouldn't render for me]**.

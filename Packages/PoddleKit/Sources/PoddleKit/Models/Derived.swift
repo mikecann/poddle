@@ -108,7 +108,46 @@ public struct SearchResult: Codable, Sendable, Hashable, Identifiable {
 public struct SearchResponse: Codable, Sendable, Hashable {
     public var results: [SearchResult]
     public var totalCount: Int
-    public init(results: [SearchResult], totalCount: Int) { self.results = results; self.totalCount = totalCount }
+    /// Episodes whose names match (Apple's episode search), shown under the shows.
+    public var episodes: [EpisodeSearchResult]
+    public init(results: [SearchResult], totalCount: Int, episodes: [EpisodeSearchResult] = []) {
+        self.results = results; self.totalCount = totalCount; self.episodes = episodes
+    }
+}
+
+/// One episode from Apple's episode search (`directory:searchEpisodes`), from any show, followed or not.
+public struct EpisodeSearchResult: Codable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var title: String
+    public var showTitle: String
+    public var author: String
+    public var feedURL: String
+    /// The feed item's guid as Apple saw it, which finds our copy of the episode.
+    public var guid: String?
+    public var audioURL: String?
+    public var pubDate: Millis?
+    public var duration: Double?
+    public var artworkURL: String?
+    public init(
+        id: String, title: String, showTitle: String, author: String = "", feedURL: String, guid: String? = nil,
+        audioURL: String? = nil, pubDate: Millis? = nil, duration: Double? = nil, artworkURL: String? = nil
+    ) {
+        self.id = id; self.title = title; self.showTitle = showTitle; self.author = author; self.feedURL = feedURL
+        self.guid = guid; self.audioURL = audioURL; self.pubDate = pubDate; self.duration = duration; self.artworkURL = artworkURL
+    }
+}
+
+/// A Discover result to open without following its show (decisions.md, 27 Oct 2026).
+public enum DiscoverTarget: Sendable, Hashable {
+    case show(SearchResult)
+    case episode(EpisodeSearchResult)
+}
+
+/// What opening a `DiscoverTarget` found: the show, and the episode when one was asked for and is in the feed.
+public struct OpenedFeed: Sendable, Hashable {
+    public var podcastId: String
+    public var episodeId: String?
+    public init(podcastId: String, episodeId: String? = nil) { self.podcastId = podcastId; self.episodeId = episodeId }
 }
 
 public struct ImportProgress: Codable, Sendable, Hashable {

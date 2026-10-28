@@ -85,6 +85,15 @@ struct EpisodeDetailView: View {
                             PoddleButton(title: "Queue", systemImage: "plus") { store.queueLast(item.id) }
                                 .accessibilityIdentifier("episode.queue")
                         }
+                        // Downloading is one tap here, for an episode found in Discover. Its status shows
+                        // by the date, so the button goes once it's started.
+                        if !item.isDownloaded && !item.isDownloading {
+                            PoddleButton(title: "", systemImage: "arrow.down.circle") {
+                                EpisodeActions(store: store, player: player, app: app).download(item.id)
+                            }
+                            .accessibilityLabel("Download")
+                            .accessibilityIdentifier("episode.download")
+                        }
                         PoddleButton(title: "", systemImage: item.isStarred ? "star.fill" : "star") { store.toggleStar(item.id) }
                             .accessibilityLabel(item.isStarred ? "Unstar" : "Star")
                             .accessibilityIdentifier("episode.star")
@@ -102,6 +111,7 @@ struct EpisodeDetailView: View {
                         .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 30)
                 }
             }
+            .accessibilityIdentifier("episode.page")
             .task(id: episodeId) { await store.loadShowNotes(episodeId) }
         } else {
             BrandPlaceholder(title: "Episode not found", message: "It may no longer be available, or it may be from a private feed.")
