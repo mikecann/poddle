@@ -47,12 +47,14 @@ These must keep end-to-end coverage. Change one, and its feature changes in the 
 
 ### End-to-end cadence
 
-The e2e suites are slow (the app's takes about 17 minutes). Full runs belong on **tinker-desk** (Mike's spare Mac, over SSH), through `npm run test:e2e:remote`, so the M5 MacBook stays free. Local e2e runs are for the scenarios you touched.
+The e2e suites are slow (the app's takes about 17 minutes), so the full suite runs overnight, not per change (Mike, 28 Oct 2026). e2e runs go to **tinker-desk** (Mike's spare Mac, over SSH) through `npm run test:e2e:remote`, so the M5 MacBook stays free.
 
-- **Narrow changes:** run the smallest relevant checks: `npm test`, one Vitest file, `swift test` in one package, or one feature or scenario of an e2e suite.
-- **Run the whole suite remotely** (or every feature covering what you touched) when the change is large or risky: auth, sync and the outbox, playback, navigation that spans screens, the website's pages, anything on a critical path above, and before an App Store build.
-- **Nightly:** tinker-desk runs the full suite at 03:00 local when `origin/main` has moved. Results go to the orphan `e2e-nightly` branch; GitHub updates one `e2e-failure` issue and closes it after a green run.
-- A regression on a critical path still gets its scenario. The cadence is about when to run the full suite, not whether to cover the bug.
+- **Every change:** the smallest relevant checks: `npm run check`, one Vitest file, `swift test` in one package.
+- **A change you can see, or one on a critical path above:** also run just the e2e features it touches, remotely (`--suite ios --feature <name>` or `--suite web -g "…"`), one run per feature. Not the whole suite.
+- **Nightly:** tinker-desk runs the full suite at 03:00 local when `origin/main` has moved, and that's what catches knock-on breakage elsewhere. Results go to the orphan `e2e-nightly` branch; GitHub updates one `e2e-failure` issue and closes it after a green run. Look at that issue before starting on something new.
+- **Before an App Store build:** the full suite, remotely, on the commit being shipped.
+- If tinker-desk is busy (its shared lock is held), wait for it, or run the one feature locally. Don't hold a change up on the full suite.
+- A regression on a critical path still gets its scenario. The cadence is about when to run the suite, not whether to cover the bug.
 
 `npm run check` (typecheck, Vitest, BDD pairing and drift) runs no simulator or browser, so run it on every change.
 
