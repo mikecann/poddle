@@ -43,7 +43,9 @@ final class EnginePlayer: PoddlePlayer {
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
 
     /// Saved to the store this often while playing (it's also saved on pause, seek and episode change).
-    static let saveInterval: TimeInterval = 5
+    /// Each save is a server round trip, so every 5 s kept the phone's radio awake for whole listens;
+    /// a crash mid-episode loses at most a minute.
+    static let saveInterval: TimeInterval = 60
 
     init(store: PoddleStore, engine: PlaybackEngine = PlaybackEngine(), downloads: DownloadManager?, sessions: SessionForwarder?) {
         self.store = store

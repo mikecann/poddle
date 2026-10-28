@@ -124,6 +124,29 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
         #expect(pending.last?.calls.first?.args["deviceId"] == "device-1")
         await store.stop()
     }
+
+    @Test func positionSavesDontStartACatchUp() async throws {
+        let fake = FakeTransport()
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        _ = await store.snapshots()
+        @Sendable func syncs() -> Int { fake.queries.filter { $0.name == "sync:changes" }.count }
+        // Let the first catch-up finish.
+        #expect(await eventually { syncs() > 0 })
+        try await Task.sleep(for: .milliseconds(100))
+        let before = syncs()
+
+        try await store.send(.savePosition(episodeId: "ep1", position: 10, device: "x"))
+        #expect(await eventually { await store.pendingEntries.isEmpty })
+        try await Task.sleep(for: .milliseconds(100))
+        #expect(syncs() == before)
+
+        // Anything else still reads the server's view back.
+        try await store.send(.setStarred(episodeId: "ep1", true))
+        #expect(await eventually { syncs() > before })
+        await store.stop()
+    }
 }
 
 @Suite struct PlaybackRecordTests {

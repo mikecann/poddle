@@ -645,7 +645,10 @@ public actor LiveStore: PoddleDataSource {
                 delay = min(delay * 2, timing.maxRetry)
             }
         }
-        if gen == generation, outbox.pending.isEmpty, !confirmed.isEmpty {
+        // Position saves and listening sessions change nothing we'd need to read back, and they
+        // arrive all through playback, so they wait for the next catch-up (foreground, or every
+        // few minutes) rather than starting one each time.
+        if gen == generation, outbox.pending.isEmpty, confirmed.contains(where: { !$0.mutation.isPlaybackReport }) {
             // Pick up the server's view of what we just sent.
             Task { await self.catchUp() }
         }
@@ -1120,4 +1123,14 @@ private actor LatestValues {
 public enum LiveStoreError: LocalizedError {
     case notWired
     public var errorDescription: String? { "The Convex backend isn't wired up yet." }
+}
+
+private extension Mutation {
+    /// What the player sends on its own while you listen.
+    var isPlaybackReport: Bool {
+        switch self {
+        case .savePosition, .recordSessions: true
+        default: false
+        }
+    }
 }
