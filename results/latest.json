@@ -1,9 +1,9 @@
 {
-  "sha": "bf7e2dee26be3db37ec20f8dd0a76078d22b0186",
+  "sha": "f9abd437bdb49beda7aecb2b137213acb2270d6c",
   "status": "failed",
   "suite": "both",
-  "startedAt": "2026-10-27T19:00:04.704Z",
-  "finishedAt": "2026-10-27T19:00:15.911Z",
+  "startedAt": "2026-10-28T19:00:04.742Z",
+  "finishedAt": "2026-10-28T19:00:14.570Z",
   "scenarios": [],
   "error": "ChefKit project revision and Package.resolved disagree",
   "screenshots": [],
