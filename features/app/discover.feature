@@ -12,8 +12,9 @@ Feature: Episodes from shows you don't follow
     When they search Discover for "breakfast"
     And they open the episode "Breakfast in C" from the results
     And they download it from its page
-    Then Up Next lists "Breakfast in C"
-    And "Breakfast in C" shows as downloaded
+    Then it finishes downloading
+    And Up Next on the server is "Breakfast in C"
+    And the mini player shows "Breakfast in C"
     And they still don't follow "Morning Tones"
 
   Scenario: Look at a show's episodes before following it

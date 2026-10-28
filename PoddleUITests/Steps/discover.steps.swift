@@ -18,6 +18,17 @@ final class DiscoverSteps: StepModule {
             try w.waitGone("episode.download", timeout: 10)
         }
 
+        // On the episode page: a finished download shows no icon, so it's done once nothing there
+        // says otherwise (the same rule as Up Next's rows).
+        s.then("it finishes downloading") { w, _ in
+            try w.waitFor("episode.play", timeout: 10, "the episode page")
+            let notYet = NSPredicate(format: "label IN %@ OR label BEGINSWITH 'Downloading'",
+                                     ["Not downloaded", "Waiting for Wi-Fi", "Download failed"])
+            try w.eventually("the episode to be downloaded", timeout: 30) {
+                !w.app.descendants(matching: .any).matching(notYet).firstMatch.exists
+            }
+        }
+
         s.then("they still don't follow {string}") { w, a in
             // The show reaches their library (unfollowed) once the queued episode has synced.
             try w.eventually("the server to know the show, unfollowed", timeout: 20) {

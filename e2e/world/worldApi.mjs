@@ -44,10 +44,7 @@ export function worldApi({ convexUrl, adminToken, fixtures }) {
       const row = (await episodesOf(email, show._id)).find((r) => r.episode.title === title);
       if (row) return row;
     }
-    // An episode of a show they don't follow, found in Discover and queued.
-    const queued = (await client.query("queue:upNext", { admin: admin(email) })).find((q) => q.row.episode.title === title);
-    if (queued) return queued.row;
-    throw new Error(`No episode "${title}" in ${email}'s shows or Up Next`);
+    throw new Error(`No episode "${title}" in ${email}'s shows`);
   }
 
   async function waitFor(what, check, timeoutMs = 20_000) {
