@@ -111,6 +111,7 @@ struct EpisodeDetailView: View {
                         .padding(.horizontal, 14).padding(.top, 8).padding(.bottom, 30)
                 }
             }
+            .accessibilityIdentifier("episode.page")
             .task(id: episodeId) { await store.loadShowNotes(episodeId) }
         } else {
             BrandPlaceholder(title: "Episode not found", message: "It may no longer be available, or it may be from a private feed.")
