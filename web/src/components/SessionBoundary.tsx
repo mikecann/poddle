@@ -1,3 +1,4 @@
+import { captureException } from "@sentry/react";
 import { Component, type ReactNode } from "react";
 import { isSignedOutError } from "../lib/sessionErrors";
 import { Loading } from "./Layout";
@@ -19,6 +20,8 @@ export class SessionBoundary extends Component<Props, { error: unknown }> {
 
   componentDidCatch(error: unknown) {
     if (isSignedOutError(error)) this.props.onSignedOut();
+    // Anything else is a real failure someone saw (a no-op unless Sentry started, lib/sentry.ts).
+    else captureException(error);
   }
 
   render() {

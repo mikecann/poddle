@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
+import { execSync } from "node:child_process";
 import { readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -45,11 +46,21 @@ function prerenderLanding(): Plugin {
   };
 }
 
+/** The commit being built, for Sentry's release (src/lib/sentry.ts). */
+function gitSha(): string {
+  try {
+    return execSync("git rev-parse --short HEAD", { cwd: import.meta.dirname, encoding: "utf8" }).trim();
+  } catch {
+    return "unknown";
+  }
+}
+
 // The website: built into web/dist and uploaded to Convex static hosting
 // (`npm run web:upload:dev`, README "Website").
 export default defineConfig({
   root: import.meta.dirname,
   plugins: [react(), tailwindcss(), prerenderLanding()],
+  define: { "import.meta.env.VITE_PODDLE_RELEASE": JSON.stringify(gitSha()) },
   build: { outDir: "dist", emptyOutDir: true },
   server: { port: 5174 },
 });

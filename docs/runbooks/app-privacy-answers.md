@@ -25,8 +25,9 @@ They match `App/PrivacyInfo.xcprivacy` and the website's `/privacy` page. If one
 | Identifiers | **Device ID** | The device ID and push token in `devices` |
 | Usage Data | **Product Interaction** | Listening history, library, queue and stats |
 | Search History | **Search History** | Discover searches, cached on the server for up to two days |
+| Diagnostics | **Crash Data** | Anonymous crash and error reports sent to Sentry by App Store installs (`App/Diagnostics.swift`) |
 
-Leave everything else unticked: Health and Fitness, Financial Info, Location, Sensitive Info, Contacts, Browsing History, Purchases, Diagnostics (no crash or performance reporting leaves the device), Advertising Data, Other Usage Data, Other Data, Phone Number, Physical Address, Other User Contact Info, Emails or Text Messages, Gameplay Content, Customer Support.
+Leave everything else unticked: Health and Fitness, Financial Info, Location, Sensitive Info, Contacts, Browsing History, Purchases, Performance Data and Other Diagnostic Data under Diagnostics, Advertising Data, Other Usage Data, Other Data, Phone Number, Physical Address, Other User Contact Info, Emails or Text Messages, Gameplay Content, Customer Support.
 
 ## 4. For each ticked type
 
@@ -38,10 +39,10 @@ Apple asks three things per type. The answers are the same for all of them excep
 2. **Is it linked to the user's identity?** **Yes.**
 3. **Is it used for tracking?** **No.**
 
-**Search History:**
+**Search History** and **Crash Data:**
 
 1. **How is it used?** **App Functionality** only.
-2. **Linked to the user's identity?** **No** (the cache is keyed by the search, not the person).
+2. **Linked to the user's identity?** **No** (the search cache is keyed by the search, not the person; crash reports carry no account or email, only a random ID Sentry makes per install).
 3. **Used for tracking?** **No.**
 
 ## 5. Check the preview
@@ -49,7 +50,7 @@ Apple asks three things per type. The answers are the same for all of them excep
 The summary on the App Privacy page should read:
 
 - **Data Linked to You:** Contact Info, User Content, Identifiers, Usage Data
-- **Data Not Linked to You:** Search History
+- **Data Not Linked to You:** Search History, Diagnostics
 - **Data Used to Track You:** none
 
 Then **Publish**.

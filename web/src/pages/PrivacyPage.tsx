@@ -14,7 +14,7 @@ export function PrivacyPage() {
       <article className="prose">
         <span className="eyebrow">Privacy</span>
         <h1>Poddle's privacy policy</h1>
-        <p className="meta">Last updated 22 October 2026</p>
+        <p className="meta">Last updated 29 October 2026</p>
 
         <p>
           Poddle is a podcast player I (Mike Cann) made for myself, and now anyone can use it. This page says what it
@@ -74,6 +74,11 @@ export function PrivacyPage() {
           <li>
             <b>Apple Push Notification service</b> delivers notifications to your iPhone, using your device's push token.
           </li>
+          <li>
+            <b>Sentry</b> receives anonymous crash and error reports from the app and this website, so I can fix what
+            breaks: what went wrong, the app version, and the kind of device and system. They don't include your name,
+            email, account or what you listen to.
+          </li>
         </ul>
         <p>
           Podcast audio and artwork are fetched from wherever each show hosts them, like any podcast app, so those hosts
@@ -82,8 +87,8 @@ export function PrivacyPage() {
 
         <h2>No ads, no tracking, no selling</h2>
         <p>
-          Poddle has no ads, no analytics or tracking SDKs, and doesn't follow you across other apps or websites. I don't
-          sell or rent your data, and I never will.
+          Poddle has no ads and no analytics or tracking SDKs (Sentry only reports crashes and errors), and doesn't
+          follow you across other apps or websites. I don't sell or rent your data, and I never will.
         </p>
 
         <h2>Deleting your account</h2>

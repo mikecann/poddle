@@ -21,6 +21,8 @@ struct PoddleApp: App {
 
     /// Launch arguments are documented in the README ("Launch arguments").
     init() {
+        // First, so a crash while starting up is caught too. App Store installs only (Diagnostics).
+        Diagnostics.start()
         let defaults = UserDefaults.standard
         #if DEBUG
         let screen = defaults.string(forKey: "PoddleScreen")

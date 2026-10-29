@@ -58,6 +58,8 @@ npx convex env set PODDLE_API_TOKEN <long random string>   # for scripts' admin 
 
 The app needs no secrets: Debug talks to dev (`striped-turtle-260`) and Release to prod (`coordinated-dodo-120`), both set in `Config/*.xcconfig`, and people sign in.
 
+Crashes and errors go to Sentry (project `poddle`, org `mikec`) from App Store and TestFlight installs only (`App/Diagnostics.swift`) and from the live website on `poddle.mikecann.app` only (`web/src/lib/sentry.ts`). Debug builds, the simulator, phone installs from `scripts/install-phone.sh`, `vite dev`, the dev site and every test run stay out of it. Backend errors reach the same project through Convex's log stream.
+
 | Script | What it does |
 |---|---|
 | `npm run dev` | `convex dev` against the linked deployment (watch, push, codegen) |
