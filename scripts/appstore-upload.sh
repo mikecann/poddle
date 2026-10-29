@@ -55,16 +55,6 @@ xcodebuild archive -project Poddle.xcodeproj -scheme Poddle -configuration Relea
 VERSION=$(/usr/libexec/PlistBuddy -c "Print :ApplicationProperties:CFBundleShortVersionString" "$ARCHIVE/Info.plist")
 echo "Archived Poddle $VERSION ($BUILD)"
 
-# Sentry needs this build's dSYMs to put function names on crash reports (App/Diagnostics.swift).
-# Optional: it needs sentry-cli and a SENTRY_AUTH_TOKEN, and the archive keeps them for later anyway.
-if command -v sentry-cli >/dev/null && [[ -n "${SENTRY_AUTH_TOKEN:-}" ]]; then
-  echo "Uploading dSYMs to Sentry…"
-  sentry-cli debug-files upload --org mikec --project poddle "$ARCHIVE/dSYMs" > "$OUT/sentry-dsyms.log" 2>&1 \
-    || echo "Sentry dSYM upload failed, see $OUT/sentry-dsyms.log (carrying on)" >&2
-else
-  echo "Skipping the Sentry dSYM upload (needs sentry-cli and SENTRY_AUTH_TOKEN); they're in $ARCHIVE/dSYMs"
-fi
-
 echo "Exporting for App Store Connect…"
 xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$OUT/export" \
   -exportOptionsPlist "$(export_options export)" "${auth[@]}" > "$OUT/export.log" 2>&1 \
@@ -95,3 +85,20 @@ xcodebuild -exportArchive -archivePath "$ARCHIVE" -exportPath "$OUT/upload" \
   -exportOptionsPlist "$(export_options upload)" "${auth[@]}" 2>&1 | tee "$OUT/upload.log" \
   | grep -E "error|Upload succeeded|EXPORT SUCCEEDED|EXPORT FAILED|Uploaded"
 echo "Uploaded Poddle $VERSION ($BUILD). It shows up under TestFlight once App Store Connect has processed it."
+
+# Sentry needs this build's dSYMs to put function names on crash reports (App/Diagnostics.swift).
+# Only an uploaded build ships, so only then. Optional: it needs sentry-cli (on PATH or in
+# ~/.local/bin) and a token (SENTRY_AUTH_TOKEN, else ~/.config/sentry/token), and the archive keeps
+# the dSYMs for later anyway. A failed upload never fails the script.
+SENTRY_CLI=$(command -v sentry-cli || true)
+[[ -z "$SENTRY_CLI" && -x "$HOME/.local/bin/sentry-cli" ]] && SENTRY_CLI="$HOME/.local/bin/sentry-cli"
+SENTRY_TOKEN=${SENTRY_AUTH_TOKEN:-}
+[[ -z "$SENTRY_TOKEN" && -r "$HOME/.config/sentry/token" ]] && SENTRY_TOKEN=$(tr -d '[:space:]' < "$HOME/.config/sentry/token")
+if [[ -n "$SENTRY_CLI" && -n "$SENTRY_TOKEN" ]]; then
+  echo "Uploading dSYMs to Sentry…"
+  SENTRY_AUTH_TOKEN="$SENTRY_TOKEN" "$SENTRY_CLI" debug-files upload --org mikec --project poddle "$ARCHIVE/dSYMs" \
+    > "$OUT/sentry-dsyms.log" 2>&1 \
+    || echo "Sentry dSYM upload failed, see $OUT/sentry-dsyms.log (carrying on)" >&2
+else
+  echo "Debug symbols not uploaded to Sentry (needs sentry-cli and a token); they're in $ARCHIVE/dSYMs"
+fi
