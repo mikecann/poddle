@@ -66,7 +66,9 @@ export function verifyPackages(repo, source) {
     const checkout = path.join(source, "checkouts", pin.identity);
     if (dependency?.state.checkoutState?.revision !== pin.state.revision ||
         command("git", ["-C", checkout, "rev-parse", "HEAD"]) !== pin.state.revision) {
-      throw new Error(`Cached ${pin.identity} does not match pin ${pin.state.revision}. Resolve packages on the MacBook and sync again.`);
+      // Say how, because the cache goes stale whenever a pin moves (sentry-cocoa did on 30 Oct 2026).
+      throw new Error(`Cached ${pin.identity} does not match pin ${pin.state.revision}. Refresh the cache with ` +
+        `\`xcodebuild -project Poddle.xcodeproj -scheme Poddle -resolvePackageDependencies -derivedDataPath ${path.dirname(source)}\`, then rerun.`);
     }
     if (command("git", ["-C", checkout, "status", "--porcelain", "--untracked-files=no"])) {
       throw new Error(`Cached ${pin.identity} has modified tracked files`);
