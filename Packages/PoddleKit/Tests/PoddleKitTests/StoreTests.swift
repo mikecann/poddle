@@ -130,6 +130,18 @@ import Testing
         #expect(store.pastShows.contains { $0.id == "pod_hardfork" })
     }
 
+    /// The library and per-show counts are cached until the snapshot changes, but a screen that
+    /// read them from the cache is still told when it does.
+    @Test func cachedLibraryStillRedrawsOnChange() {
+        _ = store.library
+        _ = store.unplayedCount("pod_hardfork")
+        let fired = invalidates({ _ = store.library; _ = store.unplayedCount("pod_hardfork") }) {
+            store.unsubscribe("pod_hardfork")
+        }
+        #expect(fired)
+        #expect(!store.library.contains { $0.id == "pod_hardfork" })
+    }
+
     @Test func clearQueueKeepsCurrent() {
         store.clearQueue(keeping: MockData.playingEpisodeId)
         #expect(queueIds == [MockData.playingEpisodeId])

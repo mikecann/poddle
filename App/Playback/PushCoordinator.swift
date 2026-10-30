@@ -140,6 +140,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
             return completionHandler()
         }
         downloads.backgroundCompletion = completionHandler
+        // Relaunched in the background, so start whatever's waiting now rather than two at a time.
+        downloads.setInForeground(false)
     }
 }
 #else

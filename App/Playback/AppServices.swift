@@ -1,6 +1,9 @@
 import Foundation
 import PoddleKit
 import PoddlePlayback
+#if os(iOS)
+import UIKit
+#endif
 
 /// Everything long-lived behind the screens: the store, the player, downloads, session
 /// forwarding and push. `current` lets the app delegate reach it.
@@ -45,6 +48,9 @@ final class AppServices {
             self.sessions = sessions
             self.player = player
             startHousekeeping()
+            #if os(iOS)
+            followForeground(downloads)
+            #endif
         }
         Self.current = self
     }
@@ -66,12 +72,34 @@ final class AppServices {
         }
     }
 
+    #if os(iOS)
+    /// Tells downloads when the app leaves the foreground, so it can hand iOS everything waiting
+    /// while that still counts as the foreground (`DownloadManager.setInForeground`). Resigning
+    /// active comes first: locking the phone or swiping home, while it's still in front.
+    private func followForeground(_ downloads: DownloadManager) {
+        let center = NotificationCenter.default
+        for name in [UIApplication.willResignActiveNotification, UIApplication.didEnterBackgroundNotification] {
+            center.addObserver(forName: name, object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { downloads.setInForeground(false) }
+            }
+        }
+        center.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { downloads.setInForeground(true) }
+        }
+    }
+    #endif
+
     /// Woken in the background by a sync push (`apns:sendSyncWake`) or background app refresh:
     /// pull what's changed and start the downloads it needs, so new episodes are in Up Next and on
     /// the phone before Poddle's opened. `recheckFeeds` also asks Convex to re-check every feed, as
     /// coming to the foreground does. True if Up Next changed.
     func syncInBackground(recheckFeeds: Bool) async -> Bool {
         guard let live = store.dataSource as? LiveStore, await live.userId != nil else { return false }
+        #if os(iOS)
+        // A sync push also lands while the app's open. In the background it may have been launched
+        // straight there, with no resign-active first.
+        if UIApplication.shared.applicationState == .background { downloads?.setInForeground(false) }
+        #endif
         let before = store.queue.map(\.id)
         if recheckFeeds { await store.refresh() }
         await live.syncNow()

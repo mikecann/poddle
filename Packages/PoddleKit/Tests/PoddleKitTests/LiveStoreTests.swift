@@ -332,6 +332,44 @@ private func makeStore(_ fake: FakeTransport, _ disk: LiveDisk, clock: TickingCl
     }
 }
 
+@Suite struct SnapshotEmissionTests {
+    /// Every feed check bumps the show's `lastFetchedAt` and `updatedAt`, and Convex re-sends the
+    /// whole list. The app keeps neither, so listeners (every screen) hear nothing until a real change.
+    @Test func resentFeedsWithNothingNewWakeNobody() async throws {
+        let fake = FakeTransport()
+        let disk = tempDisk()
+        defer { disk.erase() }
+        let store = makeStore(fake, disk)
+        let stream = await store.snapshots()
+        let titles = Titles()
+        let reader = Task { for await s in stream { if let t = s.podcasts["p1"]?.title { await titles.add(t) } } }
+        func library(_ title: String, checked: Int) -> String {
+            """
+            [{"_id":"p1","_creationTime":1,"feedUrl":"https://a.example/feed","title":"\(title)","isPrivate":false,"subscribed":true,
+              "subscriptionUpdatedAt":1,"episodeCount":1,"createdAt":1,"updatedAt":\(checked),"lastFetchedAt":\(checked)}]
+            """
+        }
+        fake.push("podcasts:list", library("Alpha", checked: 1))
+        #expect(await eventually { await titles.all.last == "Alpha" })
+        // Let the first catch-up land too, then count from there.
+        try await Task.sleep(for: .milliseconds(200))
+        let before = await titles.all.count
+        for checked in 2...4 { fake.push("podcasts:list", library("Alpha", checked: checked)) }
+        try await Task.sleep(for: .milliseconds(200))
+        #expect(await titles.all.count == before)
+        fake.push("podcasts:list", library("Beta", checked: 5))
+        #expect(await eventually { await titles.all.last == "Beta" })
+        #expect(await titles.all.count == before + 1)
+        reader.cancel()
+        await store.stop()
+    }
+}
+
+private actor Titles {
+    private(set) var all: [String] = []
+    func add(_ t: String) { all.append(t) }
+}
+
 @Suite struct CatchUpTests {
     @Test func pagesTablesAndAppliesDeletions() async throws {
         let fake = FakeTransport()

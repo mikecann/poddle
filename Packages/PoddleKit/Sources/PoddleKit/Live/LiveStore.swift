@@ -68,6 +68,8 @@ public actor LiveStore: PoddleDataSource {
     private var draining = false
     private var syncing = false
     private var emitPending = false
+    /// What the listeners were last sent, so a feed re-sending what they already have wakes nothing.
+    private var lastEmitted: LibrarySnapshot?
     private var savePending = false
     /// Bumped by `switchAccount` so work started for the previous person stops writing.
     private var generation = 0
@@ -210,6 +212,8 @@ public actor LiveStore: PoddleDataSource {
         listeners[id] = continuation
         continuation.onTermination = { [weak self] _ in Task { await self?.removeListener(id) } }
         continuation.yield(current())
+        // The newcomer may have something newer than the others, so the next change goes to everyone.
+        lastEmitted = nil
         startIfNeeded()
         return stream
     }
@@ -258,6 +262,12 @@ public actor LiveStore: PoddleDataSource {
     private func emitNow() {
         emitPending = false
         let s = current()
+        // Convex re-sends a whole feed when anything in it changes, often a field the app doesn't
+        // keep. Each snapshot the store takes redraws every screen (all four tabs stay alive), and
+        // a feed refresh sends dozens, which made Up Next stutter while scrolling. Compared here, on
+        // the actor, so the main thread never does it for nothing.
+        guard s != lastEmitted else { return }
+        lastEmitted = s
         for l in listeners.values { l.yield(s) }
     }
 

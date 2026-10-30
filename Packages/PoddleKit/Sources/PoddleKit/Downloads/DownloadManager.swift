@@ -69,7 +69,8 @@ public final class DownloadProgress {
 @Observable
 public final class DownloadManager {
     public static let sessionIdentifier = "com.mikecann.poddle.downloads"
-    /// More at once just splits the bandwidth, so the top of Up Next lands later.
+    /// More at once just splits the bandwidth, so the top of Up Next lands later. Only while the
+    /// app's in the foreground (`setInForeground`).
     public static let maxConcurrent = 2
 
     /// Changes only on state transitions (queued, downloading, done, failed, waiting for Wi-Fi), so
@@ -96,6 +97,8 @@ public final class DownloadManager {
     @ObservationIgnored private var progressById: [String: DownloadProgress] = [:]
     /// Up Next positions, so queued downloads start in the order they'll be played.
     @ObservationIgnored private var order: [String: Int] = [:]
+    /// False once the app leaves the foreground (`setInForeground`), which lifts the two-at-a-time cap.
+    @ObservationIgnored private var inForeground = true
 
     private static let settingsKey = "PoddleDownloadSettings"
 
@@ -319,6 +322,22 @@ public final class DownloadManager {
         }
     }
 
+    /// The app is coming to the foreground or leaving it. iOS only treats downloads handed to a
+    /// background session from the foreground as wanted now. Ones created later (when a slot frees
+    /// up while suspended, or after a sync push) wait for the system's go-ahead, often until the
+    /// phone's charging on Wi-Fi. So on the way out everything waiting is handed over at once,
+    /// and the system downloads the lot while the app is gone. Back in the foreground, new ones
+    /// wait for a slot again; whatever's already running carries on.
+    public func setInForeground(_ foreground: Bool) {
+        guard foreground != inForeground else { return }
+        inForeground = foreground
+        if !foreground { startQueued() }
+    }
+
+    /// Two at a time while someone's looking, so the top of Up Next lands first and progress
+    /// events don't crowd scrolling. No cap while the app's away.
+    private var slotLimit: Int { inForeground ? Self.maxConcurrent : .max }
+
     // MARK: Tasks
 
     private func start(_ episodeId: String, url: URL, allowsMobile: Bool, oneOff: Bool, auto: Bool) {
@@ -335,7 +354,7 @@ public final class DownloadManager {
         record.isAuto = record.isAuto && auto
         record.error = nil
         record.requestedAt = record.requestedAt ?? now()
-        if wasRunning || activeCount < Self.maxConcurrent {
+        if wasRunning || activeCount < slotLimit {
             records[episodeId] = record
             launch(episodeId, allowsMobile: allowsMobile, useResumeData: true)
         } else {
@@ -350,7 +369,7 @@ public final class DownloadManager {
     /// Fills free slots from the queued downloads: manual taps first, then Up Next order, then
     /// oldest request. Each gets whatever mobile data the policy allows when it starts.
     private func startQueued() {
-        var free = Self.maxConcurrent - activeCount
+        var free = slotLimit - activeCount
         guard free > 0 else { return }
         let waiting = records.values.filter { $0.state == .queued }.sorted { a, b in
             if a.isAuto != b.isAuto { return !a.isAuto }

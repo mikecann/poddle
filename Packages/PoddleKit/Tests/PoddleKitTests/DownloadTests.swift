@@ -358,6 +358,27 @@ private let sydney: Calendar = {
         for id in ["c", "d", "tap"] { manager.remove(id) }
     }
 
+    /// iOS only hurries downloads it was handed from the foreground, so on the way out everything
+    /// waiting starts at once. Back in front, new ones wait for a slot again.
+    @Test func leavingTheForegroundStartsEverythingWaiting() async throws {
+        let manager = makeManager(ManualNetworkMonitor(.wifi))
+        await waitFor { manager.network == .wifi }
+        for id in ["a", "b", "c", "d"] { manager.request(id, url: slow(id), auto: true) }
+        #expect(manager.records.values.count { $0.state == .queued } == 2)
+
+        manager.setInForeground(false)
+        #expect(manager.records.values.allSatisfy { $0.state == .downloading })
+        // A sync push in the background: straight to the system too.
+        manager.request("e", url: slow("e"), auto: true)
+        #expect(manager.records["e"]?.state == .downloading)
+
+        manager.setInForeground(true)
+        manager.request("f", url: slow("f"), auto: true)
+        #expect(manager.records["f"]?.state == .queued)
+        #expect(manager.records.values.count { $0.state == .downloading } == 5)
+        for id in ["a", "b", "c", "d", "e", "f"] { manager.remove(id) }
+    }
+
     @Test func pausedDownloadsWaitInLineWhenWifiReturns() async throws {
         let net = ManualNetworkMonitor(.mobile)
         let manager = makeManager(net)
@@ -421,12 +442,15 @@ private let sydney: Calendar = {
         manager.remove(queued)
     }
 
-    private func invalidates(_ read: () -> Void, by change: () -> Void) -> Bool {
-        let fired = Flag()
-        withObservationTracking(read) { fired.value = true }
-        change()
-        return fired.value
-    }
+}
+
+/// Whether `change` tells whoever did `read` to redraw.
+@MainActor
+func invalidates(_ read: () -> Void, by change: () -> Void) -> Bool {
+    let fired = Flag()
+    withObservationTracking(read) { fired.value = true }
+    change()
+    return fired.value
 }
 
 private final class Flag: @unchecked Sendable { var value = false }

@@ -15,7 +15,6 @@ struct PodcastDoc: Decodable, Sendable {
     var isPrivate: Bool
     var subscribed: Bool
     var subscribedAt: Double?
-    var lastFetchedAt: Double?
     var latestEpisodeAt: Double?
 
     var model: Podcast {
@@ -23,7 +22,10 @@ struct PodcastDoc: Decodable, Sendable {
             id: _id, feedURL: feedUrl, isPrivate: isPrivate, title: title, author: author ?? "",
             artworkURL: artworkUrl, description: description ?? "", appleId: appleId.map { String(Int($0)) },
             importRefs: .init(overcastId: overcastId.map { String(Int($0)) }), subscribed: subscribed,
-            subscribedAt: subscribedAt, lastFetchedAt: lastFetchedAt
+            // Not `lastFetchedAt`: nothing in the app reads it, and it changes every time the backend
+            // checks the feed, so keeping it made every show (and every row showing one) look changed
+            // after each refresh.
+            subscribedAt: subscribedAt
         )
     }
 }

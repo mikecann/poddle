@@ -8,7 +8,7 @@ import Observation
 @Observable
 public final class PoddleStore {
     public private(set) var snapshot: LibrarySnapshot {
-        didSet { byPodcastCache = nil }
+        didSet { derived = Derived() }
     }
     /// Sample downloads for previews and screenshots. Real ones come from `downloader`.
     private var fakeDownloads: [String: Download]
@@ -48,7 +48,18 @@ public final class PoddleStore {
     @ObservationIgnored public var now: () -> Date = Date.init
     @ObservationIgnored private var outbox: AsyncStream<Mutation>.Continuation?
     @ObservationIgnored private var tasks: [Task<Void, Never>] = []
-    @ObservationIgnored private var byPodcastCache: [String: [Episode]]?
+    @ObservationIgnored private var derived = Derived()
+
+    /// Answers worked out from the snapshot, kept until it changes. Every tab stays alive, so each
+    /// new snapshot makes all of them ask again; the Library tab used to sort every show and count
+    /// every episode several times per change, even while hidden behind Up Next.
+    private struct Derived {
+        var byPodcast: [String: [Episode]]?
+        var library: [Podcast]?
+        var pastShows: [Podcast]?
+        var latestPubDate: [String: Millis?] = [:]
+        var unplayed: [String: Int] = [:]
+    }
 
     public init(
         dataSource: any PoddleDataSource, seed: LibrarySnapshot = .init(), downloads: [String: Download] = [:],
@@ -90,10 +101,16 @@ public final class PoddleStore {
     /// Episodes grouped by show, rebuilt only when the snapshot changes (the live library has
     /// thousands of episodes, and the library grid asks per show).
     private var byPodcast: [String: [Episode]] {
-        if let byPodcastCache { return byPodcastCache }
-        let grouped = Dictionary(grouping: snapshot.episodes.values, by: \.podcastId)
-        byPodcastCache = grouped
-        return grouped
+        memo(\.byPodcast) { Dictionary(grouping: snapshot.episodes.values, by: \.podcastId) }
+    }
+
+    /// A cached answer. Reads `snapshot` either way, so a view that asks is still redrawn when it changes.
+    private func memo<T>(_ key: WritableKeyPath<Derived, T?>, _ make: () -> T) -> T {
+        _ = snapshot
+        if let hit = derived[keyPath: key] { return hit }
+        let value = make()
+        derived[keyPath: key] = value
+        return value
     }
 
     var nowMillis: Millis { now().timeIntervalSince1970 * 1000 }
@@ -172,20 +189,24 @@ public final class PoddleStore {
 
     /// Subscribed shows, most recently updated first.
     public var library: [Podcast] {
-        snapshot.podcasts.values.filter(\.subscribed)
-            .sorted { (latestPubDate($0.id) ?? 0) > (latestPubDate($1.id) ?? 0) }
+        memo(\.library) {
+            snapshot.podcasts.values.filter(\.subscribed)
+                .sorted { (latestPubDate($0.id) ?? 0) > (latestPubDate($1.id) ?? 0) }
+        }
     }
 
     /// Unsubscribed shows that still have history, so imported history isn't orphaned. The server
     /// says which (their episodes aren't synced, so an imported show's history isn't here), plus
     /// any just unsubscribed here with history on this device.
     public var pastShows: [Podcast] {
-        let byPodcast = byPodcast
-        let fromServer = snapshot.pastShowIds ?? []
-        return snapshot.podcasts.values.filter { p in
-            !p.subscribed && (fromServer.contains(p.id)
-                || (byPodcast[p.id] ?? []).contains { snapshot.states[$0.id].map { $0.played || $0.position > 1 || $0.isStarred } ?? false })
-        }.sorted { $0.title < $1.title }
+        memo(\.pastShows) {
+            let byPodcast = byPodcast
+            let fromServer = snapshot.pastShowIds ?? []
+            return snapshot.podcasts.values.filter { p in
+                !p.subscribed && (fromServer.contains(p.id)
+                    || (byPodcast[p.id] ?? []).contains { snapshot.states[$0.id].map { $0.played || $0.position > 1 || $0.isStarred } ?? false })
+            }.sorted { $0.title < $1.title }
+        }
     }
 
     public func episodes(of podcastId: String, order: EpisodeOrder? = nil) -> [EpisodeItem] {
@@ -197,7 +218,11 @@ public final class PoddleStore {
     }
 
     public func latestPubDate(_ podcastId: String) -> Millis? {
-        byPodcast[podcastId]?.map(\.pubDate).max()
+        _ = snapshot
+        if let hit = derived.latestPubDate[podcastId] { return hit }
+        let latest = byPodcast[podcastId]?.map(\.pubDate).max()
+        derived.latestPubDate[podcastId] = .some(latest)
+        return latest
     }
 
     public func latestEpisode(of podcastId: String) -> EpisodeItem? {
@@ -205,7 +230,11 @@ public final class PoddleStore {
     }
 
     public func unplayedCount(_ podcastId: String) -> Int {
-        (byPodcast[podcastId] ?? []).count { !snapshot.state($0.id).played && !snapshot.state($0.id).archived }
+        _ = snapshot
+        if let hit = derived.unplayed[podcastId] { return hit }
+        let n = (byPodcast[podcastId] ?? []).count { !snapshot.state($0.id).played && !snapshot.state($0.id).archived }
+        derived.unplayed[podcastId] = n
+        return n
     }
 
     /// "3 a week", "Weekly", "Daily"… from the last 30 days of episodes.
