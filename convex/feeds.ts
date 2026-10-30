@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { scheduleSyncWake } from "./devices";
 import { asUser, type UserMutationCtx } from "./lib/auth";
 import { upsertEpisode, vIncomingEpisode, vIngestMode } from "./lib/ingest";
@@ -276,25 +276,44 @@ export const pollDueFeeds = internalMutation({
   },
 });
 
-/** Pull-to-refresh / app foreground: everything this person subscribes to not checked in the last 2 min. */
-export const scheduleRefreshAll = internalMutation({
+/**
+ * Pull-to-refresh / app foreground: the feeds this person subscribes to that
+ * weren't checked in the last 2 min and aren't mid-fetch.
+ *
+ * A query, not part of the mutation that schedules them (PODDLE-3): fetches
+ * already in flight keep patching these feedStates through recordFetch, and
+ * reading a big library's worth of them inside a mutation conflicted with every
+ * retry. The fetch lease in claimFetch stops a feed being fetched twice.
+ */
+export const feedsToRefresh = internalQuery({
   args: { userId: v.id("users") },
-  returns: v.number(),
+  returns: v.array(v.id("podcasts")),
   handler: async (ctx, { userId }) => {
     const now = Date.now();
     const subs = await ctx.db
       .query("subscriptions")
       .withIndex("by_user_subscribed", (q) => q.eq("userId", userId).eq("subscribed", true))
       .collect();
-    let n = 0;
+    const due: Id<"podcasts">[] = [];
     for (const sub of subs) {
       const state = await feedStateFor(ctx, sub.podcastId);
       if (!state) continue;
       if (state.lastCheckedAt && now - state.lastCheckedAt < 2 * MINUTE) continue;
-      await ctx.db.patch(state._id, { nextCheckAt: now + 10 * MINUTE });
-      await ctx.scheduler.runAfter((n % 10) * 300, internal.feedActions.fetchFeed, { podcastId: state.podcastId });
-      n++;
+      if (state.fetchingUntil !== undefined && state.fetchingUntil > now) continue;
+      due.push(sub.podcastId);
     }
-    return n;
+    return due;
+  },
+});
+
+/** Schedules the fetches `feedsToRefresh` found. Reads nothing, so it can't conflict with landing fetches. */
+export const scheduleFetches = internalMutation({
+  args: { podcastIds: v.array(v.id("podcasts")) },
+  returns: v.null(),
+  handler: async (ctx, { podcastIds }) => {
+    for (const [n, podcastId] of podcastIds.entries()) {
+      await ctx.scheduler.runAfter((n % 10) * 300, internal.feedActions.fetchFeed, { podcastId });
+    }
+    return null;
   },
 });

@@ -28,7 +28,7 @@ export const fetchFeed = internalAction({
 /**
  * Called on app foreground and pull-to-refresh. With a `podcastId`, fetches that
  * show now and waits for it. Without, schedules every subscribed feed that
- * hasn't been checked in the last 2 minutes and returns how many.
+ * hasn't been checked in the last 2 minutes (and isn't being fetched) and returns how many.
  */
 export const refreshNow = userAction({
   args: { podcastId: v.optional(v.id("podcasts")) },
@@ -38,8 +38,9 @@ export const refreshNow = userAction({
       const result = await refreshPodcast(ctx, podcastId, { force: false });
       return { scheduled: 0, result };
     }
-    const scheduled: number = await ctx.runMutation(internal.feeds.scheduleRefreshAll, { userId: ctx.userId });
-    return { scheduled };
+    const podcastIds: Id<"podcasts">[] = await ctx.runQuery(internal.feeds.feedsToRefresh, { userId: ctx.userId });
+    if (podcastIds.length) await ctx.runMutation(internal.feeds.scheduleFetches, { podcastIds });
+    return { scheduled: podcastIds.length };
   },
 });
 

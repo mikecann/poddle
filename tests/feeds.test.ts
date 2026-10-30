@@ -223,6 +223,40 @@ describe("refreshing", () => {
   });
 });
 
+describe("refreshing everything", () => {
+  const OTHER = "https://feeds.example.com/other.xml";
+  const feedStates = (t: T) => t.run(async (ctx) => await ctx.db.query("feedStates").collect());
+
+  // PODDLE-3: refreshing a big library failed because the mutation read and patched
+  // every feed's state while fetches already in flight kept landing on them.
+  test("schedules the stale feeds without touching any feed's bookkeeping", async () => {
+    const t = setup();
+    const fetchMock = mockFetch({ [FEED]: fixture("odd-feed.xml"), [OTHER]: fixture("odd-feed.xml") });
+    await subscribeTo(t);
+    const busy = await t.mutation(api.podcasts.subscribe, { feedUrl: OTHER, at: NOW });
+    await drain(t);
+
+    const fresh = await t.mutation(api.podcasts.subscribe, { feedUrl: "https://feeds.example.com/fresh.xml", at: NOW });
+    await drain(t);
+    // Three minutes on: one feed is mid-fetch, another was checked a minute ago.
+    vi.setSystemTime(NOW + 3 * 60_000);
+    await t.run(async (ctx) => {
+      for (const s of await ctx.db.query("feedStates").collect()) {
+        if (s.podcastId === busy) await ctx.db.patch(s._id, { fetchingUntil: Date.now() + 60_000 });
+        if (s.podcastId === fresh) await ctx.db.patch(s._id, { lastCheckedAt: Date.now() - 60_000 });
+      }
+    });
+    const before = await feedStates(t);
+    fetchMock.mockClear();
+
+    expect(await t.action(api.feedActions.refreshNow, {})).toEqual({ scheduled: 1 });
+    expect(await feedStates(t)).toEqual(before);
+
+    await drain(t);
+    expect(fetchMock.mock.calls.map((c) => String(c[0]))).toEqual([FEED]);
+  });
+});
+
 describe("polling", () => {
   test("backs off quiet feeds and failing feeds", () => {
     const now = NOW;
