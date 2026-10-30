@@ -125,7 +125,7 @@ The deploy key pushes a small results commit to the **orphan `e2e-nightly` branc
    crontab -l | grep poddle-e2e-nightly
    ```
 
-   This copies the worker and reporter to `~/.local/share/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, replaces the tagged crontab line (keeping any other entries), and removes the launch agent earlier installs used, without starting a suite. Rerun the installer after changing worker/reporting code. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed.
+   This copies the worker and reporter to `~/.local/share/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, replaces the tagged crontab line (keeping any other entries), and removes the launch agent earlier installs used, without starting a suite. The nightly refreshes those worker and lib copies from the commit it tests before running, so they keep up with `main` by themselves; rerun the installer only to change the schedule or `nightly.json`. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed.
 6. The first iOS run creates the dedicated simulator. To create it once after Xcode setup, without running tests:
 
    ```sh

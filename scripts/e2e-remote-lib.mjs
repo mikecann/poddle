@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync, chmodSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync, mkdirSync, copyFileSync, writeFileSync, chmodSync, cpSync, rmSync } from "node:fs";
 import path from "node:path";
 
 // Playwright caches each compiled test file, and its source map, in the system temp folder by
@@ -50,6 +50,14 @@ export function relocatePackages(source) {
     if (suffix) artifact.path = source + suffix;
   }
   writeFileSync(file, JSON.stringify(state, null, 2));
+}
+// Node's cpSync turns relative symlinks into absolute ones unless told otherwise. Binary
+// frameworks are full of them (Sentry.framework/Headers -> Versions/Current/Headers), so the
+// copy pointed into the upload folder, which is deleted after the run, and Xcode refused
+// Sentry.xcframework: "The signature cannot be verified" (30 Oct 2026).
+export function copyPackages(source, destination) {
+  rmSync(destination, { recursive: true, force: true });
+  cpSync(source, destination, { recursive: true, verbatimSymlinks: true });
 }
 export function verifyPackages(repo, source) {
   const state = readJson(path.join(source, "workspace-state.json"));

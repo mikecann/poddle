@@ -4,7 +4,8 @@
 import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, copyFileSync } from "node:fs";
 import path from "node:path";
-import { command, readJson, verifyPackages, relocatePackages, scenarioResults, copyNightlyScreenshots } from "./e2e-remote-lib.mjs";
+import { fileURLToPath } from "node:url";
+import { command, readJson, verifyPackages, relocatePackages, copyPackages, scenarioResults, copyNightlyScreenshots } from "./e2e-remote-lib.mjs";
 
 const config = process.argv[2] === "--nightly"
   ? { ...readJson(process.argv[3]), nightly: true, suite: "both", args: [], runId: String(Date.now()) }
@@ -20,6 +21,25 @@ const lastNightly = path.join(root, "last-nightly-sha");
 if (config.nightly && existsSync(lastNightly) && readFileSync(lastNightly, "utf8").trim() === sha) {
   console.log(`[e2e nightly] origin/main is still ${sha}; skipping`);
   process.exit(0);
+}
+// cron runs copies of this worker and its lib installed in root/tools, and they went stale when
+// the scripts changed on main: from 27 Oct every nightly failed looking for the old feedback-chef
+// pin (#22). So the nightly refreshes them from the commit it's about to test, then reruns itself.
+if (config.nightly && !process.env.E2E_NIGHTLY_REFRESHED) {
+  const self = fileURLToPath(import.meta.url);
+  let changed = false;
+  for (const name of ["e2e-remote-worker.mjs", "e2e-remote-lib.mjs"]) {
+    const file = path.join(path.dirname(self), name);
+    const latest = git("show", `${sha}:scripts/${name}`) + "\n";
+    if (!existsSync(file) || readFileSync(file, "utf8") !== latest) { writeFileSync(file, latest); changed = true; }
+  }
+  if (changed) {
+    console.log(`[e2e nightly] Updated the installed runner scripts to ${sha}; rerunning with them`);
+    const child = spawn(process.execPath, [self, ...process.argv.slice(2)], { stdio: "inherit", env: { ...process.env, E2E_NIGHTLY_REFRESHED: "1" } });
+    for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) process.on(signal, () => child.kill(signal));
+    child.on("close", (code) => process.exit(code ?? 1));
+    await new Promise(() => {});
+  }
 }
 const checkout = path.join(root, "worktree");
 const output = path.join(root, "results", sha, config.runId);
@@ -69,8 +89,7 @@ try {
     relocatePackages(source);
     verifyPackages(checkout, source);
     if (source !== env.E2E_SOURCE_PACKAGES) {
-      rmSync(env.E2E_SOURCE_PACKAGES, { recursive: true, force: true });
-      cpSync(source, env.E2E_SOURCE_PACKAGES, { recursive: true });
+      copyPackages(source, env.E2E_SOURCE_PACKAGES);
     }
     relocatePackages(env.E2E_SOURCE_PACKAGES);
     const workspace = path.join(checkout, "Poddle.xcodeproj/project.xcworkspace/xcshareddata/swiftpm");

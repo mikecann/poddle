@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync } from "node:fs";
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync, symlinkSync, readlinkSync } from "node:fs";
 import path from "node:path";
-import { copyNightlyScreenshots, packagePins, scenarioResults, quote, relocatePackages, PLAYWRIGHT_CACHE_DIR, webE2eEnv } from "../scripts/e2e-remote-lib.mjs";
+import { copyNightlyScreenshots, copyPackages, packagePins, scenarioResults, quote, relocatePackages, PLAYWRIGHT_CACHE_DIR, webE2eEnv } from "../scripts/e2e-remote-lib.mjs";
 
 const scratch = path.resolve("e2e/.runtime/remote-tests");
 const folders: string[] = [];
@@ -78,6 +78,22 @@ describe("remote e2e reporting", () => {
     expect(readFileSync(alternates, "utf8")).toBe(`${source}/repositories/convex-swift-123/objects\n`);
     const state = JSON.parse(readFileSync(path.join(source, "workspace-state.json"), "utf8"));
     expect(state.object.artifacts[0].path).toBe(`${source}/checkouts/convex-swift/library.xcframework`);
+  });
+  it("keeps a binary framework's relative symlinks relative when copying the package cache", () => {
+    // Sentry.xcframework failed its signature check on tinker-desk once the copy's links
+    // pointed back into the deleted upload folder.
+    const upload = temp();
+    const framework = path.join(upload, "SourcePackages/artifacts/sentry-cocoa/Sentry.framework");
+    mkdirSync(path.join(framework, "Versions/A/Headers"), { recursive: true });
+    writeFileSync(path.join(framework, "Versions/A/Headers/Sentry.h"), "// header");
+    symlinkSync("A", path.join(framework, "Versions/Current"));
+    symlinkSync("Versions/Current/Headers", path.join(framework, "Headers"));
+    const cache = path.join(temp(), "SourcePackages");
+    copyPackages(path.join(upload, "SourcePackages"), cache);
+    rmSync(upload, { recursive: true, force: true });
+    const copied = path.join(cache, "artifacts/sentry-cocoa/Sentry.framework");
+    expect(readlinkSync(path.join(copied, "Headers"))).toBe("Versions/Current/Headers");
+    expect(readFileSync(path.join(copied, "Headers/Sentry.h"), "utf8")).toBe("// header");
   });
   it("rejects a ChefKit project pin that disagrees with the package lock", () => {
     const repo = temp();
