@@ -109,7 +109,7 @@ On the 1.0.0 version page and App Information, check:
 4. If `docs/runbooks/app-privacy-answers.md` changed since the last release, click the new answers into App Privacy and **Publish** before submitting. The first build with Sentry crash reporting (main from 29 Oct 2026) adds Diagnostics > Crash Data.
 5. If the screens changed, retake the screenshots (step 6) and upload them with `node scripts/appstore-screenshots.mjs <pngs in order>`, which replaces the set.
 6. `UPLOAD=1 scripts/appstore-upload.sh`, then `node scripts/appstore-submit.mjs <build> --submit`. If Apple refuses it with a 409, the lines above the raw error say what's missing. For 1.0.1 it was a new age rating question (`socialMedia`), answered in `metadata.json` and sent with the metadata script.
-7. Once it's approved, release it (App Store Connect, or `POST /v1/appStoreVersionReleaseRequests` with the version's id).
+7. Once it's approved, release it: `node scripts/appstore-release.mjs <version> --release`. It only releases once Apple has approved it, and exits 2 while the version's still waiting for review, so it's safe to run on a schedule.
 
 ## If it's rejected
 
