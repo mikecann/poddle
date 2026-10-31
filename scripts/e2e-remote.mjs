@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, rmSync } from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { command, quote, verifyPackages } from "./e2e-remote-lib.mjs";
@@ -22,7 +23,8 @@ if (dryRun) args.splice(args.indexOf("--dry-run"), 1);
 if (args.includes("--feature") && suite !== "ios") throw new Error("Use --suite ios with --feature (the web harness has no feature flag)");
 const sha = command("git", ["rev-parse", "--verify", `${commit}^{commit}`], { cwd: root });
 const results = path.join(root, "e2e/.remote-results", sha);
-const source = process.env.E2E_SOURCE_PACKAGES ?? "/tmp/poddle-dd-check/SourcePackages";
+// Not in /tmp: macOS empties it on every restart, which broke the next remote run (1 Nov 2026).
+const source = process.env.E2E_SOURCE_PACKAGES ?? path.join(os.homedir(), "Library/Caches/poddle-e2e/SourcePackages");
 console.log(`[e2e remote] ${sha}, ${suite}, on ${host}`);
 console.log(`  Fetch origin, verify commit is pushed, create an isolated worktree, npm ci${suite === "web" ? "" : ", verify and sync pinned Swift packages"}.`);
 console.log(`  Take ~/.blender-queue.lock (shared with render-box); run npm run test:e2e${suite === "both" ? "" : `:${suite}`} ${args.map(quote).join(" ")}`);

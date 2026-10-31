@@ -59,16 +59,20 @@ export function copyPackages(source, destination) {
   rmSync(destination, { recursive: true, force: true });
   cpSync(source, destination, { recursive: true, verbatimSymlinks: true });
 }
+// Say how, because the cache goes stale whenever a pin moves (sentry-cocoa did on 30 Oct 2026)
+// and is missing on a new Mac or after it's been cleared.
+export const refreshPackagesHint = (source) =>
+  `Refresh the cache with \`xcodebuild -project Poddle.xcodeproj -scheme Poddle -resolvePackageDependencies -derivedDataPath ${path.dirname(source)}\`, then rerun.`;
 export function verifyPackages(repo, source) {
-  const state = readJson(path.join(source, "workspace-state.json"));
+  const stateFile = path.join(source, "workspace-state.json");
+  if (!existsSync(stateFile)) throw new Error(`No resolved Swift packages at ${source}. ${refreshPackagesHint(source)}`);
+  const state = readJson(stateFile);
   for (const pin of packagePins(repo)) {
     const dependency = state.object.dependencies.find((d) => d.packageRef.identity === pin.identity);
     const checkout = path.join(source, "checkouts", pin.identity);
     if (dependency?.state.checkoutState?.revision !== pin.state.revision ||
         command("git", ["-C", checkout, "rev-parse", "HEAD"]) !== pin.state.revision) {
-      // Say how, because the cache goes stale whenever a pin moves (sentry-cocoa did on 30 Oct 2026).
-      throw new Error(`Cached ${pin.identity} does not match pin ${pin.state.revision}. Refresh the cache with ` +
-        `\`xcodebuild -project Poddle.xcodeproj -scheme Poddle -resolvePackageDependencies -derivedDataPath ${path.dirname(source)}\`, then rerun.`);
+      throw new Error(`Cached ${pin.identity} does not match pin ${pin.state.revision}. ${refreshPackagesHint(source)}`);
     }
     if (command("git", ["-C", checkout, "status", "--porcelain", "--untracked-files=no"])) {
       throw new Error(`Cached ${pin.identity} has modified tracked files`);

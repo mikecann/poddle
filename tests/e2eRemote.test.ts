@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it } from "vitest";
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync, readFileSync, chmodSync, symlinkSync, readlinkSync } from "node:fs";
 import path from "node:path";
-import { copyNightlyScreenshots, copyPackages, packagePins, scenarioResults, quote, relocatePackages, PLAYWRIGHT_CACHE_DIR, webE2eEnv } from "../scripts/e2e-remote-lib.mjs";
+import { copyNightlyScreenshots, copyPackages, packagePins, scenarioResults, quote, relocatePackages, verifyPackages, PLAYWRIGHT_CACHE_DIR, webE2eEnv } from "../scripts/e2e-remote-lib.mjs";
 
 const scratch = path.resolve("e2e/.runtime/remote-tests");
 const folders: string[] = [];
@@ -105,5 +105,17 @@ describe("remote e2e reporting", () => {
   });
   it("quotes SSH arguments containing apostrophes and shell substitutions literally", () => {
     expect(quote("Mike's $(touch bad) `whoami`")).toBe("'Mike'\\''s $(touch bad) `whoami`'");
+  });
+});
+
+describe("the controller's Swift package cache", () => {
+  // It used to live in /tmp, which macOS empties on restart, and a missing cache crashed
+  // with a bare ENOENT instead of saying how to rebuild it (1 Nov 2026).
+  it("says how to rebuild it when it's missing", () => {
+    const source = path.join(temp(), "SourcePackages");
+    expect(() => verifyPackages(process.cwd(), source)).toThrow(/No resolved Swift packages.*-resolvePackageDependencies/);
+  });
+  it("doesn't default to the system temp folder", () => {
+    expect(readFileSync("scripts/e2e-remote.mjs", "utf8")).not.toMatch(/E2E_SOURCE_PACKAGES \?\? "\/tmp/);
   });
 });
