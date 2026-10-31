@@ -75,6 +75,21 @@ describe("refreshing", () => {
     expect(headers["If-Modified-Since"]).toBe("Tue, 14 Oct 2025 18:00:00 GMT");
   });
 
+  // PODDLE-6: a feed host answering non-2xx made the return validators throw on `httpStatus`.
+  test("a feed host's HTTP error comes back as an error result, not a throw", async () => {
+    const t = setup();
+    mockFetch({ [FEED]: fixture("odd-feed.xml") });
+    const podcastId = await subscribeTo(t);
+
+    mockFetch({ [FEED]: { status: 522, body: "origin timed out" } });
+    const r = await t.action(api.feedActions.refreshNow, { podcastId });
+    expect(r.result).toEqual({ status: "error", newEpisodes: 0, error: "HTTP 522", httpStatus: 522 });
+
+    // The scheduled poll goes through the internal action, which has its own validator.
+    const polled = await t.action(internal.feedActions.fetchFeed, { podcastId, force: true });
+    expect(polled).toMatchObject({ status: "error", httpStatus: 522 });
+  });
+
   test("an unchanged body is skipped even without 304 support", async () => {
     const t = setup();
     mockFetch({ [FEED]: fixture("odd-feed.xml") });

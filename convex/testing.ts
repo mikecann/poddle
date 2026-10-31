@@ -58,8 +58,8 @@ export const podcastByFeedUrl = internalQuery({
  */
 export const refreshFeed = action({
   args: { token: v.string(), feedUrl: v.string() },
-  returns: v.object({ status: v.string(), newEpisodes: v.number(), error: v.optional(v.string()) }),
-  handler: async (ctx, { token, feedUrl }): Promise<{ status: string; newEpisodes: number; error?: string }> => {
+  returns: v.object({ status: v.string(), newEpisodes: v.number(), error: v.optional(v.string()), httpStatus: v.optional(v.number()) }),
+  handler: async (ctx, { token, feedUrl }): Promise<{ status: string; newEpisodes: number; error?: string; httpStatus?: number }> => {
     assertE2e(token);
     const podcastId = await ctx.runQuery(internal.testing.podcastByFeedUrl, { feedUrl: normalizeFeedUrl(feedUrl) });
     if (!podcastId) throw new Error(`No show with feed ${feedUrl}`);

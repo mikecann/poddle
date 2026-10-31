@@ -15,6 +15,9 @@ const vRefreshResult = v.object({
   status: v.union(v.literal("updated"), v.literal("notModified"), v.literal("unchanged"), v.literal("busy"), v.literal("error")),
   newEpisodes: v.number(),
   error: v.optional(v.string()),
+  // Set when the feed host answered non-2xx (the Overcast import shows it per feed).
+  // It has to be here: returning it without it made every failed fetch throw (PODDLE-6).
+  httpStatus: v.optional(v.number()),
 });
 
 export const fetchFeed = internalAction({
