@@ -55,9 +55,9 @@ const WORDS: Record<string, string> = {
 export default {
   icon: "headphones",
   actions: [
-    { title: "Website", icon: "safari", run: "open https://poddle.mikecann.app/" },
-    { title: "App Store Connect", icon: "app.badge", run: `open ${CONNECT}` },
-    { title: "Sentry", icon: "exclamationmark.triangle", run: "open 'https://mikec.sentry.io/issues/?project=4512336956817408'" },
+    { title: "Website", icon: "safari", url: "https://poddle.mikecann.app/" },
+    { title: "App Store Connect", icon: "app.badge", url: CONNECT },
+    { title: "Sentry", icon: "exclamationmark.triangle", url: "https://mikec.sentry.io/issues/?project=4512336956817408" },
     {
       // Only there once Apple has said yes. A message rather than a command, as a release also has
       // the checks in the runbook (does the build still work with today's backend, badges).
