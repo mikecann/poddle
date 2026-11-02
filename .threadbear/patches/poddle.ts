@@ -50,7 +50,7 @@ type Stats = {
 };
 const stats = kept(async (sh) => JSON.parse(await sh("npx convex run --prod adminStats:overview")) as Stats);
 const hours = (h: number) => `${h < 100 ? h.toFixed(1) : Math.round(h).toLocaleString("en-AU")} h`;
-const period = (p: Period) => `${hours(p.liveHours)} · ${p.listens} listens · ${p.activeUsers} people listening`;
+const period = (p: Period) => `${hours(p.liveHours)} · ${p.listens} play sessions · ${p.activeUsers} people listening`;
 
 const isOpen = (r: Request) => r.state !== "completed" && r.state !== "rejected";
 const needsMike = (state: string) => state === "PENDING_DEVELOPER_RELEASE" || state.endsWith("REJECTED");
