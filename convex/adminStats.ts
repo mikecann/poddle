@@ -11,7 +11,7 @@ import { internalQuery } from "./_generated/server";
 const DAY = 86_400_000;
 const isoDay = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 
-const vPeriod = v.object({ activeUsers: v.number(), liveHours: v.number(), listens: v.number(), completed: v.number() });
+const vPeriod = v.object({ activeUsers: v.number(), liveHours: v.number(), listens: v.number() });
 
 export const overview = internalQuery({
   args: {},
@@ -38,8 +38,8 @@ export const overview = internalQuery({
     const since7 = isoDay(now - 7 * DAY);
     const since30 = isoDay(now - 30 * DAY);
 
-    const last7d = { activeUsers: 0, liveHours: 0, listens: 0, completed: 0 };
-    const last30d = { activeUsers: 0, liveHours: 0, listens: 0, completed: 0 };
+    const last7d = { activeUsers: 0, liveHours: 0, listens: 0 };
+    const last30d = { activeUsers: 0, liveHours: 0, listens: 0 };
     const allTime = { liveHours: 0, importedHours: 0, listens: 0, completed: 0 };
     let users = 0;
     let newUsers7d = 0;
@@ -79,9 +79,19 @@ export const overview = internalQuery({
         if (inPeriod.length > 0) period.activeUsers++;
         for (const d of inPeriod) {
           period.liveHours += (d.wall - d.estimatedWall) / 3600;
-          period.listens += d.sessions;
-          period.completed += d.episodesCompleted;
         }
+      }
+
+      // Counted from the sessions, not the rollups: an Overcast import can backdate hundreds of plays
+      // into this window, and the rollups' session counts don't say which were estimated.
+      const sessions = await ctx.db
+        .query("listeningSessions")
+        .withIndex("by_user_startedAt", (q) => q.eq("userId", user._id).gte("startedAt", now - 30 * DAY))
+        .collect();
+      for (const session of sessions) {
+        if (session.isEstimated) continue;
+        last30d.listens++;
+        if (session.startedAt >= now - 7 * DAY) last7d.listens++;
       }
 
       const subscriptions = await ctx.db

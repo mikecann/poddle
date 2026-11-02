@@ -1,6 +1,6 @@
 // Threadbear patch (Threadbear's docs/protocol.md, "Patches"): Poddle's pages one click away, where
-// its App Store versions stand, and its Chef requests. Both panels read production or Apple, so they
-// keep the answer for 15 minutes rather than asking on every refresh. On a machine without Mike's
+// its App Store versions stand, its Chef requests and whole-app stats. The panels read production or
+// Apple, so they keep the answer for 15 minutes rather than asking on every refresh. On a machine without Mike's
 // App Store key the App Store panel just doesn't show.
 
 type Ctx = { sh: (command: string) => Promise<string> };
@@ -36,6 +36,21 @@ const requests = kept(async (sh) =>
     .filter((line) => line.startsWith("{"))
     .map((line) => JSON.parse(line) as Request),
 );
+
+type Period = { activeUsers: number; liveHours: number; listens: number };
+type Stats = {
+  users: number;
+  newUsers7d: number;
+  newUsers30d: number;
+  last7d: Period;
+  last30d: Period;
+  allTime: { liveHours: number; importedHours: number; listens: number; completed: number };
+  follows: number;
+  shows: number;
+};
+const stats = kept(async (sh) => JSON.parse(await sh("npx convex run --prod adminStats:overview")) as Stats);
+const hours = (h: number) => `${h < 100 ? h.toFixed(1) : Math.round(h).toLocaleString("en-AU")} h`;
+const period = (p: Period) => `${hours(p.liveHours)} · ${p.listens} listens · ${p.activeUsers} people listening`;
 
 const isOpen = (r: Request) => r.state !== "completed" && r.state !== "rejected";
 const needsMike = (state: string) => state === "PENDING_DEVELOPER_RELEASE" || state.endsWith("REJECTED");
@@ -77,6 +92,29 @@ export default {
     },
   ],
   panels: [
+    {
+      title: "Stats",
+      icon: "chart.bar",
+      note: "Production, counts only, refreshed every 15 minutes",
+      summary: async ({ sh }: Ctx) => {
+        const s = await stats(sh);
+        return `${s.users} users, ${s.last7d.activeUsers} listening this week, ${hours(s.last7d.liveHours)} heard`;
+      },
+      items: async ({ sh }: Ctx) => {
+        const s = await stats(sh);
+        return [
+          { title: `${s.users} users`, detail: `${s.newUsers7d} new this week, ${s.newUsers30d} in 30 days`, icon: "person.2" },
+          { title: "Last 7 days", detail: period(s.last7d), icon: "calendar" },
+          { title: "Last 30 days", detail: period(s.last30d), icon: "calendar" },
+          {
+            title: `${hours(s.allTime.liveHours)} heard in Poddle`,
+            detail: `Plus ${hours(s.allTime.importedHours)} imported from Overcast. ${s.allTime.listens} listens and ${s.allTime.completed} finished, imports included`,
+            icon: "headphones",
+          },
+          { title: `${s.follows} follows`, detail: `Across ${s.shows} shows`, icon: "plus.circle" },
+        ];
+      },
+    },
     {
       title: "App Store",
       icon: "app.badge",

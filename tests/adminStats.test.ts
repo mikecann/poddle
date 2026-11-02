@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import { internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import { setup, type T } from "./helpers";
+import { seedShow } from "./seed";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const DAY = 86_400_000;
@@ -48,8 +49,41 @@ describe("adminStats:overview", () => {
     await listened(t, importer, today(), { imported: 50, sessions: 40, completed: 40 });
 
     const stats = await t.run((ctx) => ctx.runQuery(internal.adminStats.overview, {}));
-    expect(stats.last7d).toEqual({ activeUsers: 1, liveHours: 2, listens: 3, completed: 1 });
+    expect(stats.last7d).toMatchObject({ activeUsers: 1, liveHours: 2 });
     expect(stats.allTime).toEqual({ liveHours: 2, importedHours: 50, listens: 43, completed: 41 });
+  });
+
+  test("recent listens leave out plays backdated by an import", async () => {
+    const t = setup();
+    const { podcastId, episodeIds } = await seedShow(t, 1);
+    const userId = await t.userId();
+    const session = (sessionId: string, isEstimated: boolean, startedAt: number) => ({
+      userId,
+      sessionId,
+      episodeId: episodeIds[0]!,
+      podcastId,
+      startedAt,
+      endedAt: startedAt + 60_000,
+      contentStart: 0,
+      contentEnd: 60,
+      rate: 1,
+      smartSpeed: false,
+      smartRemovedContent: 0,
+      voiceBoost: false,
+      source: "live" as const,
+      isEstimated,
+      utcOffsetMinutes: 0,
+      updatedAt: startedAt,
+    });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("listeningSessions", session("heard", false, Date.now() - DAY));
+      await ctx.db.insert("listeningSessions", session("earlier", false, Date.now() - 10 * DAY));
+      await ctx.db.insert("listeningSessions", session("imported", true, Date.now() - DAY));
+    });
+
+    const stats = await t.run((ctx) => ctx.runQuery(internal.adminStats.overview, {}));
+    expect(stats.last7d.listens).toBe(1);
+    expect(stats.last30d.listens).toBe(2);
   });
 
   test("old listening counts towards all time but not the recent windows", async () => {
