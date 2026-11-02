@@ -9,6 +9,7 @@
  */
 
 import type * as accountDeletion from "../accountDeletion.js";
+import type * as adminStats from "../adminStats.js";
 import type * as apns from "../apns.js";
 import type * as appleRevoke from "../appleRevoke.js";
 import type * as auth from "../auth.js";
@@ -65,6 +66,7 @@ import type {
 
 declare const fullApi: ApiFromModules<{
   accountDeletion: typeof accountDeletion;
+  adminStats: typeof adminStats;
   apns: typeof apns;
   appleRevoke: typeof appleRevoke;
   auth: typeof auth;
