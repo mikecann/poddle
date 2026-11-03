@@ -169,11 +169,13 @@ async function pickFor(ctx: ActionCtx, userId: Id<"users">, key: string): Promis
 }
 
 export const refreshFor = internalAction({
-  args: { userId: v.id("users") },
+  /** `claimed`: saveKey has already marked this refresh as started. */
+  args: { userId: v.id("users"), claimed: v.optional(v.boolean()) },
   returns: v.null(),
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { userId, claimed }) => {
     const stored = await ctx.runQuery(internal.suggestions.encryptedKey, { userId });
-    if (!stored || !(await ctx.runMutation(internal.suggestions.startRefresh, { userId }))) return null;
+    if (!stored) return null;
+    if (!claimed && !(await ctx.runMutation(internal.suggestions.startRefresh, { userId }))) return null;
     try {
       const picks = await pickFor(ctx, userId, decryptKey(stored));
       await ctx.runMutation(internal.suggestions.finishRefresh, { userId, picks });
@@ -195,7 +197,6 @@ export const setKey = userAction({
     const trimmed = key.trim();
     if (trimmed.length < 16 || /\s/.test(trimmed)) throw new ConvexError({ code: "badKey", message: "That doesn't look like an Exa key." });
     await ctx.runMutation(internal.suggestions.saveKey, { userId: ctx.userId, ciphertext: encryptKey(trimmed), ending: trimmed.slice(-4) });
-    await ctx.scheduler.runAfter(0, internal.suggestionsActions.refreshFor, { userId: ctx.userId });
     return null;
   },
 });

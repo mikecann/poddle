@@ -80,13 +80,22 @@ export const removeKey = userMutation({
   },
 });
 
+/**
+ * Marks the refresh as started here rather than when it runs. The app asks the moment the key's
+ * saved, and if it heard "not refreshing" it would stop looking before the picks arrived.
+ */
 export const saveKey = internalMutation({
   args: { userId: v.id("users"), ciphertext: v.string(), ending: v.string() },
   returns: v.null(),
   handler: async (ctx, { userId, ciphertext, ending }) => {
+    const now = Date.now();
     const existing = await keyFor(ctx, userId);
-    if (existing) await ctx.db.patch(existing._id, { ciphertext, ending, updatedAt: Date.now() });
-    else await ctx.db.insert("exaKeys", { userId, ciphertext, ending, updatedAt: Date.now() });
+    if (existing) await ctx.db.patch(existing._id, { ciphertext, ending, updatedAt: now });
+    else await ctx.db.insert("exaKeys", { userId, ciphertext, ending, updatedAt: now });
+    const row = await suggestionsFor(ctx, userId);
+    if (row) await ctx.db.patch(row._id, { refreshingSince: now, error: undefined });
+    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now });
+    await ctx.scheduler.runAfter(0, internal.suggestionsActions.refreshFor, { userId, claimed: true });
     return null;
   },
 });

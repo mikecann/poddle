@@ -47,6 +47,8 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
         const result = await world(url.pathname.slice("/_world/".length), await readJson(req));
         return send(res, 200, "application/json", JSON.stringify(result ?? {}));
       }
+      if (req.method === "POST" && url.pathname === "/exa/search") return send(res, 200, "application/json", JSON.stringify(exaSearch()));
+      if (req.method === "POST" && url.pathname === "/exa/contents") return send(res, 200, "application/json", JSON.stringify(exaContents(await readJson(req))));
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "method not allowed");
       let m;
       if ((m = /^\/feeds\/([a-z]+)\.xml$/.exec(url.pathname)) && SHOWS[m[1]]) {
@@ -65,8 +67,6 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
         if (!episode?.chapters) return send(res, 404, "text/plain", "no chapters");
         return send(res, 200, "application/json+chapters", JSON.stringify({ version: "1.2.0", chapters: episode.chapters }));
       }
-      if (req.method === "POST" && url.pathname === "/exa/search") return send(res, 200, "application/json", JSON.stringify(exaSearch()));
-      if (req.method === "POST" && url.pathname === "/exa/contents") return send(res, 200, "application/json", JSON.stringify(exaContents(await readJson(req))));
       if (url.pathname === "/itunes/search") return send(res, 200, "application/json", JSON.stringify(search(url)));
       if (url.pathname === "/itunes/lookup") return send(res, 200, "application/json", JSON.stringify(lookup(url)));
       return send(res, 404, "text/plain", "not found");

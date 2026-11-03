@@ -155,6 +155,15 @@ describe("your key", () => {
     expect(JSON.stringify(you)).not.toContain(KEY);
   });
 
+  test("says it's refreshing the moment the key's saved, so the app keeps looking", async () => {
+    const t = setup();
+    fakeExa();
+    await t.action(api.suggestionsActions.setKey, { key: KEY });
+    expect((await t.query(api.suggestions.forYou, {})).refreshing).toBe(true);
+    await t.finishAllScheduledFunctions(() => undefined);
+    expect((await t.query(api.suggestions.forYou, {})).refreshing).toBe(false);
+  });
+
   test("something that can't be a key is refused", async () => {
     const t = setup();
     await expect(t.action(api.suggestionsActions.setKey, { key: "short" })).rejects.toThrow(/look like/);
