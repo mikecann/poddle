@@ -38,7 +38,8 @@ export type Seed = {
 };
 
 const field = (text: string, name: string) => text.match(new RegExp(`\\*\\*${name}:\\*\\* (.*)`))?.[1]?.trim();
-const plain = (markdown: string) => markdown.replace(/\[([^\]]+)\]\([^)]*\)/g, "$1").trim();
+// Exa's text is cut at a length, which can end it halfway through a link, so the closing bracket is optional.
+const plain = (markdown: string) => markdown.replace(/\[([^\]]+)\]\([^)]*\)?/g, "$1").trim();
 
 /** "90:42.000" or "1:30:42.000" to seconds. */
 export function parseDuration(text: string | undefined): number | undefined {

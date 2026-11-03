@@ -103,6 +103,10 @@ describe("reading Exa's pages", () => {
     expect(h.duration).toBeCloseTo(4386.482);
   });
 
+  test("a guest whose link the text cut off halfway", () => {
+    expect(parseEpisodeHeader("- **Guests:** [Arvind Krishna](https://exa.ai/x), [Nikesh Arora](htt").guests).toEqual(["Arvind Krishna", "Nikesh Arora"]);
+  });
+
   test("hours in a duration, and rubbish", () => {
     expect(parseDuration("1:30:00.000")).toBe(5400);
     expect(parseDuration("nope")).toBeUndefined();
