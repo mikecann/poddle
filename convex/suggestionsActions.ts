@@ -16,6 +16,7 @@ import {
   parseShowPage,
   rankScore,
   reasonFor,
+  sameTitle,
   type Seed,
   type Suggestion,
 } from "./lib/suggestions";
@@ -121,8 +122,10 @@ async function pickFor(ctx: ActionCtx, userId: Id<"users">, key: string): Promis
   for (const [i, seed] of seeds.slice(0, GUEST_LOOKUPS).entries()) {
     if (seed.why === "follows" || guests.length >= MAX_GUESTS) continue;
     const hits = await search(key, `${seed.showTitle}: ${seed.title}`, 3);
-    const same = hits.map((h) => parseEpisodeHeader(h.text ?? "")).find((h) => h.showTitle?.toLowerCase().includes(seed.showTitle.toLowerCase().slice(0, 12)));
-    const name = same?.guests[0];
+    // The episode they heard, not just its show: the show's other episodes have other guests, and
+    // "who you heard on" has to be true.
+    const same = hits.find((h) => h.title && sameTitle(h.title, seed.title));
+    const name = same && parseEpisodeHeader(same.text ?? "").guests[0];
     if (name) guests.push({ name, seedIndex: i });
   }
   for (const { name, seedIndex } of guests) {

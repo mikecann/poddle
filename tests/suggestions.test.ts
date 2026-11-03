@@ -262,6 +262,15 @@ describe("refreshing", () => {
     expect(picks[0]!.reason).toBe("Roman Mars, who you heard on Syntax");
   });
 
+  test("only takes a guest from the episode they heard, not another of that show's", async () => {
+    const t = setup();
+    const userId = await withKey(t);
+    await heard(t, "Syntax");
+    const { queries } = fakeExa((q) => (q === "Syntax: Syntax ep" ? [result("other", "A different episode", { show: "Syntax", guests: "Roman Mars" })] : []));
+    await run(t, userId);
+    expect(queries).not.toContain("podcast interview with Roman Mars");
+  });
+
   test("leaves out shows you already follow, including ones followed since", async () => {
     const t = setup();
     const userId = await withKey(t);
