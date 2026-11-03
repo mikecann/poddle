@@ -1,6 +1,7 @@
 import { ConvexError, v } from "convex/values";
 import { vAppleProfile } from "@convex-dev/auth/methods/apple/server";
 import { vGoogleProfile } from "@convex-dev/auth/methods/google/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalMutation, internalQuery, mutation, query, type MutationCtx } from "./_generated/server";
 import { deletionInProgress, startDeletion } from "./accountDeletion";
@@ -31,13 +32,35 @@ async function findOrCreate(ctx: MutationCtx, details: Details, extra: { picture
   const existing = await existingUser(ctx, details);
   if (existing) return existing;
   assertMaySignUp(details.email, details.emailVerified);
-  return await ctx.db.insert("users", {
+  const userId = await ctx.db.insert("users", {
     name: details.name,
     email: details.email?.trim().toLowerCase(),
     emailVerified: details.emailVerified,
     ...extra,
   });
+  await ctx.scheduler.runAfter(0, internal.apns.sendSignupAlert, { userId });
+  return userId;
 }
+
+/**
+ * What Mike's phone should say about someone new, and whose phone that is
+ * (PODDLE_OWNER_EMAIL). Null when nobody's set or it's the owner signing up.
+ * Just the first name goes through Apple, never the email.
+ */
+export const signupAlert = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(v.object({ ownerId: v.id("users"), body: v.string() }), v.null()),
+  handler: async (ctx, { userId }) => {
+    const ownerEmail = process.env.PODDLE_OWNER_EMAIL?.trim().toLowerCase();
+    const owner = ownerEmail ? await userByEmail(ctx, ownerEmail) : null;
+    const user = await ctx.db.get(userId);
+    if (!owner || !user || owner._id === userId) return null;
+    const everyone = await ctx.db.query("users").collect();
+    const total = everyone.filter((u) => !u.mergedInto && u.deletedAt === undefined && !u.isTest).length;
+    const firstName = user.name?.trim().split(/\s+/)[0];
+    return { ownerId: owner._id, body: `${firstName || "Someone"} just signed up. That's ${total} on Poddle.` };
+  },
+});
 
 /**
  * Keeps the user's name and email up to date from what Apple or Google sent.

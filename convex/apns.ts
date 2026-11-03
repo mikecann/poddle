@@ -190,6 +190,17 @@ export const sendSyncWake = internalAction({
     await sendToUser(ctx, userId, { aps: { "content-available": 1 }, sync: "upNext" }, BACKGROUND, "sync wake"),
 });
 
+/** Tells Mike someone new has joined. A failure here must never get in the way of the sign-up, so it runs on its own. */
+export const sendSignupAlert = internalAction({
+  args: { userId: v.id("users") },
+  returns: vSendResult,
+  handler: async (ctx, { userId }): Promise<SendSummary> => {
+    const alert: { ownerId: Id<"users">; body: string } | null = await ctx.runQuery(internal.users.signupAlert, { userId });
+    if (!alert) return { sent: 0, failed: 0, skipped: "noOwner" };
+    return await sendAlertToUser(ctx, alert.ownerId, { title: "New Poddle user", body: alert.body, threadId: "signups" });
+  },
+});
+
 /** Send a test notification to every device you're signed in on. */
 export const sendTestPush = userAction({
   args: { message: v.optional(v.string()) },

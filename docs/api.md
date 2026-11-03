@@ -35,6 +35,7 @@ Set with `npx convex env set NAME value` on the deployment.
 | `PODDLE_ALLOWED_EMAILS` | for sign-up | Comma-separated emails that may make an account. Unset: nobody new. Existing accounts always sign in. |
 | `PODDLE_OPEN_SIGNUP` | at launch | Exactly `1` lets anyone with a verified Apple or Google email make an account; the allowlist no longer matters. Anything else: invite-only. |
 | `PODDLE_TEST_SIGNIN` | dev only | Exactly `1` enables test sign-in. Never set it on prod (it's refused on prod's addresses anyway). |
+| `PODDLE_OWNER_EMAIL` | optional | Whose devices get a push when someone new signs up. Unset: no push. |
 | `PODDLE_API_TOKEN` | for scripts | Long random string for the admin path. |
 | `PODDLE_E2E`, `PODDLE_DIRECTORY_URL` | e2e only | The end-to-end suites' local backend (`docs/testing.md`): exactly `1` turns on `testing:*`, and the URL points Apple Podcasts search at the fixture server. Both are ignored unless the deployment's own URLs are `127.0.0.1`/`localhost` (`lib/e2e.ts`). Never set them on dev or prod. |
 | `PODDLE_SITE_URL` | prod | The website's public origin, `https://poddle.mikecann.app`. Link previews' canonical URLs, and an allowed sign-in return origin. Unset on dev (the request's own origin). |
