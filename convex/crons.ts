@@ -11,4 +11,7 @@ crons.daily("housekeeping", { hourUTC: 16, minuteUTC: 0 }, internal.maintenance.
 // Account deletions run as a chain of steps; this restarts any chain that stopped.
 crons.interval("resume account deletions", { hours: 1 }, internal.accountDeletion.resumeStalled, {});
 
+// People's own Exa keys pay for "For you", so each person's only refreshes about once a week.
+crons.daily("refresh suggestions", { hourUTC: 17, minuteUTC: 0 }, internal.suggestions.refreshDue, {});
+
 export default crons;

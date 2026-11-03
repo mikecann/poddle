@@ -32,3 +32,10 @@ export function directoryBase(env: Env = process.env): string {
   if (override && e2eRefusal(env) === null) return override.replace(/\/$/, "");
   return "https://itunes.apple.com";
 }
+
+/** Exa, or the e2e fixture server's stand-in for it (PODDLE_EXA_URL). */
+export function exaBase(env: Env = process.env): string {
+  const override = env.PODDLE_EXA_URL?.trim();
+  if (override && e2eRefusal(env) === null) return override.replace(/\/$/, "");
+  return "https://api.exa.ai";
+}

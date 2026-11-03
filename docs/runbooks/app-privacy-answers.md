@@ -39,6 +39,8 @@ Apple asks three things per type. The answers are the same for all of them excep
 2. **Is it linked to the user's identity?** **Yes.**
 3. **Is it used for tracking?** **No.**
 
+**Product Interaction** also gets **Product Personalization** ticked, and "For you" sends a few episode titles to Exa, on the person's own key and only if they add one.
+
 **Search History** and **Crash Data:**
 
 1. **How is it used?** **App Functionality** only.

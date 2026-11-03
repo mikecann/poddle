@@ -124,6 +124,18 @@ public actor MockStore: PoddleDataSource {
             }
     }
 
+    /// Sample picks, for previews and screenshots of "For you".
+    public func forYou() async throws -> ForYou {
+        await pause(150)
+        let day: Millis = 86_400_000
+        let today = now().timeIntervalSince1970 * 1000
+        return ForYou(hasKey: true, keyEnding: "a1b2", refreshedAt: today, picks: [
+            SuggestedEpisode(id: "s1", title: "Why No One Can Look Away From Elizabeth Holmes", showTitle: "Hard Fork", feedURL: "https://example.com/hardfork.xml", pubDate: today - 18 * day, duration: 4386, reason: "Because you heard \"What it's like when Elizabeth Holmes…\"", chartPosition: 14),
+            SuggestedEpisode(id: "s2", title: "Runway's WorldPrompt and the Engineering of Real-Time Worlds", showTitle: "Latent Space", feedURL: "https://example.com/latent.xml", pubDate: today - 39 * day, duration: 5780, reason: "Because you heard \"AI Can Now Create Worlds\""),
+            SuggestedEpisode(id: "s3", title: "U.S. History in 100 Objects", showTitle: "Sidedoor", feedURL: "https://example.com/sidedoor.xml", pubDate: today - 139 * day, duration: 1873, reason: "Roman Mars, who you heard on Conversations with Tyler"),
+        ])
+    }
+
     /// Only shows the sample data already has: there's no feed to fetch.
     public func open(_ target: DiscoverTarget) async throws -> OpenedFeed {
         await pause(300)

@@ -18,6 +18,8 @@ struct DiscoverView: View {
     /// The result being fetched so its page can open, for its spinner.
     @State private var opening: String?
     @FocusState private var focused: Bool
+    @State private var forYou: ForYou?
+    @State private var addingKey = false
 
     enum ClipboardState: Equatable {
         case none
@@ -42,6 +44,8 @@ struct DiscoverView: View {
         .sensoryFeedback(.success, trigger: followed)
         .task(id: query) { await runSearch() }
         .task { await checkClipboard() }
+        .task(id: addingKey) { if !addingKey { await loadForYou() } }
+        .sheet(isPresented: $addingKey) { ExaKeySheet() }
         .onAppear { if query.isEmpty && !app.discoverQuery.isEmpty { query = app.discoverQuery } }
         #if os(iOS)
         .onReceive(NotificationCenter.default.publisher(for: UIApplication.didBecomeActiveNotification)) { _ in
@@ -85,6 +89,19 @@ struct DiscoverView: View {
         }
         .padding(.horizontal, 16)
         .animation(.snappy, value: focused || !query.isEmpty)
+    }
+
+    /// Picks are made in the background after a key is added, so it keeps looking until they land.
+    private func loadForYou() async {
+        var attempts = 0
+        repeat {
+            if attempts > 0 { try? await Task.sleep(for: .seconds(3)) }
+            guard !Task.isCancelled else { return }
+            if let latest = try? await store.forYou() {
+                withAnimation(.snappy) { forYou = latest }
+            }
+            attempts += 1
+        } while forYou?.refreshing == true && attempts < 40
     }
 
     private func runSearch() async {
@@ -146,9 +163,16 @@ struct DiscoverView: View {
             }
             Color.clear.frame(height: 20)
         } else {
-            Companion(pose: .searching, motion: .sway, size: 140)
-                .frame(height: 140)
-                .frame(maxWidth: .infinity).padding(.top, 20)
+            if let forYou {
+                ForYouSection(forYou: forYou, opening: opening, addKey: { addingKey = true }) { pick in
+                    Task { await open(pick.target, id: pick.id) }
+                }
+            }
+            if forYou?.picks.isEmpty != false {
+                Companion(pose: .searching, motion: .sway, size: 140)
+                    .frame(height: 140)
+                    .frame(maxWidth: .infinity).padding(.top, 20)
+            }
             VStack(alignment: .leading, spacing: 12) {
                 Text("Try").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
                 FlowChips(items: ["ai", "web dev", "history", "apple", "design", "comedy", "security", "business"]) { query = $0 }

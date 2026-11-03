@@ -90,6 +90,11 @@ struct SettingsView: View {
                     .accessibilityIdentifier("settings.import")
                 }
 
+                GroupLabel(text: "Suggestions")
+                GroupCard {
+                    ExaKeyRow()
+                }
+
                 GroupLabel(text: "Poddle")
                 GroupCard {
                     Toggle(isOn: $showPoddle.animation(.spring(response: 0.4, dampingFraction: 0.8))) {

@@ -42,6 +42,11 @@ public protocol PoddleDataSource: Sendable {
     /// Puts a Discover result's show on the server without following it and fetches its feed
     /// (`feedActions:openFeed`), so it can be loaded like a shared link.
     func open(_ target: DiscoverTarget) async throws -> OpenedFeed
+    /// Discover's "For you" (`suggestions:forYou`).
+    func forYou() async throws -> ForYou
+    /// Saves their own Exa key on the server and starts their first picks.
+    func setExaKey(_ key: String) async throws
+    func removeExaKey() async throws
     func connectionStatus() async -> AsyncStream<ConnectionStatus>
 
     /// Listening sessions for stats (`sessions:record`). The same `sessionId` is re-sent every 30 s
@@ -76,6 +81,9 @@ extension PoddleDataSource {
     public func loadShared(_ target: ShareLinks.Target) async -> Bool { false }
     public func searchEpisodes(_ term: String) async throws -> [EpisodeSearchResult] { [] }
     public func open(_ target: DiscoverTarget) async throws -> OpenedFeed { throw CancellationError() }
+    public func forYou() async throws -> ForYou { ForYou() }
+    public func setExaKey(_ key: String) async throws {}
+    public func removeExaKey() async throws {}
     public func connectionStatus() async -> AsyncStream<ConnectionStatus> { AsyncStream { $0.finish() } }
 }
 

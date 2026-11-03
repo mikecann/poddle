@@ -52,6 +52,12 @@ export function PrivacyPage() {
           results are kept for a day or two so the same search is quicker next time. They aren't tied to you.
         </p>
         <p>
+          "For you" in Discover is off unless you add your own Exa key. If you do, the key is stored encrypted, and about
+          once a week Poddle's server sends Exa the titles of a few episodes you've starred or listened to lately, and
+          their shows, to find similar ones. Private shows are never sent. Exa sees that under your key, not your name.
+          Removing the key stops it and deletes your suggestions.
+        </p>
+        <p>
           The shows and episodes themselves (titles, artwork, show notes) come from public podcast feeds and are shared by
           everyone, so they aren't yours or anyone's personal data. Downloaded episodes stay on your device.
         </p>
@@ -59,7 +65,8 @@ export function PrivacyPage() {
         <h2>Why</h2>
         <p>
           Only to run Poddle for you: to sign you in, keep your library and queue in sync across your devices, show you
-          your stats, send you a notification when a new episode arrives, and read your feature requests. It's never used
+          your stats, send you a notification when a new episode arrives, suggest episodes if you've asked for that, and
+          read your feature requests. It's never used
           for advertising, and it's never shared with anyone for their own use.
         </p>
 
@@ -73,6 +80,10 @@ export function PrivacyPage() {
           </li>
           <li>
             <b>Apple Push Notification service</b> delivers notifications to your iPhone, using your device's push token.
+          </li>
+          <li>
+            <b>Exa</b> searches podcasts for "For you", only if you add your own Exa key. It's your account with them, so
+            their terms and privacy policy apply to it.
           </li>
           <li>
             <b>Sentry</b> receives anonymous crash and error reports from the app and this website, so I can fix what

@@ -137,6 +137,47 @@ public struct EpisodeSearchResult: Codable, Sendable, Hashable, Identifiable {
     }
 }
 
+/// One "For you" pick (`suggestions:forYou`): an episode from a show they don't follow, and why.
+public struct SuggestedEpisode: Codable, Sendable, Hashable, Identifiable {
+    public var id: String
+    public var title: String
+    public var showTitle: String
+    public var feedURL: String
+    public var artworkURL: String?
+    public var pubDate: Millis
+    public var duration: Double
+    public var reason: String
+    /// The show's place on Apple's top shows, when it's there.
+    public var chartPosition: Int?
+    public init(
+        id: String, title: String, showTitle: String, feedURL: String, artworkURL: String? = nil, pubDate: Millis, duration: Double,
+        reason: String, chartPosition: Int? = nil
+    ) {
+        self.id = id; self.title = title; self.showTitle = showTitle; self.feedURL = feedURL; self.artworkURL = artworkURL
+        self.pubDate = pubDate; self.duration = duration; self.reason = reason; self.chartPosition = chartPosition
+    }
+
+    /// Opens through the same path as an episode found by search. The title and date find it in the
+    /// feed; when the feed words it differently, that opens the show's page instead.
+    public var target: DiscoverTarget {
+        .episode(EpisodeSearchResult(id: id, title: title, showTitle: showTitle, feedURL: feedURL, pubDate: pubDate, duration: duration, artworkURL: artworkURL))
+    }
+}
+
+/// Discover's "For you", on the person's own Exa key (decisions.md, 3 Nov 2026).
+public struct ForYou: Codable, Sendable, Hashable {
+    public var hasKey: Bool
+    /// The key's last few characters. The key itself never comes back from the server.
+    public var keyEnding: String?
+    public var refreshing: Bool
+    public var refreshedAt: Millis?
+    public var error: String?
+    public var picks: [SuggestedEpisode]
+    public init(hasKey: Bool = false, keyEnding: String? = nil, refreshing: Bool = false, refreshedAt: Millis? = nil, error: String? = nil, picks: [SuggestedEpisode] = []) {
+        self.hasKey = hasKey; self.keyEnding = keyEnding; self.refreshing = refreshing; self.refreshedAt = refreshedAt; self.error = error; self.picks = picks
+    }
+}
+
 /// A Discover result to open without following its show (decisions.md, 27 Oct 2026).
 public enum DiscoverTarget: Sendable, Hashable {
     case show(SearchResult)

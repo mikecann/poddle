@@ -20,7 +20,7 @@ Claims marked **[verified]** were checked against a source listed at the end. Cl
 
 ### Non-goals (v1)
 - Apple Watch, CarPlay, widgets, Siri/App Intents (beyond what Now Playing gives for free), Live Activities.
-- Social features, comments, recommendations, multiple users.
+- Social features, comments, multiple users. (Recommendations were here too, until "For you": decisions.md, 3 Nov 2026.)
 - Video podcasts (play the audio track only).
 - App Store release, localisation, accessibility beyond SwiftUI defaults plus VoiceOver labels.
 - Generating transcripts on device.
