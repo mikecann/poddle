@@ -30,6 +30,27 @@ const keyFor = (ctx: QueryCtx, userId: Id<"users">) =>
     .withIndex("by_user", (q) => q.eq("userId", userId))
     .unique();
 
+/** Their followed shows' titles, lower-cased. Exa's feed address for a show can differ from the one
+ * they followed (a redirect, another host), so the title is the backstop: All-In got through on its URL. */
+async function followedTitles(ctx: QueryCtx, userId: Id<"users">): Promise<Set<string>> {
+  const subs = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_user_subscribed", (q) => q.eq("userId", userId).eq("subscribed", true))
+    .take(1000);
+  const titles = new Set<string>();
+  for (const sub of subs) {
+    const show = await ctx.db.get(sub.podcastId);
+    if (show) titles.add(show.title.trim().toLowerCase());
+  }
+  return titles;
+}
+
+export const followedShowTitles = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.array(v.string()),
+  handler: async (ctx, { userId }) => [...(await followedTitles(ctx, userId))],
+});
+
 /** What Discover and Profile show. The key itself never comes back: just its last characters. */
 export const forYou = userQuery({
   args: {},
@@ -44,7 +65,9 @@ export const forYou = userQuery({
   handler: async (ctx) => {
     const [key, row] = await Promise.all([keyFor(ctx, ctx.userId), suggestionsFor(ctx, ctx.userId)]);
     const picks = [];
+    const followed = row?.picks.length ? await followedTitles(ctx, ctx.userId) : new Set<string>();
     for (const pick of row?.picks ?? []) {
+      if (followed.has(pick.showTitle.trim().toLowerCase())) continue;
       // Followed since the last refresh: it's in their library now, so it isn't a suggestion.
       const show = await ctx.db
         .query("podcasts")

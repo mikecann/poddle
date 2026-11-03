@@ -144,10 +144,11 @@ async function pickFor(ctx: ActionCtx, userId: Id<"users">, key: string): Promis
   });
   const matches = await ctx.runQuery(internal.directoryCache.libraryMatches, { userId, feedUrls: withFeeds.map((c) => c.feedUrl) });
   const followed = new Set(matches.filter((m) => m.subscribed).map((m) => m.feedUrl));
+  const followedTitles = new Set<string>(await ctx.runQuery(internal.suggestions.followedShowTitles, { userId }));
   const chart = await chartPositions();
 
   const ranked = withFeeds
-    .filter(({ feedUrl }) => !followed.has(feedUrl))
+    .filter(({ c, feedUrl }) => !followed.has(feedUrl) && !followedTitles.has(c.header.showTitle!.trim().toLowerCase()))
     .map(({ c, feedUrl, appleId }) => {
       const chartPosition = appleId === undefined ? undefined : chart.get(appleId);
       return {

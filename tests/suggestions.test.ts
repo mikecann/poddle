@@ -289,6 +289,19 @@ describe("refreshing", () => {
     expect((await t.query(api.suggestions.forYou, {})).picks).toEqual([]);
   });
 
+  test("leaves out a followed show whose feed Exa knows by another address", async () => {
+    const t = setup();
+    const userId = await withKey(t);
+    await heard(t, "Syntax");
+    await t.run(async (ctx) => {
+      const podcastId = await ctx.db.insert("podcasts", { feedUrl: "https://feeds.other-host.com/allin", title: "All-In", isPrivate: false, episodeCount: 1, createdAt: 1, updatedAt: 1 });
+      await ctx.db.insert("subscriptions", { userId, podcastId, subscribed: true, subscriptionUpdatedAt: 1, addedAt: 1, updatedAt: 1 });
+    });
+    fakeExa((q) => (q.startsWith("podcast episodes about") ? [result("e1", "Theirs", { show: "All-In" }), result("e2", "New", { show: "Hard Fork" })] : []));
+    await run(t, userId);
+    expect((await t.query(api.suggestions.forYou, {})).picks.map((p) => p.id)).toEqual(["e2"]);
+  });
+
   test("a new person with no history gets picks from what they follow", async () => {
     const t = setup();
     const userId = await withKey(t);
