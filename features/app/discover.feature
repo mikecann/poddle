@@ -29,4 +29,4 @@ Feature: Episodes from shows you don't follow
     And they add an Exa key from Discover
     Then For You suggests "Breakfast in C"
     When they open "Breakfast in C" from For You
-    Then they still don't follow "Morning Tones"
+    Then opening it didn't follow "Morning Tones"

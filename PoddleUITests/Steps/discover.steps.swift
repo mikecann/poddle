@@ -61,6 +61,13 @@ final class DiscoverSteps: StepModule {
             guard forYouRow(w, a.string(0)).waitForExistence(timeout: 45) else { throw World.Failure("\(a.string(0)) isn't in For You") }
         }
 
+        // Just opening an episode writes nothing personal, so there may be no record of the show for
+        // this person at all. What matters is that nothing says they follow it.
+        s.then("opening it didn't follow {string}") { w, a in
+            let subscribed = (try? w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"]) as? Bool
+            if subscribed == true { throw World.Failure("\(a.string(0)) got followed") }
+        }
+
         s.when("they open {string} from For You") { w, a in
             let row = forYouRow(w, a.string(0))
             try w.reveal(row, a.string(0))
