@@ -39,3 +39,10 @@ export function exaBase(env: Env = process.env): string {
   if (override && e2eRefusal(env) === null) return override.replace(/\/$/, "");
   return "https://api.exa.ai";
 }
+
+/** Sign in with Apple's key server, or the e2e fixture server's stand-in for it (PODDLE_APPLE_URL). */
+export function appleBase(env: Env = process.env): string {
+  const override = env.PODDLE_APPLE_URL?.trim();
+  if (override && e2eRefusal(env) === null) return override.replace(/\/$/, "");
+  return "https://appleid.apple.com";
+}

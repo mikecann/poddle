@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
-import { directoryBase, e2eRefusal } from "../convex/lib/e2e";
+import { appleBase, directoryBase, e2eRefusal } from "../convex/lib/e2e";
 import { TOKEN, mockFetch, setup } from "./helpers";
 import { seedShow } from "./seed";
 
@@ -32,6 +32,17 @@ describe("e2e hooks", () => {
     expect(directoryBase(fake)).toBe("https://itunes.apple.com");
     expect(directoryBase({ ...LOCAL, ...fake, CONVEX_CLOUD_URL: "https://coordinated-dodo-120.ap-southeast-2.convex.cloud" })).toBe(
       "https://itunes.apple.com",
+    );
+  });
+
+  test("the Sign in with Apple stand-in is only trusted on the local e2e backend", () => {
+    // Its keys sign whatever the fixture server likes, so anywhere else it would let anyone in.
+    const fake = { PODDLE_APPLE_URL: "http://127.0.0.1:4310/apple/" };
+    expect(appleBase({ ...LOCAL, ...fake })).toBe("http://127.0.0.1:4310/apple");
+    expect(appleBase(fake)).toBe("https://appleid.apple.com");
+    expect(appleBase({ ...LOCAL, ...fake, PODDLE_E2E: undefined })).toBe("https://appleid.apple.com");
+    expect(appleBase({ ...LOCAL, ...fake, CONVEX_SITE_URL: "https://coordinated-dodo-120.ap-southeast-2.convex.site" })).toBe(
+      "https://appleid.apple.com",
     );
   });
 

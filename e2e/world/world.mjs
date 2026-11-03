@@ -118,6 +118,7 @@ function envLines({ adminToken, fixtureUrl }) {
     PODDLE_E2E: "1",
     PODDLE_DIRECTORY_URL: `${fixtureUrl}/itunes`,
     PODDLE_EXA_URL: `${fixtureUrl}/exa`,
+    PODDLE_APPLE_URL: `${fixtureUrl}/apple`,
     PODDLE_KEY_SECRET: "e2e-only-secret",
   };
   return Object.entries(vars).map(([k, v]) => `${k}='${v}'`).join("\n") + "\n";

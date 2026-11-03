@@ -10,6 +10,9 @@
 // GET  /art/<slug>.png             artwork
 // GET  /chapters/<guid>.json       Podcasting 2.0 chapters
 // POST /exa/search, /exa/contents   Exa's podcast search (PODDLE_EXA_URL)
+// GET  /apple/auth/keys            Sign in with Apple's signing keys (PODDLE_APPLE_URL)
+// POST /apple/_token               { email, nonce } a signed identity token, like the iPhone's
+//                                  Apple sheet gets (the app's -PoddleFakeAppleSignIn)
 // GET  /itunes/search?term=…       Apple's search API, over the public shows (or their episodes,
 //                                  with entity=podcastEpisode)
 // GET  /itunes/lookup?id=…         Apple's lookup API
@@ -22,7 +25,11 @@ import { createReadStream, statSync } from "node:fs";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { SignJWT, exportJWK, generateKeyPair } from "jose";
 import { AUDIO_SECONDS, SHOWS, showByTitle } from "./shows.mjs";
+
+// The stand-in for Apple's Sign in with Apple key, made fresh for each world.
+const appleKey = generateKeyPair("RS256");
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtures = path.join(here, "..", "fixtures");
@@ -46,6 +53,24 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
         if (!world) return send(res, 503, "text/plain", "the backend isn't up yet");
         const result = await world(url.pathname.slice("/_world/".length), await readJson(req));
         return send(res, 200, "application/json", JSON.stringify(result ?? {}));
+      }
+      if (url.pathname === "/apple/auth/keys") {
+        const jwk = await exportJWK((await appleKey).publicKey);
+        return send(res, 200, "application/json", JSON.stringify({ keys: [{ ...jwk, kid: "e2e-apple", alg: "RS256", use: "sig" }] }));
+      }
+      if (req.method === "POST" && url.pathname === "/apple/_token") {
+        const { email, nonce } = await readJson(req);
+        // What Apple signs for the iPhone app: its bundle ID as the audience, and a stable
+        // `sub` per person (here, made from the email).
+        const token = await new SignJWT({ email, email_verified: "true", nonce })
+          .setProtectedHeader({ alg: "RS256", kid: "e2e-apple" })
+          .setIssuer("https://appleid.apple.com")
+          .setAudience("com.mikecann.poddle")
+          .setSubject(`e2e.${Buffer.from(email).toString("hex")}`)
+          .setIssuedAt()
+          .setExpirationTime("10m")
+          .sign((await appleKey).privateKey);
+        return send(res, 200, "application/json", JSON.stringify({ identityToken: token }));
       }
       if (req.method === "POST" && url.pathname === "/exa/search") return send(res, 200, "application/json", JSON.stringify(exaSearch()));
       if (req.method === "POST" && url.pathname === "/exa/contents") return send(res, 200, "application/json", JSON.stringify(exaContents(await readJson(req))));

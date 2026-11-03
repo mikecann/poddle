@@ -14,6 +14,8 @@ final class FakeAuthServer: ConvexHTTPCalling, @unchecked Sendable {
     var offline = false
     var refuseDelete = false
     private var _deleteToken: String?
+    private var _appleArgs: [String: JSONValue]?
+    var appleArgs: [String: JSONValue]? { lock.withLock { _appleArgs } }
     var deleteToken: String? { lock.withLock { _deleteToken } }
 
     func tokens(_ n: Int) -> JSONValue {
@@ -39,6 +41,10 @@ final class FakeAuthServer: ConvexHTTPCalling, @unchecked Sendable {
             if refuseDelete { throw AccountError.failed("Sign in first") }
             lock.withLock { _deleteToken = token }
             return ["deletionId": "d1"]
+        case "auth:signInWithAppleNative":
+            lock.withLock { _appleArgs = args }
+            if args["identityToken"] == "stranger-token" { throw AccountError.inviteOnly("Poddle is invite-only for now.") }
+            return ["status": "complete", "tokens": tokens(0)]
         case "auth:startSignInWithGoogle":
             return ["redirect": "https://accounts.google.com/o/oauth2/auth?x=1", "state": "st"]
         case "auth:completeSignInWithGoogle":
@@ -90,6 +96,22 @@ private let config = LiveConfig(deploymentURL: URL(string: "https://striped-turt
         }
         try await account.completeWebSignIn(.google, landedOn: URL(string: "poddle://signed-in?convexAuthCode=abc")!, state: state)
         #expect(account.userId == "user-1")
+    }
+
+    @Test func nativeAppleSignInSendsAppleTokenAndNonce() async throws {
+        let server = FakeAuthServer()
+        let account = Account(config: config, store: MemorySessionStore(), http: server)
+        try await account.signInWithApple(identityToken: "apple-jwt", nonce: "raw-nonce", firstName: "Pat", lastName: nil)
+        #expect(account.userId == "user-1")
+        #expect(server.appleArgs == ["identityToken": "apple-jwt", "nonce": "raw-nonce", "firstName": "Pat"])
+    }
+
+    @Test func nativeAppleSignInPassesInviteOnlyThrough() async {
+        let account = Account(config: config, store: MemorySessionStore(), http: FakeAuthServer())
+        await #expect(throws: AccountError.inviteOnly("Poddle is invite-only for now.")) {
+            try await account.signInWithApple(identityToken: "stranger-token", nonce: "n", firstName: nil, lastName: nil)
+        }
+        #expect(!account.isSignedIn)
     }
 
     @Test func refreshesOnceWhenTheTokenIsAboutToExpire() async throws {

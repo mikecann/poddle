@@ -48,6 +48,8 @@ const app = defineApp({
     // search at the fixture server. Both are ignored anywhere but 127.0.0.1.
     PODDLE_E2E: v.optional(v.string()),
     PODDLE_DIRECTORY_URL: v.optional(v.string()),
+    // The e2e world's stand-in for Sign in with Apple's key server (lib/e2e.ts), ignored elsewhere.
+    PODDLE_APPLE_URL: v.optional(v.string()),
   },
 });
 

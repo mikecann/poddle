@@ -20,15 +20,14 @@ struct WebSignInTests {
     }
 
     @Test func aCancelBeforeAnyoneCouldSeeTheSheetIsIOSRefusingToOpenIt() {
-        #expect(WebSignIn.outcome(url: nil, error: cancel, after: 0.3)
-            == .failure(.failed("Couldn't open the sign-in page (1). Try again.")))
+        #expect(WebSignIn.outcome(url: nil, error: cancel, after: 0.3) == .failure(.sheetRefused(1)))
+        #expect(AccountError.sheetRefused(1).localizedDescription == "Couldn't open the sign-in page (1). Try again.")
     }
 
     @Test func otherErrorsSayWhichOne() {
         let invalid = NSError(domain: ASWebAuthenticationSessionErrorDomain,
                               code: ASWebAuthenticationSessionError.presentationContextInvalid.rawValue)
-        #expect(WebSignIn.outcome(url: nil, error: invalid, after: 0.01)
-            == .failure(.failed("Couldn't open the sign-in page (3). Try again.")))
+        #expect(WebSignIn.outcome(url: nil, error: invalid, after: 0.01) == .failure(.sheetRefused(3)))
     }
 
     @Test func onlyTheFirstEndingIsPassedOn() {
@@ -54,9 +53,9 @@ struct WebSignInTests {
         let result: Result<URL, AccountError> = await withCheckedContinuation { continuation in
             let finish = FirstAnswer<Result<URL, AccountError>> { continuation.resume(returning: $0) }
             finish(WebSignIn.outcome(url: nil, error: cancel, after: 0.01))
-            finish(.failure(WebSignIn.couldNotStart))
+            finish(.failure(.sheetRefused(nil)))
         }
-        #expect(result == .failure(.failed("Couldn't open the sign-in page (1). Try again.")))
+        #expect(result == .failure(.sheetRefused(1)))
     }
 }
 
@@ -65,4 +64,19 @@ private final class Box: @unchecked Sendable {
     private var _values: [Int] = []
     var values: [Int] { lock.withLock { _values } }
     func append(_ n: Int) { lock.withLock { _values.append(n) } }
+}
+
+/// The nonce native Sign in with Apple puts in its request: Apple signs its hash into the
+/// identity token, and the backend checks the raw value against it.
+struct AppleSignInNonceTests {
+    @Test func theHashIsSHA256OfTheRawValue() {
+        let nonce = AppleSignInNonce(raw: "abc")
+        #expect(nonce.hashed == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad")
+    }
+
+    @Test func eachSignInGetsAFreshOne() {
+        let a = AppleSignInNonce.make(), b = AppleSignInNonce.make()
+        #expect(a.raw != b.raw)
+        #expect(a.raw.count == 64)
+    }
 }

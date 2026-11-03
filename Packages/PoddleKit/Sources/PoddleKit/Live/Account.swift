@@ -60,6 +60,9 @@ public enum AccountError: Error, Sendable, Hashable, LocalizedError {
     case network(String)
     /// The server said no, or sent something unexpected.
     case failed(String)
+    /// iOS wouldn't open the web sign-in sheet at all (with its error code, when it gave one).
+    /// Apple's App Review devices do this every time (PODDLE-A), so Google falls back to Safari.
+    case sheetRefused(Int?)
 
     public var errorDescription: String? {
         switch self {
@@ -67,6 +70,7 @@ public enum AccountError: Error, Sendable, Hashable, LocalizedError {
         case let .inviteOnly(m): m
         case let .network(m): "Can't reach Poddle (\(m)). Check your connection and try again."
         case let .failed(m): m
+        case let .sheetRefused(code): "Couldn't open the sign-in page\(code.map { " (\($0))" } ?? ""). Try again."
         }
     }
 }
@@ -178,6 +182,16 @@ public final class Account: AuthTokenSource {
         let result = try await http.call("mutation", "auth:completeSignInWith\(provider.rawValue)",
                                          ["code": .string(code), "state": .string(state)], token: nil)
         try await finish(result)
+    }
+
+    /// Native Sign in with Apple: swaps the identity token from the iPhone's own Apple sheet
+    /// (with the raw nonce whose hash the request carried) for a session. Apple only gives the
+    /// name the first time someone signs in, so it's passed on when there is one.
+    public func signInWithApple(identityToken: String, nonce: String, firstName: String?, lastName: String?) async throws {
+        var args: [String: JSONValue] = ["identityToken": .string(identityToken), "nonce": .string(nonce)]
+        if let firstName, !firstName.isEmpty { args["firstName"] = .string(firstName) }
+        if let lastName, !lastName.isEmpty { args["lastName"] = .string(lastName) }
+        try await finish(try await http.call("action", "auth:signInWithAppleNative", args, token: nil))
     }
 
     #if DEBUG
