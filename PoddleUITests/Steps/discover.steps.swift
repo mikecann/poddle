@@ -64,8 +64,12 @@ final class DiscoverSteps: StepModule {
         // Just opening an episode writes nothing personal, so there may be no record of the show for
         // this person at all. What matters is that nothing says they follow it.
         s.then("opening it didn't follow {string}") { w, a in
-            let subscribed = try w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"] as? Bool
-            if subscribed == true { throw World.Failure("\(a.string(0)) got followed") }
+            // The world can't find a show that isn't in their library, which is the answer we want.
+            // Any other failure still fails the step.
+            do {
+                let subscribed = try w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"] as? Bool
+                if subscribed == true { throw World.Failure("\(a.string(0)) got followed") }
+            } catch let error where "\(error)".contains("isn't in the catalogue") {}
         }
 
         s.when("they open {string} from For You") { w, a in

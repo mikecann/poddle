@@ -131,7 +131,8 @@ public actor MockStore: PoddleDataSource {
         let reasons = ["Because you heard an episode like this one", "From a show close to ones you follow", "A guest you've heard before"]
         let picks = server.episodes.values
             .sorted { $0.pubDate > $1.pubDate }
-            .compactMap { e -> (Episode, Podcast)? in server.podcasts[e.podcastId].map { (e, $0) } }
+            // Never a private show, as the live server would never pick one.
+            .compactMap { e -> (Episode, Podcast)? in server.podcasts[e.podcastId].flatMap { $0.isPrivate ? nil : (e, $0) } }
             .prefix(3)
             .enumerated()
             .map { i, pair in

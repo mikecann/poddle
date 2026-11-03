@@ -41,7 +41,7 @@ Apple asks three things per type. The answers are the same for all of them excep
 
 **Product Interaction:**
 
-1. **How is it used?** Tick **App Functionality** and **Product Personalization** ("For you" picks episodes from listening history, and sends a few episode titles to Exa on the person's own key, only if they add one).
+1. **How is it used?** Tick **App Functionality** and **Product Personalization** ("For you" picks episodes from listening history, or followed shows for someone new, and sends a few episode and show titles to Exa on the person's own key, only if they add one).
 2. **Is it linked to the user's identity?** **Yes.**
 3. **Is it used for tracking?** **No.**
 
