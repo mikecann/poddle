@@ -84,6 +84,20 @@ export const dropToken = internalMutation({
   },
 });
 
+/** Apple took this token in the other environment than the app said (apns.ts). */
+export const setTokenEnvironment = internalMutation({
+  args: { token: v.string(), environment: v.union(v.literal("sandbox"), v.literal("production")) },
+  returns: v.null(),
+  handler: async (ctx, { token, environment }) => {
+    const holders = await ctx.db
+      .query("devices")
+      .withIndex("by_apnsToken", (q) => q.eq("apnsToken", token))
+      .collect();
+    for (const h of holders) await ctx.db.patch(h._id, { apnsEnvironment: environment, updatedAt: Date.now() });
+    return null;
+  },
+});
+
 export const alertForEpisode = internalQuery({
   args: { episodeId: v.id("episodes") },
   returns: v.union(v.null(), v.object({ title: v.string(), body: v.string(), podcastId: v.id("podcasts") })),

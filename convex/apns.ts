@@ -49,6 +49,7 @@ export function providerToken(cfg: ApnsConfig, nowMs = Date.now()): string {
   return token;
 }
 
+type ApnsEnv = "sandbox" | "production";
 type SendResult = { token: string; status: number; reason?: string };
 
 /**
@@ -133,26 +134,44 @@ async function sendToUser(
   const jwt = providerToken(cfg);
   let sent = 0;
   let failed = 0;
+  const wrongEnvironment: { token: string; environment: ApnsEnv }[] = [];
+  const sendAll = async (env: ApnsEnv, tokens: string[]) => {
+    const session = http2.connect(env === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com");
+    session.on("error", (e) => console.error(`[apns] session error: ${e.message}`));
+    try {
+      return await Promise.all(tokens.map((t) => sendOne(session, cfg, jwt, t, payload, kind)));
+    } finally {
+      session.close();
+    }
+  };
+  const dead = (r: SendResult) => r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered";
+
   for (const env of ["sandbox", "production"] as const) {
     const tokens = targets.filter((t) => (t.environment ?? cfg.env) === env).map((t) => t.token);
     if (!tokens.length) continue;
-    const host = env === "production" ? "https://api.push.apple.com" : "https://api.sandbox.push.apple.com";
-    const session = http2.connect(host);
-    session.on("error", (e) => console.error(`[apns] session error: ${e.message}`));
-    try {
-      const results = await Promise.all(tokens.map((t) => sendOne(session, cfg, jwt, t, payload, kind)));
-      for (const r of results) {
-        if (r.status === 200) sent++;
-        else {
-          failed++;
-          console.warn(`[apns] ${r.status} ${r.reason ?? ""} for …${r.token.slice(-6)}`);
-          if (r.status === 410 || r.reason === "BadDeviceToken" || r.reason === "Unregistered") {
-            await ctx.runMutation(internal.devices.dropToken, { token: r.token });
-          }
-        }
+    for (const r of await sendAll(env, tokens)) {
+      if (r.status === 200) sent++;
+      else if (r.reason === "BadDeviceToken") wrongEnvironment.push({ token: r.token, environment: env === "production" ? "sandbox" : "production" });
+      else {
+        failed++;
+        console.warn(`[apns] ${r.status} ${r.reason ?? ""} for …${r.token.slice(-6)}`);
+        if (dead(r)) await ctx.runMutation(internal.devices.dropToken, { token: r.token });
       }
-    } finally {
-      session.close();
+    }
+  }
+
+  // The app can only guess its environment from the build configuration, and a Release build
+  // installed from Xcode or devicectl gets a sandbox token while saying "production". Apple calls that
+  // BadDeviceToken, which used to delete a good token. So try the other environment before giving up.
+  for (const { token, environment } of wrongEnvironment) {
+    const [r] = await sendAll(environment, [token]);
+    if (r?.status === 200) {
+      sent++;
+      await ctx.runMutation(internal.devices.setTokenEnvironment, { token, environment });
+    } else {
+      failed++;
+      console.warn(`[apns] BadDeviceToken in both environments for …${token.slice(-6)}`);
+      await ctx.runMutation(internal.devices.dropToken, { token });
     }
   }
   return { sent, failed };
