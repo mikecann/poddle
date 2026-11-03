@@ -124,16 +124,23 @@ public actor MockStore: PoddleDataSource {
             }
     }
 
-    /// Sample picks, for previews and screenshots of "For you".
+    /// Sample picks, for previews and screenshots of "For you": real episodes from the sample data,
+    /// so tapping one opens it like the live app would.
     public func forYou() async throws -> ForYou {
         await pause(150)
-        let day: Millis = 86_400_000
-        let today = now().timeIntervalSince1970 * 1000
-        return ForYou(hasKey: true, keyEnding: "a1b2", refreshedAt: today, picks: [
-            SuggestedEpisode(id: "s1", title: "Why No One Can Look Away From Elizabeth Holmes", showTitle: "Hard Fork", feedURL: "https://example.com/hardfork.xml", pubDate: today - 18 * day, duration: 4386, reason: "Because you heard \"What it's like when Elizabeth Holmes…\"", chartPosition: 14),
-            SuggestedEpisode(id: "s2", title: "Runway's WorldPrompt and the Engineering of Real-Time Worlds", showTitle: "Latent Space", feedURL: "https://example.com/latent.xml", pubDate: today - 39 * day, duration: 5780, reason: "Because you heard \"AI Can Now Create Worlds\""),
-            SuggestedEpisode(id: "s3", title: "U.S. History in 100 Objects", showTitle: "Sidedoor", feedURL: "https://example.com/sidedoor.xml", pubDate: today - 139 * day, duration: 1873, reason: "Roman Mars, who you heard on Conversations with Tyler"),
-        ])
+        let reasons = ["Because you heard an episode like this one", "From a show close to ones you follow", "A guest you've heard before"]
+        let picks = server.episodes.values
+            .sorted { $0.pubDate > $1.pubDate }
+            .compactMap { e -> (Episode, Podcast)? in server.podcasts[e.podcastId].map { (e, $0) } }
+            .prefix(3)
+            .enumerated()
+            .map { i, pair in
+                SuggestedEpisode(
+                    id: "s\(i)", title: pair.0.title, showTitle: pair.1.title, feedURL: pair.1.feedURL, artworkURL: pair.1.artworkURL,
+                    pubDate: pair.0.pubDate, duration: pair.0.duration ?? 0, reason: reasons[i], chartPosition: i == 0 ? 14 : nil
+                )
+            }
+        return ForYou(hasKey: true, keyEnding: "a1b2", refreshedAt: nowMillis, picks: Array(picks))
     }
 
     /// Only shows the sample data already has: there's no feed to fetch.

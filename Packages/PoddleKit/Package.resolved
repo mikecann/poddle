@@ -1,6 +1,14 @@
 {
-  "originHash" : "acaf33172c492149e20fd742f65e3b9e5ec3025d7c24647521533b4bf779b331",
+  "originHash" : "043636519b7944a979557e390c1edee598e81ddcfc837702dd7ba5006ebef4df",
   "pins" : [
+    {
+      "identity" : "chef-cloud",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/convex/chef-cloud",
+      "state" : {
+        "revision" : "7f3eb9a40621d52ee2408f7fb9e48069ec07982e"
+      }
+    },
     {
       "identity" : "convex-swift",
       "kind" : "remoteSourceControl",
@@ -8,6 +16,15 @@
       "state" : {
         "revision" : "125b71b2f8725931a5b0e8252f0799ef2adad120",
         "version" : "0.8.1"
+      }
+    },
+    {
+      "identity" : "sentry-cocoa",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/getsentry/sentry-cocoa",
+      "state" : {
+        "revision" : "2f64c77f77514acd01780d1aac86ae75b7fccd04",
+        "version" : "9.31.0"
       }
     }
   ],

@@ -196,9 +196,6 @@ Every function below acts for the signed-in caller (and also takes the optional 
 | Function | Kind | Args | Returns / behaviour |
 |---|---|---|---|
 | `episodes:inbox` | query | – | **Deprecated.** `[EpisodeRow]` newest first (max 500). There's no Inbox any more, nothing new goes into it, and `migrations:retireInbox` empties it, so this returns `[]`. Kept while the app still subscribes to it. |
-| `suggestions:forYou` | query | – | `{ hasKey, keyEnding?, refreshing, refreshedAt?, error?, picks: [{ id, title, showTitle, feedUrl, appleId?, artworkUrl?, pubDate, duration, reason, chartPosition? }] }`. Discover's "For you". The key itself never comes back. |
-| `suggestionsActions:setKey` | action | `key` | `null`. Saves the person's own Exa key, encrypted, and starts a refresh. `{ code: "badKey" }` if it can't be one. |
-| `suggestions:removeKey` | mutation | – | `null`. Forgets the key and the picks. |
 | `episodes:starred` | query | – | `[EpisodeRow]` most recently starred first. |
 | `episodes:get` | query | `episodeId` | `{ row: EpisodeRow, showNotesHtml?, inQueue: Bool } \| null` |
 | `episodes:updatePosition` | mutation | `episodeId`, `position`, `positionUpdatedAt`, `deviceId` | `Bool` applied. LWW on `positionUpdatedAt`; equal times: later arrival wins. Send on pause, every ~30 s while playing, and on episode change. |
@@ -206,6 +203,15 @@ Every function below acts for the signed-in caller (and also takes the optional 
 | `episodes:setStarredState` | mutation | `episodeId`, `starred`, `at` | `Bool` changed |
 | `episodes:setArchivedState` | mutation | `episodeId`, `archived`, `at` | `Bool` changed. Archiving removes it from the Inbox (not from Up Next). Archiving an unplayed episode logs a `skipped` event. |
 | `episodes:archiveAllOlder` | mutation | `episodeId`, `at`, `includeThis?` | `Int` archived. Archives that show's Inbox episodes published before this one. With the Inbox gone it finds nothing; kept while the app still calls it. |
+
+
+### For you (`suggestions:*`, `suggestionsActions:*`)
+
+| Function | Kind | Args | Returns / notes |
+|---|---|---|---|
+| `suggestions:forYou` | query | – | `{ hasKey, keyEnding?, refreshing, refreshedAt?, error?, picks: [{ id, title, showTitle, feedUrl, appleId?, artworkUrl?, pubDate, duration, reason, chartPosition? }] }`. Discover's "For you". Only the key's last four characters come back. |
+| `suggestionsActions:setKey` | action | `key` | `null`. Saves the person's own Exa key, encrypted, and starts a refresh. `{ code: "badKey" }` if it can't be one. |
+| `suggestions:removeKey` | mutation | – | `null`. Forgets the key and the picks. |
 
 ### Up Next (`queue:*`)
 

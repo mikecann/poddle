@@ -137,6 +137,14 @@ describe("what's worth showing", () => {
     expect(isWorthShowing({ title: "Arvind Krishna & Nikesh Arora: Quantum Threat, Open vs Frontier AI, AI Cyber Warfare & SaaS Collapse", header: { ...good, showTitle: "All-In" } }, heard, now)).toBe(false);
     expect(isWorthShowing({ title: "Nikesh Arora, CEO Palo Alto Networks", header: { ...good, showTitle: "Sourcery" } }, heard, now)).toBe(true);
   });
+  test("a short show name only counts as a whole word", () => {
+    const lex = [{ title: "Something", showTitle: "Lex" }];
+    expect(isWorthShowing({ title: "The lexicon of AI", header: good }, lex, now)).toBe(true);
+    expect(isWorthShowing({ title: "What Lex got wrong", header: good }, lex, now)).toBe(false);
+  });
+  test("a short seed title doesn't match every longer title with those words in it", () => {
+    expect(isWorthShowing({ title: "Bonus Episode: the history of trade", header: good }, [{ title: "Bonus Episode", showTitle: "X" }], now)).toBe(true);
+  });
   test("not another show's write-up of it", () => expect(ok("Syntax: why code died")).toBe(false));
   test("nothing with missing details", () => expect(ok("Ep", { ...good, pubDate: undefined as never })).toBe(false));
 
@@ -314,6 +322,37 @@ describe("refreshing", () => {
     fakeExa((q) => (q.startsWith("podcast episodes about") ? [result("e1", "Theirs", { show: "All-In" }), result("e2", "New", { show: "Hard Fork" })] : []));
     await run(t, userId);
     expect((await t.query(api.suggestions.forYou, {})).picks.map((p) => p.id)).toEqual(["e2"]);
+  });
+
+  test("one real play is enough not to send their follows", async () => {
+    const t = setup();
+    const userId = await withKey(t);
+    await heard(t, "Syntax");
+    await seedShow(t, 1, { title: "Followed Only" });
+    const { queries } = fakeExa();
+    await run(t, userId);
+    expect(queries.join("\n")).not.toContain("podcast episodes like");
+  });
+
+  test("picks that have aged past a year drop out even if refreshes keep failing", async () => {
+    const t = setup();
+    const userId = await withKey(t);
+    await t.run(async (ctx) => {
+      const row = await ctx.db.query("suggestions").first();
+      const pick = { id: "old", title: "Old", showTitle: "Somewhere", feedUrl: "https://f/x.xml", pubDate: Date.now() - 400 * DAY, duration: 3000, reason: "r" };
+      await ctx.db.patch(row!._id, { picks: [pick, { ...pick, id: "new", pubDate: Date.now() - DAY }], refreshingSince: undefined });
+    });
+    expect((await t.query(api.suggestions.forYou, {})).picks.map((p) => p.id)).toEqual(["new"]);
+    void userId;
+  });
+
+  test("a refresh that dies stops saying it's refreshing", async () => {
+    const t = setup();
+    const userId = await t.userId();
+    const refreshId = await t.raw.mutation(internal.suggestions.startRefresh, { userId });
+    expect((await t.query(api.suggestions.forYou, {})).refreshing).toBe(true);
+    await t.raw.mutation(internal.suggestions.expireRefresh, { userId, refreshId: refreshId! });
+    expect((await t.query(api.suggestions.forYou, {})).refreshing).toBe(false);
   });
 
   test("a new person with no history gets picks from what they follow", async () => {

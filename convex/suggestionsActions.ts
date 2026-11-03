@@ -12,6 +12,7 @@ import {
   type Candidate,
   choosePicks,
   isWorthShowing,
+  MAX_AGE_MS,
   parseEpisodeHeader,
   parseShowPage,
   rankScore,
@@ -95,7 +96,7 @@ async function pickFor(ctx: ActionCtx, userId: Id<"users">, key: string): Promis
   const now = Date.now();
   const seeds: Seed[] = await ctx.runQuery(internal.suggestions.seedsFor, { userId });
   if (seeds.length === 0) return [];
-  const since = new Date(now - 365 * 86_400_000).toISOString();
+  const since = new Date(now - MAX_AGE_MS).toISOString();
   const candidates = new Map<string, Candidate>();
 
   const collect = (results: ExaResult[], seedIndex: number, reason: string, mustMention?: string) => {
@@ -174,13 +175,13 @@ async function pickFor(ctx: ActionCtx, userId: Id<"users">, key: string): Promis
 
 export const refreshFor = internalAction({
   /** `refreshId`: saveKey has already started this refresh and given it this id. */
-  args: { userId: v.id("users"), refreshId: v.optional(v.string()) },
+  args: { userId: v.id("users"), refreshId: v.optional(v.string()), onlyIfDue: v.optional(v.boolean()) },
   returns: v.null(),
   handler: async (ctx, args) => {
     const { userId } = args;
     const stored = await ctx.runQuery(internal.suggestions.encryptedKey, { userId });
     if (!stored) return null;
-    const refreshId = args.refreshId ?? (await ctx.runMutation(internal.suggestions.startRefresh, { userId }));
+    const refreshId = args.refreshId ?? (await ctx.runMutation(internal.suggestions.startRefresh, { userId, onlyIfDue: args.onlyIfDue }));
     if (!refreshId) return null;
     try {
       const picks = await pickFor(ctx, userId, decryptKey(stored));

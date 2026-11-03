@@ -105,18 +105,24 @@ export function isWorthShowing(c: Pick<Candidate, "title" | "header">, seeds: Pi
   return !seeds.some(
     (s) =>
       sameTitle(c.title, s.title) ||
-      (showTitle.toLowerCase() !== s.showTitle.toLowerCase() && title.includes(s.showTitle.toLowerCase())),
+      (showTitle.toLowerCase() !== s.showTitle.toLowerCase() && mentions(title, s.showTitle)),
   );
+}
+
+/** The show's name as whole words, so "Lex" doesn't knock out every title with "lexicon" in it. */
+function mentions(title: string, name: string): boolean {
+  const escaped = name.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(title.toLowerCase());
 }
 
 const words = (title: string) => new Set(title.toLowerCase().match(/[a-z0-9]+/g) ?? []);
 
-/** Mostly the same words, in any order. */
+/** Mostly the same words, in any order. Against the longer title, so a short one like "Bonus Episode" doesn't match everything containing it. */
 export function sameTitle(a: string, b: string): boolean {
   const [x, y] = [words(a), words(b)];
   if (x.size === 0 || y.size === 0) return false;
   const shared = [...x].filter((w) => y.has(w)).length;
-  return shared / Math.min(x.size, y.size) >= 0.75;
+  return shared / Math.max(x.size, y.size) >= 0.75;
 }
 
 /**

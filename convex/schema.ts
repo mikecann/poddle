@@ -566,7 +566,7 @@ export default defineSchema({
 
   /** Someone's own Exa key for "For you", encrypted (suggestionsActions.ts). Never sent back or synced. */
   exaKeys: defineTable({
-    userId: vOwner,
+    userId: v.id("users"),
     ciphertext: v.string(),
     /** Its last few characters, so Profile can show which key it is. */
     ending: v.string(),
@@ -575,7 +575,7 @@ export default defineSchema({
 
   /** One per person with a key: their latest "For you" picks (suggestions.ts). */
   suggestions: defineTable({
-    userId: vOwner,
+    userId: v.id("users"),
     picks: v.array(vSuggestion),
     refreshedAt: v.optional(v.number()),
     refreshingSince: v.optional(v.number()),

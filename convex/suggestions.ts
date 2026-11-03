@@ -66,8 +66,11 @@ export const forYou = userQuery({
     const [key, row] = await Promise.all([keyFor(ctx, ctx.userId), suggestionsFor(ctx, ctx.userId)]);
     const picks = [];
     const followed = row?.picks.length ? await followedTitles(ctx, ctx.userId) : new Set<string>();
+    const now = Date.now();
     for (const pick of row?.picks ?? []) {
       if (followed.has(pick.showTitle.trim().toLowerCase())) continue;
+      // Last week's picks age too, and a failed refresh keeps them: still nothing over a year old.
+      if (now - pick.pubDate > MAX_AGE_MS) continue;
       // Followed since the last refresh: it's in their library now, so it isn't a suggestion.
       const show = await ctx.db
         .query("podcasts")
@@ -120,6 +123,7 @@ export const saveKey = internalMutation({
     if (row) await ctx.db.patch(row._id, { refreshingSince: now, refreshId, error: undefined });
     else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now, refreshId });
     await ctx.scheduler.runAfter(0, internal.suggestionsActions.refreshFor, { userId, refreshId });
+    await ctx.scheduler.runAfter(REFRESH_TIMEOUT, internal.suggestions.expireRefresh, { userId, refreshId });
     return null;
   },
 });
@@ -182,7 +186,8 @@ export const seedsFor = internalQuery({
     }
     for (const [episodeId] of [...heard].sort((a, b) => b[1] - a[1]).slice(0, 30)) await add(episodeId, "listened");
 
-    if (seeds.length < 3) {
+    // Only someone with nothing to go on gets their follows sent instead: one real play is enough.
+    if (heard.size === 0 && starred.length === 0) {
       const follows = await ctx.db
         .query("subscriptions")
         .withIndex("by_user_subscribed", (q) => q.eq("userId", userId).eq("subscribed", true))
@@ -202,15 +207,18 @@ export const seedsFor = internalQuery({
  * Only the refresh holding the current id may write a result (finishRefresh).
  */
 export const startRefresh = internalMutation({
-  args: { userId: v.id("users") },
+  /** `onlyIfDue`: the daily job's check, done again here in case it's been refreshed since it looked. */
+  args: { userId: v.id("users"), onlyIfDue: v.optional(v.boolean()) },
   returns: v.union(v.string(), v.null()),
-  handler: async (ctx, { userId }) => {
+  handler: async (ctx, { userId, onlyIfDue }) => {
     const now = Date.now();
     const row = await suggestionsFor(ctx, userId);
     if (row?.refreshingSince !== undefined && now - row.refreshingSince < REFRESH_TIMEOUT) return null;
+    if (onlyIfDue && row?.refreshedAt !== undefined && now - row.refreshedAt < REFRESH_EVERY) return null;
     const refreshId = crypto.randomUUID();
     if (row) await ctx.db.patch(row._id, { refreshingSince: now, refreshId });
     else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now, refreshId });
+    await ctx.scheduler.runAfter(REFRESH_TIMEOUT, internal.suggestions.expireRefresh, { userId, refreshId });
     return refreshId;
   },
 });
@@ -233,6 +241,20 @@ export const finishRefresh = internalMutation({
   },
 });
 
+/**
+ * A refresh that died without finishing would otherwise say "refreshing" until something else wrote
+ * the row: forYou is reactive, so time passing alone doesn't change its answer.
+ */
+export const expireRefresh = internalMutation({
+  args: { userId: v.id("users"), refreshId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId, refreshId }) => {
+    const row = await suggestionsFor(ctx, userId);
+    if (row?.refreshId === refreshId && row.refreshingSince !== undefined) await ctx.db.patch(row._id, { refreshingSince: undefined });
+    return null;
+  },
+});
+
 /** Daily: everyone with a key whose picks are a week old, spread out so they don't all hit Exa together. */
 export const refreshDue = internalMutation({
   args: {},
@@ -240,11 +262,13 @@ export const refreshDue = internalMutation({
   handler: async (ctx) => {
     const now = Date.now();
     let scheduled = 0;
-    for (const key of await ctx.db.query("exaKeys").take(1000)) {
-      if (!key.userId) continue;
+    // Every key, not a page of them. Poddle has a handful of people; past a few thousand keys this
+    // wants splitting across runs.
+    for await (const key of ctx.db.query("exaKeys")) {
       const row = await suggestionsFor(ctx, key.userId);
       if (row?.refreshedAt !== undefined && now - row.refreshedAt < REFRESH_EVERY) continue;
-      await ctx.scheduler.runAfter(scheduled * 20_000, internal.suggestionsActions.refreshFor, { userId: key.userId });
+      if (row?.refreshingSince !== undefined && now - row.refreshingSince < REFRESH_TIMEOUT) continue;
+      await ctx.scheduler.runAfter(scheduled * 20_000, internal.suggestionsActions.refreshFor, { userId: key.userId, onlyIfDue: true });
       scheduled++;
     }
     return scheduled;

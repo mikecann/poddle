@@ -19,7 +19,8 @@ export function PrivacyPage() {
         <p>
           Poddle is a podcast player I (Mike Cann) made for myself, and now anyone can use it. This page says what it
           keeps about you, why, where it lives, and how to get rid of it. The short version: it keeps what it needs to
-          sync your podcasts between your devices, and nothing else. No ads, no tracking, and I don't sell anything to
+          sync your podcasts between your devices (plus, only if you turn on "For you", your Exa key and the episodes it
+          picked for you), and nothing else. No ads, no tracking, and I don't sell anything to
           anyone.
         </p>
 
@@ -54,7 +55,8 @@ export function PrivacyPage() {
         <p>
           "For you" in Discover is off unless you add your own Exa key. If you do, the key is stored encrypted, and about
           once a week Poddle's server sends Exa the titles of a few episodes you've starred or listened to lately, and
-          their shows, to find similar ones. Private shows are never sent. Exa sees that under your key, not your name.
+          their shows, to find similar ones. Until you've listened to something in Poddle, it sends the names of shows you
+          follow instead. Private shows are never sent. Exa sees that under your key, not your name.
           Removing the key stops it and deletes your suggestions.
         </p>
         <p>

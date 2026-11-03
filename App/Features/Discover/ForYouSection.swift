@@ -56,7 +56,7 @@ struct ForYouSection: View {
     private var offer: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Get episodes picked for you").font(.text(17, .bold)).foregroundStyle(Palette.ink)
-            Text("Poddle searches podcast transcripts with Exa, using your own key, so you pay Exa directly: about 50c a month. It sends the titles of episodes you've listened to, never your private shows.")
+            Text("Poddle searches podcast transcripts with Exa, using your own key, so you pay Exa directly: about 50c a month. It sends the titles of episodes you've starred or listened to lately (or, if you're new, the shows you follow), never your private shows.")
                 .font(.text(14.5)).foregroundStyle(Palette.body)
             PoddleButton(title: "Add your Exa key", kind: .primary, action: addKey)
                 .padding(.top, 8)
@@ -134,6 +134,7 @@ struct ExaKeySheet: View {
             }
             HStack {
                 PoddleButton(title: "Cancel", kind: .quiet) { dismiss() }
+                    .disabled(saving)
                 PoddleButton(title: saving ? "Saving…" : "Save", kind: .primary) { save() }
                     .disabled(saving || key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                     .accessibilityIdentifier("forYou.saveKey")
@@ -167,6 +168,7 @@ struct ExaKeyRow: View {
     @Environment(AppModel.self) private var app
     @State private var forYou: ForYou?
     @State private var adding = false
+    @State private var loadFailed = false
 
     var body: some View {
         Cell(title: "Exa key", subtitle: subtitle, icon: "sparkles", iconTint: Palette.mustard) {
@@ -192,6 +194,7 @@ struct ExaKeyRow: View {
     }
 
     private var subtitle: String {
+        if forYou == nil && loadFailed { return "Couldn't check your key. Open Profile again to retry." }
         if let ending = forYou?.keyEnding { return "Ending \(ending), used for your suggestions in Discover" }
         return "Your own key pays for suggestions in Discover"
     }
@@ -203,8 +206,11 @@ struct ExaKeyRow: View {
             guard !Task.isCancelled else { return }
             if let latest = try? await store.forYou() {
                 forYou = latest
+                loadFailed = false
                 return
             }
         }
+        // Keep whatever we knew, rather than flip to "Add" when a key's really saved.
+        loadFailed = true
     }
 }
