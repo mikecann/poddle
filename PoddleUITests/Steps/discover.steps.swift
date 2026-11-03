@@ -41,6 +41,44 @@ final class DiscoverSteps: StepModule {
             }
         }
 
+        s.when("they add an Exa key from Discover") { w, _ in
+            try w.goTo(tab: "discover")
+            // Search results hide For You, so leave any search first.
+            if w.element("discover.cancel").waitForExistence(timeout: 2) { w.element("discover.cancel").tap() }
+            try w.tap("forYou.addKey", timeout: 20)
+            let field = try w.waitFor("forYou.keyField")
+            field.tap()
+            field.typeText("e2e-exa-key-0123456789")
+            try w.tap("forYou.saveKey")
+        }
+
+        func forYouRow(_ w: World, _ title: String) -> XCUIElement {
+            w.app.descendants(matching: .any)
+                .matching(NSPredicate(format: "identifier BEGINSWITH 'forYou.episode.' AND label CONTAINS %@", title)).firstMatch
+        }
+
+        s.then("For You suggests {string}") { w, a in
+            guard forYouRow(w, a.string(0)).waitForExistence(timeout: 45) else { throw World.Failure("\(a.string(0)) isn't in For You") }
+        }
+
+        // Just opening an episode writes nothing personal, so there may be no record of the show for
+        // this person at all. What matters is that nothing says they follow it.
+        s.then("opening it didn't follow {string}") { w, a in
+            // The world can't find a show that isn't in their library, which is the answer we want.
+            // Any other failure still fails the step.
+            do {
+                let subscribed = try w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"] as? Bool
+                if subscribed == true { throw World.Failure("\(a.string(0)) got followed") }
+            } catch let error where "\(error)".contains("isn't in the catalogue") {}
+        }
+
+        s.when("they open {string} from For You") { w, a in
+            let row = forYouRow(w, a.string(0))
+            try w.reveal(row, a.string(0))
+            row.tap()
+            try w.waitFor("episode.play", timeout: 20, "the page for \(a.string(0))")
+        }
+
         s.when("they open {string} from the results") { w, a in
             let card = w.app.descendants(matching: .any)
                 .matching(NSPredicate(format: "identifier BEGINSWITH 'discover.result.'"))

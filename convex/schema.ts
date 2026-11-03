@@ -1,4 +1,5 @@
 import { defineSchema, defineTable } from "convex/server";
+import { vSuggestion } from "./lib/suggestions";
 import { v } from "convex/values";
 import { globalSettingFields, podcastOverrideFields } from "./lib/settings";
 
@@ -562,6 +563,26 @@ export default defineSchema({
   })
     .index("by_user_episode", ["userId", "episodeId"])
     .index("by_user_wall", ["userId", "wall"]),
+
+  /** Someone's own Exa key for "For you", encrypted (suggestionsActions.ts). Never sent back or synced. */
+  exaKeys: defineTable({
+    userId: v.id("users"),
+    ciphertext: v.string(),
+    /** Its last few characters, so Profile can show which key it is. */
+    ending: v.string(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
+
+  /** One per person with a key: their latest "For you" picks (suggestions.ts). */
+  suggestions: defineTable({
+    userId: v.id("users"),
+    picks: v.array(vSuggestion),
+    refreshedAt: v.optional(v.number()),
+    refreshingSince: v.optional(v.number()),
+    /** Which refresh is the current one. Only that one may write its result (suggestions.ts). */
+    refreshId: v.optional(v.string()),
+    error: v.optional(v.string()),
+  }).index("by_user", ["userId"]),
 
   /** iTunes Search API responses, cached for 24 h (Apple allows ~20 calls a minute). */
   directoryCache: defineTable({

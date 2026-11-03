@@ -22,3 +22,11 @@ Feature: Episodes from shows you don't follow
     And they open "Morning Tones" from the results
     Then its page lists "Commute in D", "Breakfast in C" and "Sunrise in A"
     And its page offers to follow it
+
+  Scenario: Get episodes picked for you with your own Exa key
+    When they search Discover for "pings"
+    And they follow "Priority Pings" from the results
+    And they add an Exa key from Discover
+    Then For You suggests "Breakfast in C"
+    When they open "Breakfast in C" from For You
+    Then opening it didn't follow "Morning Tones"

@@ -9,6 +9,7 @@
 // GET  /audio/<name>.mp3           a tone, Range-aware
 // GET  /art/<slug>.png             artwork
 // GET  /chapters/<guid>.json       Podcasting 2.0 chapters
+// POST /exa/search, /exa/contents   Exa's podcast search (PODDLE_EXA_URL)
 // GET  /itunes/search?term=…       Apple's search API, over the public shows (or their episodes,
 //                                  with entity=podcastEpisode)
 // GET  /itunes/lookup?id=…         Apple's lookup API
@@ -46,6 +47,8 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
         const result = await world(url.pathname.slice("/_world/".length), await readJson(req));
         return send(res, 200, "application/json", JSON.stringify(result ?? {}));
       }
+      if (req.method === "POST" && url.pathname === "/exa/search") return send(res, 200, "application/json", JSON.stringify(exaSearch()));
+      if (req.method === "POST" && url.pathname === "/exa/contents") return send(res, 200, "application/json", JSON.stringify(exaContents(await readJson(req))));
       if (req.method !== "GET" && req.method !== "HEAD") return send(res, 405, "text/plain", "method not allowed");
       let m;
       if ((m = /^\/feeds\/([a-z]+)\.xml$/.exec(url.pathname)) && SHOWS[m[1]]) {
@@ -184,6 +187,28 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
           })),
       );
     return { resultCount: results.length, results };
+  }
+
+  // Exa's podcast search: every search finds Morning Tones' "Breakfast in C", in the markdown Exa
+  // uses. The tone itself is short, so the header claims a proper length to pass the 20-minute bar.
+  function exaSearch() {
+    const episode = episodesOf("morning").find((e) => e.guid === "morning-2");
+    const published = new Date(episode.pubDate ?? startedAt - episode.ago).toISOString();
+    return {
+      results: [
+        {
+          url: "https://exa.ai/library/podcast/morning/episode/morning-2",
+          title: episode.title,
+          text: `# ${episode.title}\n\n- **Podcast:** [${SHOWS.morning.title}](https://exa.ai/library/podcast/morning)\n- **Published:** ${published}\n- **Duration:** 30:00.000\n- **Language:** en\n`,
+        },
+      ],
+    };
+  }
+
+  function exaContents({ urls }) {
+    return {
+      results: urls.map((showUrl) => ({ url: showUrl, text: `# ${SHOWS.morning.title}\n\n[RSS feed](${base}${SHOWS.morning.path})\n` })),
+    };
   }
 
   function lookup(url) {

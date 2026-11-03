@@ -14,12 +14,13 @@ export function PrivacyPage() {
       <article className="prose">
         <span className="eyebrow">Privacy</span>
         <h1>Poddle's privacy policy</h1>
-        <p className="meta">Last updated 29 October 2026</p>
+        <p className="meta">Last updated 3 November 2026</p>
 
         <p>
           Poddle is a podcast player I (Mike Cann) made for myself, and now anyone can use it. This page says what it
           keeps about you, why, where it lives, and how to get rid of it. The short version: it keeps what it needs to
-          sync your podcasts between your devices, and nothing else. No ads, no tracking, and I don't sell anything to
+          sync your podcasts between your devices (plus, only if you turn on "For you", your Exa key and the episodes it
+          picked for you), and nothing else. No ads, no tracking, and I don't sell anything to
           anyone.
         </p>
 
@@ -52,6 +53,13 @@ export function PrivacyPage() {
           results are kept for a day or two so the same search is quicker next time. They aren't tied to you.
         </p>
         <p>
+          "For you" in Discover is off unless you add your own Exa key. If you do, the key is stored encrypted, and about
+          once a week Poddle's server sends Exa the titles of a few episodes you've starred or listened to lately, and
+          their shows, to find similar ones. Until you've listened to something in Poddle, it sends the names of shows you
+          follow instead. Private shows are never sent. Exa sees that under your key, not your name.
+          Removing the key stops it and deletes your suggestions.
+        </p>
+        <p>
           The shows and episodes themselves (titles, artwork, show notes) come from public podcast feeds and are shared by
           everyone, so they aren't yours or anyone's personal data. Downloaded episodes stay on your device.
         </p>
@@ -59,7 +67,8 @@ export function PrivacyPage() {
         <h2>Why</h2>
         <p>
           Only to run Poddle for you: to sign you in, keep your library and queue in sync across your devices, show you
-          your stats, send you a notification when a new episode arrives, and read your feature requests. It's never used
+          your stats, send you a notification when a new episode arrives, suggest episodes if you've asked for that, and
+          read your feature requests. It's never used
           for advertising, and it's never shared with anyone for their own use.
         </p>
 
@@ -73,6 +82,10 @@ export function PrivacyPage() {
           </li>
           <li>
             <b>Apple Push Notification service</b> delivers notifications to your iPhone, using your device's push token.
+          </li>
+          <li>
+            <b>Exa</b> searches podcasts for "For you", only if you add your own Exa key. It's your account with them, so
+            their terms and privacy policy apply to it.
           </li>
           <li>
             <b>Sentry</b> receives anonymous crash and error reports from the app and this website, so I can fix what
@@ -95,8 +108,8 @@ export function PrivacyPage() {
         <p>
           You can delete your account whenever you like: in the app, go to <b>Profile</b> and tap <b>Delete account</b>,
           or sign in on <Link to="/me">poddle.mikecann.app/me</Link> and use the <b>Delete account</b> link at the
-          bottom. You're signed out straight away, and your library, queue, listening history, stats, settings, devices
-          and feature requests are deleted from Poddle's database within a few minutes. Downloads on the device you
+          bottom. You're signed out straight away, and your library, queue, listening history, stats, settings, devices,
+          Exa key and suggestions, and feature requests are deleted from Poddle's database within a few minutes. Downloads on the device you
           delete from are removed too. Convex keeps daily backups for a short while, so a copy can hang around in those
           until they expire.
         </p>

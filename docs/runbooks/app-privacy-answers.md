@@ -33,9 +33,15 @@ Leave everything else unticked: Health and Fitness, Financial Info, Location, Se
 
 Apple asks three things per type. The answers are the same for all of them except Search History.
 
-**Name, Email Address, Photos or Videos, Audio Data, Other User Content, User ID, Device ID, Product Interaction:**
+**Name, Email Address, Photos or Videos, Audio Data, Other User Content, User ID, Device ID:**
 
 1. **How is it used?** Tick only **App Functionality**. (Not Third-Party Advertising, Developer's Advertising or Marketing, Analytics, Product Personalization or Other Purposes.)
+2. **Is it linked to the user's identity?** **Yes.**
+3. **Is it used for tracking?** **No.**
+
+**Product Interaction:**
+
+1. **How is it used?** Tick **App Functionality** and **Product Personalization** ("For you" picks episodes from listening history, or followed shows for someone new, and sends a few episode and show titles to Exa on the person's own key, only if they add one).
 2. **Is it linked to the user's identity?** **Yes.**
 3. **Is it used for tracking?** **No.**
 

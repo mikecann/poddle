@@ -46,6 +46,8 @@ export const PERSONAL_INDEX = {
   statsShowMonths: "by_user_month_podcast",
   episodeTotals: "by_user_episode",
   importBatches: "by_user_startedAt",
+  exaKeys: "by_user",
+  suggestions: "by_user",
 } as const;
 type PersonalTable = keyof typeof PERSONAL_INDEX;
 
@@ -102,6 +104,8 @@ const SWEEPS: Record<PersonalTable | "chefRequests", Sweep> = {
   statsShowDays: plain("statsShowDays"),
   statsShowMonths: plain("statsShowMonths"),
   episodeTotals: plain("episodeTotals"),
+  exaKeys: plain("exaKeys"),
+  suggestions: plain("suggestions"),
   // Each import batch's scratch rows (keyed by batch, not person) go before it.
   importBatches: async (ctx, userId, budget) => {
     let deleted = 0;

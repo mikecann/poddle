@@ -1,0 +1,276 @@
+import { v } from "convex/values";
+import { internal } from "./_generated/api";
+import type { Doc, Id } from "./_generated/dataModel";
+import { internalMutation, internalQuery, type QueryCtx } from "./_generated/server";
+import { userMutation, userQuery } from "./lib/auth";
+import { normalizeFeedUrl } from "./lib/parse";
+import { MAX_AGE_MS, type Seed, vSuggestion } from "./lib/suggestions";
+
+// "For you" on Discover (docs/decisions.md, 3 Nov 2026): episodes picked with the person's own Exa
+// key, so Poddle never pays for it. The network side is in suggestionsActions.ts.
+
+const HOUR = 3_600_000;
+const DAY = 24 * HOUR;
+/** About 12 Exa calls, $0.11 of the person's money, so not often. */
+const REFRESH_EVERY = 7 * DAY;
+/** A refresh that hasn't finished by now has died, and shouldn't show a spinner for ever. */
+const REFRESH_TIMEOUT = 5 * 60_000;
+const MAX_SEEDS = 6;
+const MAX_SEEDS_PER_SHOW = 2;
+const RECENT = 60 * DAY;
+
+const suggestionsFor = (ctx: QueryCtx, userId: Id<"users">) =>
+  ctx.db
+    .query("suggestions")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+const keyFor = (ctx: QueryCtx, userId: Id<"users">) =>
+  ctx.db
+    .query("exaKeys")
+    .withIndex("by_user", (q) => q.eq("userId", userId))
+    .unique();
+
+/** Their followed shows' titles, lower-cased. Exa's feed address for a show can differ from the one
+ * they followed (a redirect, another host), so the title is the backstop: All-In got through on its URL. */
+async function followedTitles(ctx: QueryCtx, userId: Id<"users">): Promise<Set<string>> {
+  const subs = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_user_subscribed", (q) => q.eq("userId", userId).eq("subscribed", true))
+    .take(1000);
+  const titles = new Set<string>();
+  for (const sub of subs) {
+    const show = await ctx.db.get(sub.podcastId);
+    if (show) titles.add(show.title.trim().toLowerCase());
+  }
+  return titles;
+}
+
+export const followedShowTitles = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.array(v.string()),
+  handler: async (ctx, { userId }) => [...(await followedTitles(ctx, userId))],
+});
+
+/** What Discover and Profile show. The key itself never comes back: just its last characters. */
+export const forYou = userQuery({
+  args: {},
+  returns: v.object({
+    hasKey: v.boolean(),
+    keyEnding: v.optional(v.string()),
+    refreshing: v.boolean(),
+    refreshedAt: v.optional(v.number()),
+    error: v.optional(v.string()),
+    picks: v.array(vSuggestion),
+  }),
+  handler: async (ctx) => {
+    const [key, row] = await Promise.all([keyFor(ctx, ctx.userId), suggestionsFor(ctx, ctx.userId)]);
+    const picks = [];
+    const followed = row?.picks.length ? await followedTitles(ctx, ctx.userId) : new Set<string>();
+    const now = Date.now();
+    for (const pick of row?.picks ?? []) {
+      if (followed.has(pick.showTitle.trim().toLowerCase())) continue;
+      // Last week's picks age too, and a failed refresh keeps them: still nothing over a year old.
+      if (now - pick.pubDate > MAX_AGE_MS) continue;
+      // Followed since the last refresh: it's in their library now, so it isn't a suggestion.
+      const show = await ctx.db
+        .query("podcasts")
+        .withIndex("by_feedUrl", (q) => q.eq("feedUrl", normalizeFeedUrl(pick.feedUrl)))
+        .first();
+      const sub =
+        show &&
+        (await ctx.db
+          .query("subscriptions")
+          .withIndex("by_user_podcast", (q) => q.eq("userId", ctx.userId).eq("podcastId", show._id))
+          .unique());
+      if (!sub?.subscribed) picks.push(pick);
+    }
+    return {
+      hasKey: key !== null,
+      keyEnding: key?.ending,
+      refreshing: row?.refreshingSince !== undefined && Date.now() - row.refreshingSince < REFRESH_TIMEOUT,
+      refreshedAt: row?.refreshedAt,
+      error: row?.error,
+      picks,
+    };
+  },
+});
+
+export const removeKey = userMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const [key, row] = await Promise.all([keyFor(ctx, ctx.userId), suggestionsFor(ctx, ctx.userId)]);
+    if (key) await ctx.db.delete(key._id);
+    if (row) await ctx.db.delete(row._id);
+    return null;
+  },
+});
+
+/**
+ * Marks the refresh as started here rather than when it runs. The app asks the moment the key's
+ * saved, and if it heard "not refreshing" it would stop looking before the picks arrived.
+ */
+export const saveKey = internalMutation({
+  args: { userId: v.id("users"), ciphertext: v.string(), ending: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId, ciphertext, ending }) => {
+    const now = Date.now();
+    const existing = await keyFor(ctx, userId);
+    if (existing) await ctx.db.patch(existing._id, { ciphertext, ending, updatedAt: now });
+    else await ctx.db.insert("exaKeys", { userId, ciphertext, ending, updatedAt: now });
+    const refreshId = crypto.randomUUID();
+    const row = await suggestionsFor(ctx, userId);
+    if (row) await ctx.db.patch(row._id, { refreshingSince: now, refreshId, error: undefined });
+    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now, refreshId });
+    await ctx.scheduler.runAfter(0, internal.suggestionsActions.refreshFor, { userId, refreshId });
+    await ctx.scheduler.runAfter(REFRESH_TIMEOUT, internal.suggestions.expireRefresh, { userId, refreshId });
+    return null;
+  },
+});
+
+export const encryptedKey = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { userId }) => (await keyFor(ctx, userId))?.ciphertext ?? null,
+});
+
+async function isPrivate(ctx: QueryCtx, userId: Id<"users">, show: Doc<"podcasts">): Promise<boolean> {
+  const sub = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_user_podcast", (q) => q.eq("userId", userId).eq("podcastId", show._id))
+    .unique();
+  return sub?.isPrivate ?? show.isPrivate;
+}
+
+/**
+ * What to search around: recent stars, then what they've really listened to lately, then (for
+ * someone new) the shows they follow. These titles go to Exa, so private shows are never in here.
+ */
+export const seedsFor = internalQuery({
+  args: { userId: v.id("users") },
+  returns: v.array(v.object({ title: v.string(), showTitle: v.string(), why: v.union(v.literal("starred"), v.literal("listened"), v.literal("follows")) })),
+  handler: async (ctx, { userId }) => {
+    const now = Date.now();
+    const seeds: Seed[] = [];
+    const perShow = new Map<string, number>();
+    const add = async (episodeId: Id<"episodes">, why: Seed["why"]) => {
+      if (seeds.length >= MAX_SEEDS) return;
+      const episode = await ctx.db.get(episodeId);
+      const show = episode && (await ctx.db.get(episode.podcastId));
+      if (!episode || !show || (perShow.get(show._id) ?? 0) >= MAX_SEEDS_PER_SHOW) return;
+      // An old favourite says little about what they'd like now, and finds old-news neighbours.
+      if (episode.pubDate !== undefined && now - episode.pubDate > MAX_AGE_MS) return;
+      if (seeds.some((s) => s.title === episode.title) || (await isPrivate(ctx, userId, show))) return;
+      perShow.set(show._id, (perShow.get(show._id) ?? 0) + 1);
+      seeds.push({ title: episode.title, showTitle: show.title, why });
+    };
+
+    const starred = await ctx.db
+      .query("episodeStates")
+      .withIndex("by_user_starred", (q) => q.eq("userId", userId).eq("starred", true))
+      .order("desc")
+      .take(10);
+    for (const s of starred.slice(0, 5)) {
+      if (seeds.length < 2) await add(s.episodeId, "starred");
+    }
+
+    const sessions = await ctx.db
+      .query("listeningSessions")
+      .withIndex("by_user_startedAt", (q) => q.eq("userId", userId).gte("startedAt", now - RECENT))
+      .order("desc")
+      .take(2000);
+    const heard = new Map<Id<"episodes">, number>();
+    for (const s of sessions) {
+      // Overcast imports backdate plays into this window, and say nothing about right now.
+      if (!s.isEstimated) heard.set(s.episodeId, (heard.get(s.episodeId) ?? 0) + (s.endedAt - s.startedAt));
+    }
+    for (const [episodeId] of [...heard].sort((a, b) => b[1] - a[1]).slice(0, 30)) await add(episodeId, "listened");
+
+    // Only someone with nothing to go on gets their follows sent instead: one real play is enough.
+    if (heard.size === 0 && starred.length === 0) {
+      const follows = await ctx.db
+        .query("subscriptions")
+        .withIndex("by_user_subscribed", (q) => q.eq("userId", userId).eq("subscribed", true))
+        .take(100);
+      for (const f of follows.sort((a, b) => (b.subscribedAt ?? 0) - (a.subscribedAt ?? 0))) {
+        if (seeds.length >= 4) break;
+        const show = await ctx.db.get(f.podcastId);
+        if (show && !(await isPrivate(ctx, userId, show))) seeds.push({ title: show.title, showTitle: show.title, why: "follows" });
+      }
+    }
+    return seeds;
+  },
+});
+
+/**
+ * This refresh's id, or null if one's already running, so two can't spend their money at once.
+ * Only the refresh holding the current id may write a result (finishRefresh).
+ */
+export const startRefresh = internalMutation({
+  /** `onlyIfDue`: the daily job's check, done again here in case it's been refreshed since it looked. */
+  args: { userId: v.id("users"), onlyIfDue: v.optional(v.boolean()) },
+  returns: v.union(v.string(), v.null()),
+  handler: async (ctx, { userId, onlyIfDue }) => {
+    const now = Date.now();
+    const row = await suggestionsFor(ctx, userId);
+    if (row?.refreshingSince !== undefined && now - row.refreshingSince < REFRESH_TIMEOUT) return null;
+    if (onlyIfDue && row?.refreshedAt !== undefined && now - row.refreshedAt < REFRESH_EVERY) return null;
+    const refreshId = crypto.randomUUID();
+    if (row) await ctx.db.patch(row._id, { refreshingSince: now, refreshId });
+    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now, refreshId });
+    await ctx.scheduler.runAfter(REFRESH_TIMEOUT, internal.suggestions.expireRefresh, { userId, refreshId });
+    return refreshId;
+  },
+});
+
+export const finishRefresh = internalMutation({
+  args: { userId: v.id("users"), refreshId: v.string(), picks: v.optional(v.array(vSuggestion)), error: v.optional(v.string()) },
+  returns: v.null(),
+  handler: async (ctx, { userId, refreshId, picks, error }) => {
+    const row = await suggestionsFor(ctx, userId);
+    // They removed their key part way through, or swapped it and a newer refresh has started:
+    // an old key's late failure mustn't overwrite the new key's picks.
+    if (!row || row.refreshId !== refreshId) return null;
+    // A failure keeps the last good picks, and leaves refreshedAt so tomorrow's cron tries again.
+    await ctx.db.patch(row._id, {
+      refreshingSince: undefined,
+      error,
+      ...(picks ? { picks, refreshedAt: Date.now() } : {}),
+    });
+    return null;
+  },
+});
+
+/**
+ * A refresh that died without finishing would otherwise say "refreshing" until something else wrote
+ * the row: forYou is reactive, so time passing alone doesn't change its answer.
+ */
+export const expireRefresh = internalMutation({
+  args: { userId: v.id("users"), refreshId: v.string() },
+  returns: v.null(),
+  handler: async (ctx, { userId, refreshId }) => {
+    const row = await suggestionsFor(ctx, userId);
+    if (row?.refreshId === refreshId && row.refreshingSince !== undefined) await ctx.db.patch(row._id, { refreshingSince: undefined });
+    return null;
+  },
+});
+
+/** Daily: everyone with a key whose picks are a week old, spread out so they don't all hit Exa together. */
+export const refreshDue = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const now = Date.now();
+    let scheduled = 0;
+    // Every key, not a page of them. Poddle has a handful of people; past a few thousand keys this
+    // wants splitting across runs.
+    for await (const key of ctx.db.query("exaKeys")) {
+      const row = await suggestionsFor(ctx, key.userId);
+      if (row?.refreshedAt !== undefined && now - row.refreshedAt < REFRESH_EVERY) continue;
+      if (row?.refreshingSince !== undefined && now - row.refreshingSince < REFRESH_TIMEOUT) continue;
+      await ctx.scheduler.runAfter(scheduled * 20_000, internal.suggestionsActions.refreshFor, { userId: key.userId, onlyIfDue: true });
+      scheduled++;
+    }
+    return scheduled;
+  },
+});

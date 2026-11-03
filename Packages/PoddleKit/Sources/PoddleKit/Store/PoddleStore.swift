@@ -497,6 +497,10 @@ public final class PoddleStore {
     }
     public func resolve(url: String) async throws -> SearchResult? { try await dataSource.resolve(url: url) }
 
+    public func forYou() async throws -> ForYou { try await dataSource.forYou() }
+    public func setExaKey(_ key: String) async throws { try await dataSource.setExaKey(key) }
+    public func removeExaKey() async throws { try await dataSource.removeExaKey() }
+
     public func chapters(for episodeId: String) async -> [Chapter] {
         if let cached = chapterCache[episodeId] { return cached }
         guard let ep = episode(episodeId) else { return [] }

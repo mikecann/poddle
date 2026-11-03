@@ -108,6 +108,9 @@ async function seedPerson(t: T, ids: { podcastId: Id<"podcasts">; episodeId: Id<
       await ctx.db.insert("importQueue", { batchId, podcastId, phase: "fetch" });
       await ctx.db.insert("importUpNext", { batchId, episodeId, podcastId, at });
     }
+    // One of each per person: suggestions.ts reads them with .unique().
+    await ctx.db.insert("exaKeys", { userId, ciphertext: "x", ending: "abcd", updatedAt: BASE });
+    await ctx.db.insert("suggestions", { userId, picks: [] });
     await ctx.runMutation(components.feedback.items.create, { userId, title: "Dark mode", description: "Please" });
   });
 }

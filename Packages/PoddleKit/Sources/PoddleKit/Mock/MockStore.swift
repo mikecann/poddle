@@ -124,6 +124,26 @@ public actor MockStore: PoddleDataSource {
             }
     }
 
+    /// Sample picks, for previews and screenshots of "For you": real episodes from the sample data,
+    /// so tapping one opens it like the live app would.
+    public func forYou() async throws -> ForYou {
+        await pause(150)
+        let reasons = ["Because you heard an episode like this one", "From a show close to ones you follow", "A guest you've heard before"]
+        let picks = server.episodes.values
+            .sorted { $0.pubDate > $1.pubDate }
+            // Never a private show, as the live server would never pick one.
+            .compactMap { e -> (Episode, Podcast)? in server.podcasts[e.podcastId].flatMap { $0.isPrivate ? nil : (e, $0) } }
+            .prefix(3)
+            .enumerated()
+            .map { i, pair in
+                SuggestedEpisode(
+                    id: "s\(i)", title: pair.0.title, showTitle: pair.1.title, feedURL: pair.1.feedURL, artworkURL: pair.1.artworkURL,
+                    pubDate: pair.0.pubDate, duration: pair.0.duration ?? 0, reason: reasons[i], chartPosition: i == 0 ? 14 : nil
+                )
+            }
+        return ForYou(hasKey: true, keyEnding: "a1b2", refreshedAt: nowMillis, picks: Array(picks))
+    }
+
     /// Only shows the sample data already has: there's no feed to fetch.
     public func open(_ target: DiscoverTarget) async throws -> OpenedFeed {
         await pause(300)

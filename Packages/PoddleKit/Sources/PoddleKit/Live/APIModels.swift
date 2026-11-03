@@ -193,6 +193,38 @@ struct DirectoryEpisodeDoc: Decodable, Sendable {
     }
 }
 
+struct SuggestionDoc: Decodable, Sendable {
+    var id: String
+    var title: String
+    var showTitle: String
+    var feedUrl: String
+    var artworkUrl: String?
+    var pubDate: Double
+    var duration: Double
+    var reason: String
+    var chartPosition: Double?
+
+    var model: SuggestedEpisode {
+        SuggestedEpisode(
+            id: id, title: title, showTitle: showTitle, feedURL: feedUrl, artworkURL: artworkUrl, pubDate: pubDate, duration: duration,
+            reason: reason, chartPosition: chartPosition.map { Int($0) }
+        )
+    }
+}
+
+struct ForYouDoc: Decodable, Sendable {
+    var hasKey: Bool
+    var keyEnding: String?
+    var refreshing: Bool
+    var refreshedAt: Double?
+    var error: String?
+    var picks: [SuggestionDoc]
+
+    var model: ForYou {
+        ForYou(hasKey: hasKey, keyEnding: keyEnding, refreshing: refreshing, refreshedAt: refreshedAt, error: error, picks: picks.map(\.model))
+    }
+}
+
 struct OpenedFeedDoc: Decodable, Sendable {
     var podcastId: String
     var episodeId: String?

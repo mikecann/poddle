@@ -36,8 +36,9 @@ Set with `npx convex env set NAME value` on the deployment.
 | `PODDLE_OPEN_SIGNUP` | at launch | Exactly `1` lets anyone with a verified Apple or Google email make an account; the allowlist no longer matters. Anything else: invite-only. |
 | `PODDLE_TEST_SIGNIN` | dev only | Exactly `1` enables test sign-in. Never set it on prod (it's refused on prod's addresses anyway). |
 | `PODDLE_OWNER_EMAIL` | optional | Whose devices get a push when someone new signs up. Unset: no push. |
+| `PODDLE_KEY_SECRET` | for "For you" | Any long random string. Encrypts people's Exa keys. Changing it makes saved keys unreadable. |
 | `PODDLE_API_TOKEN` | for scripts | Long random string for the admin path. |
-| `PODDLE_E2E`, `PODDLE_DIRECTORY_URL` | e2e only | The end-to-end suites' local backend (`docs/testing.md`): exactly `1` turns on `testing:*`, and the URL points Apple Podcasts search at the fixture server. Both are ignored unless the deployment's own URLs are `127.0.0.1`/`localhost` (`lib/e2e.ts`). Never set them on dev or prod. |
+| `PODDLE_E2E`, `PODDLE_DIRECTORY_URL`, `PODDLE_EXA_URL` | e2e only | The end-to-end suites' local backend (`docs/testing.md`): exactly `1` turns on `testing:*`, and the URLs point Apple Podcasts search and Exa at the fixture server. Both are ignored unless the deployment's own URLs are `127.0.0.1`/`localhost` (`lib/e2e.ts`). Never set them on dev or prod. |
 | `PODDLE_SITE_URL` | prod | The website's public origin, `https://poddle.mikecann.app`. Link previews' canonical URLs, and an allowed sign-in return origin. Unset on dev (the request's own origin). |
 | `APNS_KEY_P8` | for push | Contents of the `.p8` auth key. PEM (newlines or literal `\n`) or the bare base64 body. |
 | `APNS_KEY_ID` | for push | The key's 10-character ID. |
@@ -202,6 +203,15 @@ Every function below acts for the signed-in caller (and also takes the optional 
 | `episodes:setStarredState` | mutation | `episodeId`, `starred`, `at` | `Bool` changed |
 | `episodes:setArchivedState` | mutation | `episodeId`, `archived`, `at` | `Bool` changed. Archiving removes it from the Inbox (not from Up Next). Archiving an unplayed episode logs a `skipped` event. |
 | `episodes:archiveAllOlder` | mutation | `episodeId`, `at`, `includeThis?` | `Int` archived. Archives that show's Inbox episodes published before this one. With the Inbox gone it finds nothing; kept while the app still calls it. |
+
+
+### For you (`suggestions:*`, `suggestionsActions:*`)
+
+| Function | Kind | Args | Returns / notes |
+|---|---|---|---|
+| `suggestions:forYou` | query | – | `{ hasKey, keyEnding?, refreshing, refreshedAt?, error?, picks: [{ id, title, showTitle, feedUrl, appleId?, artworkUrl?, pubDate, duration, reason, chartPosition? }] }`. Discover's "For you". Only the key's last four characters come back. |
+| `suggestionsActions:setKey` | action | `key` | `null`. Saves the person's own Exa key, encrypted, and starts a refresh. `{ code: "badKey" }` if it can't be one. |
+| `suggestions:removeKey` | mutation | – | `null`. Forgets the key and the picks. |
 
 ### Up Next (`queue:*`)
 

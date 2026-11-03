@@ -948,6 +948,18 @@ public actor LiveStore: PoddleDataSource {
         return OpenedFeed(podcastId: doc.podcastId, episodeId: doc.episodeId)
     }
 
+    public func forYou() async throws -> ForYou {
+        try JSONDecoder().decode(ForYouDoc.self, from: try await transport.query("suggestions:forYou", [:])).model
+    }
+
+    public func setExaKey(_ key: String) async throws {
+        _ = try await transport.action("suggestionsActions:setKey", ["key": .string(key)])
+    }
+
+    public func removeExaKey() async throws {
+        _ = try await transport.mutation("suggestions:removeKey", [:])
+    }
+
     /// Apple and Overcast links go through the directory; anything else is fetched as a feed
     /// (or a website with a feed link) by `feedActions:previewFeed`.
     public func resolve(url: String) async throws -> SearchResult? {
