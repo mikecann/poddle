@@ -61,6 +61,11 @@ struct VoiceBoostProcessor {
     private var windowAccumulator = 0.0
     private var windowFill = 0
     private var gainDB = 0.0
+    /// False until the leveler has heard enough speech since the last reset. Its first reading is
+    /// taken straight away rather than eased into: easing from the static gain (0 dB when the file
+    /// isn't measured yet) at the 2 s rise time made every episode start, and every auto-advance,
+    /// sound like a ~5 s fade-in on a quiet show.
+    private var levelerSettled = false
     private let fallCoef: Double
     private let riseCoef: Double
     private var pending: AudioChunk
@@ -123,6 +128,7 @@ struct VoiceBoostProcessor {
         for i in windowPowers.indices { windowPowers[i] = 0 }
         windowPowerIndex = 0; windowPowerCount = 0; windowAccumulator = 0; windowFill = 0
         gainDB = staticGainDB
+        levelerSettled = false
         pending.removeAll(); pendingRead = 0
         envelope = 0
         limiter.reset()
@@ -180,7 +186,14 @@ struct VoiceBoostProcessor {
         if activeCount >= windowPowers.count / 4 {
             let range = loudnessKnown ? p.levelerRangeDB : p.levelerRangeUnmeasuredDB
             let desired = min(staticGainDB + range, max(staticGainDB - range, p.targetLUFS - momentary))
-            gainDB += (desired - gainDB) * (desired < gainDB ? fallCoef : riseCoef)
+            if levelerSettled {
+                gainDB += (desired - gainDB) * (desired < gainDB ? fallCoef : riseCoef)
+            } else {
+                // Lookahead (0.3 s) covers the 0.25 s of speech this needs, so almost nothing has
+                // been emitted at the old gain yet.
+                gainDB = desired
+                levelerSettled = true
+            }
         }
         let ready = pending.frameCount - pendingRead - lookaheadFrames
         if ready > 0 { emit(ready, fromGain: previousGain, toGain: gainDB, into: &output) }

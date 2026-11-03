@@ -205,6 +205,26 @@ struct VoiceBoostTests {
         #expect(abs(loud - -16) < 2.5 && abs(quiet - -16) < 2.5, "host \(loud) LUFS, guest \(quiet) LUFS")
     }
 
+    /// A quiet show used to fade in over ~5 s as the leveler eased up from the static gain.
+    @Test(arguments: [false, true])
+    func quietShowStartsAtFullLevel(measured: Bool) throws {
+        var s = Synthetic(sampleRate: 22_050)
+        s.add(.voice(seconds: 8, rmsDB: -30))
+        let url = try s.write()
+        let loudness = measured ? try LoudnessMeter.integratedLoudness(of: url) : nil
+        let settings = AudioSettings(rate: 1, algorithm: .spectral, smartSpeed: false, voiceBoost: true)
+        let (_, out) = try renderCollecting(url, RenderOptions(settings: settings, loudness: loudness))
+
+        func level(_ from: Double, _ to: Double) -> Double {
+            var meter = LoudnessMeter(sampleRate: 22_050, channelCount: 1)
+            let a = Int(from * 22_050), b = Int(to * 22_050)
+            out[a..<b].withUnsafeBufferPointer { meter.feed([$0], frameCount: b - a) }
+            return LoudnessMeter.perceivedLoudness(integrated: meter.integratedLoudness ?? -99, channelCount: 1)
+        }
+        let start = level(0.1, 1.1), later = level(6, 8)
+        #expect(abs(start - later) < 1.5, "first second \(start) LUFS, settled \(later) LUFS")
+    }
+
     @Test func limiterHoldsTheCeiling() {
         var limiter = LookaheadLimiter(channelCount: 1, lookaheadFrames: 64, ceiling: 0.5, releaseCoef: 0.001)
         var out = AudioChunk(channelCount: 1)
