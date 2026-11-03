@@ -45,6 +45,15 @@ enum Diagnostics {
         #endif
     }
 
+    /// Something that went wrong without crashing but that we'd want to know about, like the
+    /// sign-in sheet refusing to open. Does nothing when Sentry isn't running (Debug, the
+    /// simulator, builds not from the App Store).
+    static func note(_ message: String) {
+        #if !DEBUG && !targetEnvironment(simulator)
+        SentrySDK.capture(message: message)
+        #endif
+    }
+
     /// App Store and TestFlight builds: an iPhone build without an embedded provisioning profile, or
     /// a Mac build with a Mac App Store receipt. Xcode and `install-phone.sh` builds have the profile.
     private static var installedFromStore: Bool {

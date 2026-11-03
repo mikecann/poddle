@@ -19,38 +19,59 @@ final class SignInSheet: NSObject, ASWebAuthenticationPresentationContextProvidi
 
     func open(_ page: URL) async throws -> URL {
         let opened = Date.now
-        return try await withCheckedThrowingContinuation { continuation in
+        let result: Result<URL, AccountError> = await withCheckedContinuation { continuation in
+            // iOS can call the completion handler with an error *and* return false from start(), and
+            // resuming a continuation twice crashes the app (PODDLE-8, App Review on 1.0.6). The
+            // first ending wins.
+            let finish = FirstAnswer<Result<URL, AccountError>> { continuation.resume(returning: $0) }
             let session = ASWebAuthenticationSession(url: page, callback: .customScheme("poddle")) { url, error in
-                if let url { return continuation.resume(returning: url) }
-                // A cancel that comes back before anyone could have seen the sheet is iOS refusing to
-                // open it, not someone closing it.
-                if let error = error as? ASWebAuthenticationSessionError, error.code == .canceledLogin,
-                   Date.now.timeIntervalSince(opened) > 1.5 {
-                    continuation.resume(throwing: AccountError.cancelled)
-                } else {
-                    let code = (error as NSError?)?.code ?? 0
-                    continuation.resume(throwing: AccountError.failed("Couldn't open the sign-in page (\(code)). Try again."))
-                }
+                finish(WebSignIn.outcome(url: url, error: error, after: Date.now.timeIntervalSince(opened)))
             }
             session.presentationContextProvider = self
             self.session = session
-            if !session.start() {
-                continuation.resume(throwing: AccountError.failed("Couldn't open the sign-in page. Try again."))
-            }
+            if !session.start() { finish(.failure(WebSignIn.couldNotStart)) }
         }
+        self.session = nil
+        if case let .failure(error) = result, error != .cancelled {
+            // So we find out why it wouldn't open, not just that it didn't.
+            Diagnostics.note("Sign-in sheet didn't open: \(error.localizedDescription)")
+        }
+        return try result.get()
     }
 
     nonisolated func presentationAnchor(for session: ASWebAuthenticationSession) -> ASPresentationAnchor {
         MainActor.assumeIsolated {
             #if os(iOS)
-            UIApplication.shared.connectedScenes
-                .compactMap { ($0 as? UIWindowScene)?.keyWindow }
-                .first ?? ASPresentationAnchor()
+            Self.appWindow() ?? ASPresentationAnchor()
             #else
-            NSApplication.shared.keyWindow ?? ASPresentationAnchor()
+            NSApplication.shared.keyWindow ?? NSApplication.shared.windows.first ?? ASPresentationAnchor()
             #endif
         }
     }
+
+    #if os(iOS)
+    /// The app's own window to show the sheet over: the key one if it's ours, else any visible
+    /// normal-level one in the frontmost scene. ChefKit's overlay floats above at alert level, so
+    /// it's skipped. Never a window without a scene, which iOS refuses to present from.
+    private static func appWindow() -> UIWindow? {
+        let scenes = UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }
+            .sorted { rank($0.activationState) < rank($1.activationState) }
+        for scene in scenes {
+            if let key = scene.keyWindow, key.windowLevel == .normal { return key }
+            if let window = scene.windows.first(where: { !$0.isHidden && $0.windowLevel == .normal }) { return window }
+        }
+        return scenes.first.map { UIWindow(windowScene: $0) }
+    }
+
+    private static func rank(_ state: UIScene.ActivationState) -> Int {
+        switch state {
+        case .foregroundActive: 0
+        case .foregroundInactive: 1
+        case .background: 2
+        default: 3
+        }
+    }
+    #endif
 }
 
 extension Account {
