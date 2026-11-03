@@ -44,7 +44,9 @@ struct DiscoverView: View {
         .sensoryFeedback(.success, trigger: followed)
         .task(id: query) { await runSearch() }
         .task { await checkClipboard() }
-        .task(id: addingKey) { if !addingKey { await loadForYou() } }
+        // Again each time Discover's opened, and when the key sheet closes. The tab can be set up while
+        // it's hidden, before sign-in has finished, and that first try fails.
+        .task(id: "\(addingKey) \(app.tab == .discover)") { if !addingKey && app.tab == .discover { await loadForYou() } }
         .sheet(isPresented: $addingKey) { ExaKeySheet() }
         .onAppear { if query.isEmpty && !app.discoverQuery.isEmpty { query = app.discoverQuery } }
         #if os(iOS)
@@ -92,6 +94,7 @@ struct DiscoverView: View {
     }
 
     /// Picks are made in the background after a key is added, so it keeps looking until they land.
+    /// It also keeps trying until the first answer, in case the app is still signing in.
     private func loadForYou() async {
         var attempts = 0
         repeat {
@@ -101,7 +104,7 @@ struct DiscoverView: View {
                 withAnimation(.snappy) { forYou = latest }
             }
             attempts += 1
-        } while forYou?.refreshing == true && attempts < 40
+        } while (forYou == nil || forYou?.refreshing == true) && attempts < 40
     }
 
     private func runSearch() async {

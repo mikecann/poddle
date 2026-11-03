@@ -193,5 +193,15 @@ struct ExaKeyRow: View {
         return "Your own key pays for suggestions in Discover"
     }
 
-    private func load() async { forYou = try? await store.forYou() }
+    /// Profile can be set up before sign-in has finished, so a first failure gets a few more tries.
+    private func load() async {
+        for attempt in 0..<5 {
+            if attempt > 0 { try? await Task.sleep(for: .seconds(3)) }
+            guard !Task.isCancelled else { return }
+            if let latest = try? await store.forYou() {
+                forYou = latest
+                return
+            }
+        }
+    }
 }
