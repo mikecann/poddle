@@ -132,6 +132,11 @@ describe("what's worth showing", () => {
   test("no other languages", () => expect(ok("Hola", { ...good, language: "es" })).toBe(false));
   test("no AI summary shows", () => expect(ok("Ep", { ...good, showTitle: "AI Podcast Summaries" })).toBe(false));
   test("not the episode they heard", () => expect(ok("mourning the death of code")).toBe(false));
+  test("not the episode they heard, worded differently", () => {
+    const heard = [{ title: "Nikesh Arora & Arvind Krishna: SaaS Collapse, Quantum Threat and AI Cyber Warfare", showTitle: "All-In" }];
+    expect(isWorthShowing({ title: "Arvind Krishna & Nikesh Arora: Quantum Threat, Open vs Frontier AI, AI Cyber Warfare & SaaS Collapse", header: { ...good, showTitle: "All-In" } }, heard, now)).toBe(false);
+    expect(isWorthShowing({ title: "Nikesh Arora, CEO Palo Alto Networks", header: { ...good, showTitle: "Sourcery" } }, heard, now)).toBe(true);
+  });
   test("not another show's write-up of it", () => expect(ok("Syntax: why code died")).toBe(false));
   test("nothing with missing details", () => expect(ok("Ep", { ...good, pubDate: undefined as never })).toBe(false));
 

@@ -100,8 +100,23 @@ export function isWorthShowing(c: Pick<Candidate, "title" | "header">, seeds: Pi
   if (language && language !== "en") return false;
   if (SUMMARY_SHOW.test(showTitle)) return false;
   const title = c.title.toLowerCase();
-  // Another show's write-up of what you just heard, or the very episode.
-  return !seeds.some((s) => title === s.title.toLowerCase() || (showTitle.toLowerCase() !== s.showTitle.toLowerCase() && title.includes(s.showTitle.toLowerCase())));
+  // Another show's write-up of what you just heard, or the very episode (whose title Exa may word a
+  // little differently from the feed: All-In's came back with its guests in another order).
+  return !seeds.some(
+    (s) =>
+      sameTitle(c.title, s.title) ||
+      (showTitle.toLowerCase() !== s.showTitle.toLowerCase() && title.includes(s.showTitle.toLowerCase())),
+  );
+}
+
+const words = (title: string) => new Set(title.toLowerCase().match(/[a-z0-9]+/g) ?? []);
+
+/** Mostly the same words, in any order. */
+export function sameTitle(a: string, b: string): boolean {
+  const [x, y] = [words(a), words(b)];
+  if (x.size === 0 || y.size === 0) return false;
+  const shared = [...x].filter((w) => y.has(w)).length;
+  return shared / Math.min(x.size, y.size) >= 0.75;
 }
 
 /**
