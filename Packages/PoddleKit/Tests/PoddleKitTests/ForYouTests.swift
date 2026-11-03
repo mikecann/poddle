@@ -15,7 +15,7 @@ struct ForYouTests {
         #expect(model.picks.first?.chartPosition == 14)
     }
 
-    @Test func aPickOpensByTitleAndDateWithoutFollowing() {
+    @Test func aPickBecomesAnEpisodeTargetWithItsTitleAndDate() {
         let pick = SuggestedEpisode(id: "e1", title: "New", showTitle: "Hard Fork", feedURL: "https://f/x.xml", pubDate: 2000, duration: 3000, reason: "Because")
         guard case let .episode(episode) = pick.target else { Issue.record("not an episode"); return }
         #expect(episode.title == "New")

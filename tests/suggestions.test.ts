@@ -173,6 +173,20 @@ describe("your key", () => {
     expect((await t.query(api.suggestions.forYou, {})).refreshing).toBe(false);
   });
 
+  test("an old refresh can't overwrite a newer one after the key's swapped", async () => {
+    const t = setup();
+    const userId = await withKey(t);
+    const oldId = await t.raw.mutation(internal.suggestions.startRefresh, { userId });
+    await t.raw.mutation(internal.suggestions.finishRefresh, { userId, refreshId: oldId!, picks: [] });
+    await t.mutation(api.suggestions.removeKey, {});
+    fakeExa();
+    await t.action(api.suggestionsActions.setKey, { key: KEY });
+    await t.raw.mutation(internal.suggestions.finishRefresh, { userId, refreshId: oldId!, error: "old key failed" });
+    const you = await t.query(api.suggestions.forYou, {});
+    expect(you.error).toBeUndefined();
+    expect(you.refreshing).toBe(true);
+  });
+
   test("something that can't be a key is refused", async () => {
     const t = setup();
     await expect(t.action(api.suggestionsActions.setKey, { key: "short" })).rejects.toThrow(/look like/);

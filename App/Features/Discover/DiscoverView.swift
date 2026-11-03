@@ -94,7 +94,8 @@ struct DiscoverView: View {
     }
 
     /// Picks are made in the background after a key is added, so it keeps looking until they land.
-    /// It also keeps trying until the first answer, in case the app is still signing in.
+    /// It also keeps trying until the first answer, in case the app is still signing in. It gives up
+    /// a little after the server would call a refresh dead (5 minutes).
     private func loadForYou() async {
         var attempts = 0
         repeat {
@@ -104,7 +105,7 @@ struct DiscoverView: View {
                 withAnimation(.snappy) { forYou = latest }
             }
             attempts += 1
-        } while (forYou == nil || forYou?.refreshing == true) && attempts < 40
+        } while (forYou == nil || forYou?.refreshing == true) && attempts < 110
     }
 
     private func runSearch() async {

@@ -14,7 +14,7 @@ export function PrivacyPage() {
       <article className="prose">
         <span className="eyebrow">Privacy</span>
         <h1>Poddle's privacy policy</h1>
-        <p className="meta">Last updated 29 October 2026</p>
+        <p className="meta">Last updated 3 November 2026</p>
 
         <p>
           Poddle is a podcast player I (Mike Cann) made for myself, and now anyone can use it. This page says what it
@@ -106,8 +106,8 @@ export function PrivacyPage() {
         <p>
           You can delete your account whenever you like: in the app, go to <b>Profile</b> and tap <b>Delete account</b>,
           or sign in on <Link to="/me">poddle.mikecann.app/me</Link> and use the <b>Delete account</b> link at the
-          bottom. You're signed out straight away, and your library, queue, listening history, stats, settings, devices
-          and feature requests are deleted from Poddle's database within a few minutes. Downloads on the device you
+          bottom. You're signed out straight away, and your library, queue, listening history, stats, settings, devices,
+          Exa key and suggestions, and feature requests are deleted from Poddle's database within a few minutes. Downloads on the device you
           delete from are removed too. Convex keeps daily backups for a short while, so a copy can hang around in those
           until they expire.
         </p>

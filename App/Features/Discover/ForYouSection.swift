@@ -164,6 +164,7 @@ struct ExaKeySheet: View {
 /// Profile's row: add, or see which key's in use and remove it.
 struct ExaKeyRow: View {
     @Environment(PoddleStore.self) private var store
+    @Environment(AppModel.self) private var app
     @State private var forYou: ForYou?
     @State private var adding = false
 
@@ -185,7 +186,9 @@ struct ExaKeyRow: View {
             }
         }
         .sheet(isPresented: $adding) { ExaKeySheet() }
-        .task(id: adding) { if !adding { await load() } }
+        // Tabs stay alive on iPhone, so reload each time Profile is opened: a key added from Discover
+        // should show here as soon as you look.
+        .task(id: "\(adding) \(app.tab)") { if !adding { await load() } }
     }
 
     private var subtitle: String {

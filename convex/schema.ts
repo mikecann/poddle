@@ -579,6 +579,8 @@ export default defineSchema({
     picks: v.array(vSuggestion),
     refreshedAt: v.optional(v.number()),
     refreshingSince: v.optional(v.number()),
+    /** Which refresh is the current one. Only that one may write its result (suggestions.ts). */
+    refreshId: v.optional(v.string()),
     error: v.optional(v.string()),
   }).index("by_user", ["userId"]),
 

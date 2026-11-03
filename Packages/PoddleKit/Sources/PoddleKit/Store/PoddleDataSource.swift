@@ -82,8 +82,9 @@ extension PoddleDataSource {
     public func searchEpisodes(_ term: String) async throws -> [EpisodeSearchResult] { [] }
     public func open(_ target: DiscoverTarget) async throws -> OpenedFeed { throw CancellationError() }
     public func forYou() async throws -> ForYou { ForYou() }
-    public func setExaKey(_ key: String) async throws {}
-    public func removeExaKey() async throws {}
+    // Nothing to save a key to without a server: say so rather than pretend it worked.
+    public func setExaKey(_ key: String) async throws { throw CancellationError() }
+    public func removeExaKey() async throws { throw CancellationError() }
     public func connectionStatus() async -> AsyncStream<ConnectionStatus> { AsyncStream { $0.finish() } }
 }
 

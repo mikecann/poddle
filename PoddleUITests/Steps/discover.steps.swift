@@ -64,7 +64,7 @@ final class DiscoverSteps: StepModule {
         // Just opening an episode writes nothing personal, so there may be no record of the show for
         // this person at all. What matters is that nothing says they follow it.
         s.then("opening it didn't follow {string}") { w, a in
-            let subscribed = (try? w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"]) as? Bool
+            let subscribed = try w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"] as? Bool
             if subscribed == true { throw World.Failure("\(a.string(0)) got followed") }
         }
 

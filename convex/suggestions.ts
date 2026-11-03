@@ -115,10 +115,11 @@ export const saveKey = internalMutation({
     const existing = await keyFor(ctx, userId);
     if (existing) await ctx.db.patch(existing._id, { ciphertext, ending, updatedAt: now });
     else await ctx.db.insert("exaKeys", { userId, ciphertext, ending, updatedAt: now });
+    const refreshId = crypto.randomUUID();
     const row = await suggestionsFor(ctx, userId);
-    if (row) await ctx.db.patch(row._id, { refreshingSince: now, error: undefined });
-    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now });
-    await ctx.scheduler.runAfter(0, internal.suggestionsActions.refreshFor, { userId, claimed: true });
+    if (row) await ctx.db.patch(row._id, { refreshingSince: now, refreshId, error: undefined });
+    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now, refreshId });
+    await ctx.scheduler.runAfter(0, internal.suggestionsActions.refreshFor, { userId, refreshId });
     return null;
   },
 });
@@ -196,26 +197,32 @@ export const seedsFor = internalQuery({
   },
 });
 
-/** False if one's already running, so two can't spend their money at once. */
+/**
+ * This refresh's id, or null if one's already running, so two can't spend their money at once.
+ * Only the refresh holding the current id may write a result (finishRefresh).
+ */
 export const startRefresh = internalMutation({
   args: { userId: v.id("users") },
-  returns: v.boolean(),
+  returns: v.union(v.string(), v.null()),
   handler: async (ctx, { userId }) => {
     const now = Date.now();
     const row = await suggestionsFor(ctx, userId);
-    if (row?.refreshingSince !== undefined && now - row.refreshingSince < REFRESH_TIMEOUT) return false;
-    if (row) await ctx.db.patch(row._id, { refreshingSince: now });
-    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now });
-    return true;
+    if (row?.refreshingSince !== undefined && now - row.refreshingSince < REFRESH_TIMEOUT) return null;
+    const refreshId = crypto.randomUUID();
+    if (row) await ctx.db.patch(row._id, { refreshingSince: now, refreshId });
+    else await ctx.db.insert("suggestions", { userId, picks: [], refreshingSince: now, refreshId });
+    return refreshId;
   },
 });
 
 export const finishRefresh = internalMutation({
-  args: { userId: v.id("users"), picks: v.optional(v.array(vSuggestion)), error: v.optional(v.string()) },
+  args: { userId: v.id("users"), refreshId: v.string(), picks: v.optional(v.array(vSuggestion)), error: v.optional(v.string()) },
   returns: v.null(),
-  handler: async (ctx, { userId, picks, error }) => {
+  handler: async (ctx, { userId, refreshId, picks, error }) => {
     const row = await suggestionsFor(ctx, userId);
-    if (!row) return null; // They removed their key part way through.
+    // They removed their key part way through, or swapped it and a newer refresh has started:
+    // an old key's late failure mustn't overwrite the new key's picks.
+    if (!row || row.refreshId !== refreshId) return null;
     // A failure keeps the last good picks, and leaves refreshedAt so tomorrow's cron tries again.
     await ctx.db.patch(row._id, {
       refreshingSince: undefined,

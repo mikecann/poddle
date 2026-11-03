@@ -173,21 +173,23 @@ async function pickFor(ctx: ActionCtx, userId: Id<"users">, key: string): Promis
 }
 
 export const refreshFor = internalAction({
-  /** `claimed`: saveKey has already marked this refresh as started. */
-  args: { userId: v.id("users"), claimed: v.optional(v.boolean()) },
+  /** `refreshId`: saveKey has already started this refresh and given it this id. */
+  args: { userId: v.id("users"), refreshId: v.optional(v.string()) },
   returns: v.null(),
-  handler: async (ctx, { userId, claimed }) => {
+  handler: async (ctx, args) => {
+    const { userId } = args;
     const stored = await ctx.runQuery(internal.suggestions.encryptedKey, { userId });
     if (!stored) return null;
-    if (!claimed && !(await ctx.runMutation(internal.suggestions.startRefresh, { userId }))) return null;
+    const refreshId = args.refreshId ?? (await ctx.runMutation(internal.suggestions.startRefresh, { userId }));
+    if (!refreshId) return null;
     try {
       const picks = await pickFor(ctx, userId, decryptKey(stored));
-      await ctx.runMutation(internal.suggestions.finishRefresh, { userId, picks });
+      await ctx.runMutation(internal.suggestions.finishRefresh, { userId, refreshId, picks });
     } catch (e) {
       // Never log the error's detail: a request can carry the key.
       console.warn(`[suggestions] refresh failed: ${e instanceof ExaError ? e.message : "unexpected"}`);
       const error = e instanceof ExaError ? e.message : "Couldn't get suggestions right now. We'll try again tomorrow.";
-      await ctx.runMutation(internal.suggestions.finishRefresh, { userId, error });
+      await ctx.runMutation(internal.suggestions.finishRefresh, { userId, refreshId, error });
     }
     return null;
   },

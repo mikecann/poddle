@@ -94,8 +94,6 @@ async function seedPerson(t: T, ids: { podcastId: Id<"podcasts">; episodeId: Id<
       await ctx.db.insert("statsShowDays", { userId, day: `2025-10-1${i}`, podcastId, ...stats });
       await ctx.db.insert("statsShowMonths", { userId, month: `2025-1${i}`, podcastId, ...stats });
       await ctx.db.insert("episodeTotals", { userId, episodeId, podcastId, wall: 60, content: 60, sessions: 1 });
-      await ctx.db.insert("exaKeys", { userId, ciphertext: "x", ending: "abcd", updatedAt: BASE });
-      await ctx.db.insert("suggestions", { userId, picks: [] });
       const counts = {
         podcasts: 1, subscribedPodcasts: 1, podcastsProcessed: 0, feedsFailed: 0, episodes: 1, episodesMatched: 0,
         ghostEpisodes: 0, playedEpisodes: 0, inProgressEpisodes: 0, starredEpisodes: 0, sessions: 0,
@@ -110,6 +108,9 @@ async function seedPerson(t: T, ids: { podcastId: Id<"podcasts">; episodeId: Id<
       await ctx.db.insert("importQueue", { batchId, podcastId, phase: "fetch" });
       await ctx.db.insert("importUpNext", { batchId, episodeId, podcastId, at });
     }
+    // One of each per person: suggestions.ts reads them with .unique().
+    await ctx.db.insert("exaKeys", { userId, ciphertext: "x", ending: "abcd", updatedAt: BASE });
+    await ctx.db.insert("suggestions", { userId, picks: [] });
     await ctx.runMutation(components.feedback.items.create, { userId, title: "Dark mode", description: "Please" });
   });
 }
