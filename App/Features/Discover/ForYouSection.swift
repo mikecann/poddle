@@ -17,7 +17,7 @@ struct ForYouSection: View {
                 Text("For you").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
                 Spacer()
                 if let refreshedAt = forYou.refreshedAt, forYou.hasKey, !forYou.picks.isEmpty {
-                    Text("Updated \(Format.relativeDate(refreshedAt))").font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
+                    Text("Updated \(Format.relativeDate(refreshedAt).replacingOccurrences(of: "Today", with: "today").replacingOccurrences(of: "Yesterday", with: "yesterday"))").font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
                 }
             }
             .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 8)
