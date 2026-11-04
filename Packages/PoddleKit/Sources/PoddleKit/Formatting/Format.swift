@@ -83,6 +83,27 @@ public enum Format {
         return f.string(from: date)
     }
 
+    /// How old an episode is, for Up Next rows: "Today", "Yesterday", the weekday for the last
+    /// week ("Monday"), then "15 days ago" up to two months, then months and years. Counted in
+    /// calendar days, so last night at 11pm is "Yesterday" at 9am.
+    public static func episodeAge(_ millis: Millis, now: Date = Date(), calendar: Calendar = .current) -> String {
+        let date = Date(timeIntervalSince1970: millis / 1000)
+        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
+        switch days {
+        case ...0: return "Today"
+        case 1: return "Yesterday"
+        case 2...6:
+            return formatter("EEEE", locale: Locale(identifier: "en_AU"), calendar: calendar).string(from: date)
+        case 7..<60: return "\(days) days ago"
+        case 60..<365:
+            let months = max(2, calendar.dateComponents([.month], from: date, to: now).month ?? days / 30)
+            return "\(months) months ago"
+        default:
+            let years = max(1, calendar.dateComponents([.year], from: date, to: now).year ?? days / 365)
+            return years == 1 ? "1 year ago" : "\(years) years ago"
+        }
+    }
+
     /// "21 OCT 2026" for receipts.
     public static func receiptDate(_ millis: Millis, calendar: Calendar = .current) -> String {
         formatter("d MMM yyyy", locale: Locale(identifier: "en_AU"), calendar: calendar)
