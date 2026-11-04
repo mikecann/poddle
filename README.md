@@ -143,7 +143,7 @@ With none, the app runs on live data (`LiveStore` over Convex: the dev deploymen
 | `-PoddleRealAudio YES` | Sample data with the top of Up Next pointed at real, short public episodes (implies `-PoddleMock`) |
 | `-PoddleAudioCheck YES` | Debug builds: plays the queue head, logs position and rate, downloads mid-stream and checks the queue advances. Use with `-PoddleRealAudio YES` |
 
-Signing in (Debug simulator builds only): `-PoddleTestSignIn <email>` signs in at launch with test sign-in if signed out (the dev deployment needs `PODDLE_TEST_SIGNIN=1`; it reuses the user with that email, e.g. `mike.cann@gmail.com` on the dev copy of prod, or makes a test user). `-PoddleSignOut YES` (Debug) signs out at launch, the same way Settings does. The sign-in screen also has the test button with an email field.
+Signing in (Debug simulator builds only): `-PoddleTestSignIn <email>` signs in at launch with test sign-in if signed out (the dev deployment needs `PODDLE_TEST_SIGNIN=1`; it reuses the user with that email, e.g. `mike.cann@gmail.com` on the dev copy of prod, or makes a test user). `-PoddleFakeAppleSignIn <email> -PoddleFakeAppleURL <url>` (Debug, the e2e suite) makes Sign in with Apple ask the e2e fixture server for its identity token instead of showing the system sheet. `-PoddleSignOut YES` (Debug) signs out at launch, the same way Settings does. The sign-in screen also has the test button with an email field.
 
 Share links (Debug): `-PoddleOpenURL <url>` opens a website link at launch as if it had been tapped, e.g. `https://striped-turtle-260.ap-southeast-2.convex.site/e/<id>?t=754` or `poddle://s/<id>`.
 

@@ -8,6 +8,19 @@ final class SignInSteps: StepModule {
             w.launch(signedInAs: a.string(0))
         }
 
+        // The simulator has no Apple Account, so the system's Sign in with Apple sheet is the
+        // one part this can't drive. `-PoddleFakeAppleSignIn` has the app ask the fixture
+        // server's stand-in for Apple for the identity token instead; everything after that
+        // (the nonce, the backend checking the token against the stand-in's keys, the
+        // session) is the real path.
+        s.when("they open Poddle and sign in with Apple") { w, _ in
+            w.launch(signedInAs: nil, extra: [
+                "-PoddleFakeAppleSignIn", w.email,
+                "-PoddleFakeAppleURL", "\(w.config.fixtureUrl)/apple",
+            ])
+            try w.tap("signIn.apple")
+        }
+
         s.then("the sign-in screen says {string}") { w, a in
             let error = try w.waitFor("signIn.error", timeout: 20, "the sign-in error")
             try w.eventually("the error to say \(a.string(0))") { error.staticTexts[a.string(0)].exists || error.label.contains(a.string(0)) }

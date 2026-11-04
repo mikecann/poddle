@@ -9,6 +9,7 @@ struct SignInView: View {
     @State private var working: String?
     @State private var errorMessage: String?
     @State private var sheet = SignInSheet()
+    @State private var apple = AppleSignIn()
     #if DEBUG && targetEnvironment(simulator)
     @State private var testEmail = UserDefaults.standard.string(forKey: "PoddleTestSignIn") ?? "mike.cann@gmail.com"
     #endif
@@ -129,7 +130,10 @@ struct SignInView: View {
     #endif
 
     private func signIn(_ provider: Account.Provider) {
-        run(provider == .apple ? "apple" : "google") { try await account.signIn(with: provider, sheet: sheet) }
+        switch provider {
+        case .apple: run("apple") { try await account.signInWithApple(native: apple, sheet: sheet) }
+        case .google: run("google") { try await account.signIn(with: .google, sheet: sheet) }
+        }
     }
 
     private func run(_ id: String, _ body: @escaping () async throws -> Void) {

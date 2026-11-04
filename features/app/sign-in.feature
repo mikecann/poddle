@@ -10,6 +10,12 @@ Feature: Signing in
     And the mini player shows "Sunrise in A"
     And Up Next lists "Breakfast in C"
 
+  Scenario: Sign in with Apple uses the iPhone's own Apple sheet
+    Given the listener follows "Morning Tones" with "Sunrise in A" in Up Next
+    When they open Poddle and sign in with Apple
+    Then they're on Up Next
+    And the mini player shows "Sunrise in A"
+
   Scenario: Someone who isn't invited sees the invite-only message
     When "stranger@poddle.test" opens Poddle and tries to sign in
     Then the sign-in screen says "Poddle is invite-only for now."

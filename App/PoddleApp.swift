@@ -187,7 +187,13 @@ struct PoddleApp: App {
                 .tint(Palette.tomato)
                 .onChange(of: account?.userId) { _, userId in Task { await accountChanged(to: userId) } }
                 // Share links from the website (universal links) and its poddle:// "Open in Poddle" button.
-                .onOpenURL { url in app.open(url, store: store) }
+                .onOpenURL { url in
+                    // Safari finishing a sign-in that iOS wouldn't open in the sheet.
+                    #if os(iOS)
+                    if SignInSheet.browserReturned(url) { return }
+                    #endif
+                    app.open(url, store: store)
+                }
                 .alert("Couldn't open that link", isPresented: $app.linkNotFound) {
                     Button("OK", role: .cancel) {}
                 } message: {
@@ -204,6 +210,9 @@ struct PoddleApp: App {
                 }
                 #endif
                 .onChange(of: scenePhase) { _, phase in
+                    #if os(iOS)
+                    SignInSheet.scenePhaseChanged(to: phase)
+                    #endif
                     switch phase {
                     // Foreground: ask Convex to re-check feeds not checked in the last 2 minutes.
                     case .active: if account?.isSignedIn != false { Task { await store.refresh() } }
