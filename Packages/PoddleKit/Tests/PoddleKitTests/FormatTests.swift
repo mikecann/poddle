@@ -69,24 +69,24 @@ import Testing
     @Test func episodeAges() throws {
         var cal = Calendar(identifier: .gregorian)
         cal.timeZone = try #require(TimeZone(identifier: "Australia/Sydney"))
-        // Wednesday 21 Oct 2026, 9am.
         let now = try #require(cal.date(from: DateComponents(year: 2026, month: 10, day: 21, hour: 9)))
-        func age(_ month: Int, _ day: Int, _ hour: Int = 10, year: Int = 2026) throws -> String {
-            let d = try #require(cal.date(from: DateComponents(year: year, month: month, day: day, hour: hour)))
-            return Format.episodeAge(d.timeIntervalSince1970 * 1000, now: now, calendar: cal)
+        func age(_ secondsAgo: Double) -> String {
+            Format.episodeAge((now.timeIntervalSince1970 - secondsAgo) * 1000, now: now, calendar: cal)
         }
-        #expect(try age(10, 21, 6) == "Today")
-        #expect(try age(10, 20, 23) == "Yesterday")
-        #expect(try age(10, 19) == "Monday")
-        #expect(try age(10, 15) == "Thursday")
-        #expect(try age(10, 14) == "7 days ago")
-        #expect(try age(10, 6) == "15 days ago")
-        #expect(try age(9, 1) == "50 days ago")
-        #expect(try age(7, 10) == "3 months ago")
-        #expect(try age(10, 1, year: 2025) == "1 year ago")
-        #expect(try age(1, 1, year: 2023) == "3 years ago")
-        // A feed whose clock runs ahead still reads as today, not "-1 days ago".
-        #expect(try age(10, 22) == "Today")
+        let minute = 60.0, hour = 3600.0, day = 86_400.0
+        #expect(age(20) == "Just now")
+        #expect(age(-5 * minute) == "Just now")
+        #expect(age(minute) == "1 minute ago")
+        #expect(age(15 * minute) == "15 minutes ago")
+        #expect(age(hour) == "1 hour ago")
+        #expect(age(23 * hour + 59 * minute) == "23 hours ago")
+        #expect(age(day) == "1 day ago")
+        #expect(age(3 * day + 5 * hour) == "3 days ago")
+        #expect(age(15 * day) == "15 days ago")
+        #expect(age(59 * day) == "59 days ago")
+        #expect(age(100 * day) == "3 months ago")
+        #expect(age(380 * day) == "1 year ago")
+        #expect(age(3 * 366 * day) == "3 years ago")
     }
 }
 

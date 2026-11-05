@@ -57,7 +57,7 @@ struct EpisodeRow: View {
     @ViewBuilder private var metaLine: some View {
         HStack(spacing: 7) {
             if item.isInProgress { ProgressBar(value: item.progress) }
-            // How long it's been waiting (Mike, 4 Nov 2026): "Tuesday", "15 days ago".
+            // How long ago it came out (Mike, 5 Nov 2026): "15 minutes ago", "3 days ago".
             Text(Format.episodeAge(item.episode.pubDate)).foregroundStyle(Palette.ink2)
             Text(item.lengthLabel).fontWeight(.semibold).foregroundStyle(Palette.ink)
             DownloadGlyph(item: item)

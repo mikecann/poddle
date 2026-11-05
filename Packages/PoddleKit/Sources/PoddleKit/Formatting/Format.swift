@@ -83,24 +83,24 @@ public enum Format {
         return f.string(from: date)
     }
 
-    /// How old an episode is, for Up Next rows: "Today", "Yesterday", the weekday for the last
-    /// week ("Monday"), then "15 days ago" up to two months, then months and years. Counted in
-    /// calendar days, so last night at 11pm is "Yesterday" at 9am.
+    /// How old an episode is, for Up Next rows: "Just now", "15 minutes ago", "1 hour ago",
+    /// "3 days ago" up to two months, then months and years (Mike, 5 Nov 2026: elapsed time,
+    /// not weekday names).
     public static func episodeAge(_ millis: Millis, now: Date = Date(), calendar: Calendar = .current) -> String {
         let date = Date(timeIntervalSince1970: millis / 1000)
-        let days = calendar.dateComponents([.day], from: calendar.startOfDay(for: date), to: calendar.startOfDay(for: now)).day ?? 0
-        switch days {
-        case ...0: return "Today"
-        case 1: return "Yesterday"
-        case 2...6:
-            return formatter("EEEE", locale: Locale(identifier: "en_AU"), calendar: calendar).string(from: date)
-        case 7..<60: return "\(days) days ago"
-        case 60..<365:
-            let months = max(2, calendar.dateComponents([.month], from: date, to: now).month ?? days / 30)
-            return "\(months) months ago"
+        // A feed whose clock runs ahead gives a future date; that's "Just now", not "-3 minutes ago".
+        let seconds = max(0, now.timeIntervalSince(date))
+        func ago(_ n: Int, _ unit: String) -> String { "\(n) \(unit)\(n == 1 ? "" : "s") ago" }
+        let minutes = Int(seconds / 60), hours = Int(seconds / 3600), days = Int(seconds / 86_400)
+        switch seconds {
+        case ..<60: return "Just now"
+        case ..<3600: return ago(minutes, "minute")
+        case ..<86_400: return ago(hours, "hour")
+        case ..<(60 * 86_400): return ago(days, "day")
+        case ..<(365 * 86_400):
+            return ago(max(2, calendar.dateComponents([.month], from: date, to: now).month ?? days / 30), "month")
         default:
-            let years = max(1, calendar.dateComponents([.year], from: date, to: now).year ?? days / 365)
-            return years == 1 ? "1 year ago" : "\(years) years ago"
+            return ago(max(1, calendar.dateComponents([.year], from: date, to: now).year ?? days / 365), "year")
         }
     }
 
