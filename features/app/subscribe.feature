@@ -19,6 +19,10 @@ Feature: Following shows
     Then Discover says "Following Evening Echoes"
     And "Evening Echoes" is in their Library
 
+  Scenario: A link that can't be reached says why
+    When they paste "https://nowhere.invalid/feed.xml" into Discover's URL field
+    Then Discover says "Couldn't find nowhere.invalid. Check the address and try again."
+
   Scenario: Unsubscribe, then Undo
     Given the listener follows "Morning Tones"
     When they unsubscribe from "Morning Tones" on its page

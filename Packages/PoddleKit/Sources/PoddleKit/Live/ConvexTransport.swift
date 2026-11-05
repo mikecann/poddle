@@ -25,6 +25,10 @@ public enum TransportError: Error, Sendable, Hashable, LocalizedError {
     case unauthorized(String)
     /// The function threw. Retrying the same call won't help.
     case server(String)
+    /// The function said no on purpose (a `ConvexError`), with a message written for people,
+    /// such as "Couldn't reach feeds.example.com". Prod hides every other error's text, so
+    /// only these are worth showing. Retrying the same call won't help.
+    case refused(code: String?, message: String)
     /// Couldn't reach the deployment. Retry later.
     case network(String)
 
@@ -32,11 +36,20 @@ public enum TransportError: Error, Sendable, Hashable, LocalizedError {
         switch self {
         case let .unauthorized(m): "Not authorised: \(m)"
         case let .server(m): m
+        case let .refused(_, m): m
         case let .network(m): "Network: \(m)"
         }
     }
 
-    public var isRetryable: Bool { if case .server = self { false } else { true } }
+    /// The server's own words for why it said no, when it gave some.
+    public var userMessage: String? { if case let .refused(_, m) = self { m } else { nil } }
+
+    public var isRetryable: Bool {
+        switch self {
+        case .server, .refused: false
+        case .unauthorized, .network: true
+        }
+    }
 }
 
 /// The real transport, over convex-swift's Rust client. It talks to the UniFFI layer directly so
@@ -129,7 +142,7 @@ public final class ConvexMobileTransport: ConvexTransport, @unchecked Sendable {
             let value = try? JSONValue.decode(Data(data.utf8))
             let code = value?["code"]?.string
             let message = value?["message"]?.string ?? data
-            return ["unauthenticated", "unauthorized", "unconfigured"].contains(code ?? "") ? .unauthorized(message) : .server(message)
+            return ["unauthenticated", "unauthorized", "unconfigured"].contains(code ?? "") ? .unauthorized(message) : .refused(code: code, message: message)
         case let .ServerError(msg): return .server(msg)
         case let .InternalError(msg): return .network(msg)
         }

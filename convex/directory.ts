@@ -6,7 +6,7 @@ import type { Id } from "./_generated/dataModel";
 import type { ActionCtx } from "./_generated/server";
 import { userAction } from "./lib/auth";
 import { directoryBase } from "./lib/e2e";
-import { fetchWithTimeout, USER_AGENT } from "./lib/feedFetch";
+import { appleUnreachable, fetchWithTimeout, USER_AGENT } from "./lib/feedFetch";
 import { parseAppleId } from "./lib/parse";
 import { type DirectoryEpisode, type DirectoryResult, vDirectoryEpisode, vDirectoryResult } from "./lib/validators";
 
@@ -34,8 +34,13 @@ type ItunesItem = {
 async function itunesJson(ctx: ActionCtx, url: string): Promise<ItunesItem[]> {
   const cached = await ctx.runQuery(internal.directoryCache.getCached, { key: url });
   if (cached) return JSON.parse(cached) as ItunesItem[];
-  const res = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }, 10_000);
-  if (!res.ok) throw new Error(`Apple directory returned HTTP ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetchWithTimeout(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }, 10_000);
+  } catch (e) {
+    throw appleUnreachable(url, e);
+  }
+  if (!res.ok) throw appleUnreachable(url, res.status);
   const body = (await res.json()) as { results?: ItunesItem[] };
   const results = body.results ?? [];
   await ctx.runMutation(internal.directoryCache.putCached, { key: url, json: JSON.stringify(results) });

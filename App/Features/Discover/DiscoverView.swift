@@ -365,7 +365,18 @@ struct DiscoverView: View {
         guard !trimmed.isEmpty else { return }
         // Token-in-URL feeds are private: never sent to directory lookups or shown on share cards.
         let isPrivate = trimmed.contains("token=") || trimmed.contains("@") || trimmed.contains("/private")
-        if let found = try? await store.resolve(url: trimmed) {
+        let found: SearchResult?
+        do {
+            found = try await store.resolve(url: trimmed)
+        } catch let error as TransportError where error.userMessage != nil {
+            // The server's reason, e.g. "Couldn't reach feeds.example.com. Try again later."
+            // (PODDLE-E). Long enough to need longer than the usual 2 seconds to read.
+            show(error.userMessage!, for: 4)
+            return
+        } catch {
+            found = nil
+        }
+        if let found {
             if store.isFollowing(feedURL: found.feedURL) {
                 show("Already following \(found.title)")
             } else {
@@ -381,10 +392,10 @@ struct DiscoverView: View {
         }
     }
 
-    private func show(_ message: String) {
+    private func show(_ message: String, for seconds: Double = 2) {
         withAnimation(.spring) { toast = message }
         Task {
-            try? await Task.sleep(for: .seconds(2))
+            try? await Task.sleep(for: .seconds(seconds))
             withAnimation { toast = nil }
         }
     }

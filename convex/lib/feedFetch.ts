@@ -1,4 +1,5 @@
 import type { FunctionReturnType } from "convex/server";
+import { ConvexError } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx } from "../_generated/server";
@@ -49,19 +50,75 @@ export async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
-/** Fetch a URL that should be a feed. Follows one `<link rel="alternate">` hop for website URLs. */
+/**
+ * Why a fetch got no response at all. Node's fetch throws a bare `TypeError: fetch failed`
+ * and keeps the reason in `cause`: ENOTFOUND, ECONNREFUSED, UND_ERR_CONNECT_TIMEOUT, a
+ * certificate error. That message alone told us nothing about PODDLE-E.
+ */
+export function fetchFailureCause(e: unknown): string {
+  if (e instanceof Error && e.name === "AbortError") return "timeout";
+  const cause = (e as { cause?: { code?: unknown; message?: unknown; errors?: { code?: unknown }[] } } | null)?.cause;
+  // A host with several addresses fails with an AggregateError, one error per address.
+  const code = cause?.code ?? cause?.errors?.find((x) => x?.code)?.code;
+  if (typeof code === "string") return code;
+  if (typeof cause?.message === "string") return cause.message;
+  return e instanceof Error ? e.message : String(e);
+}
+
+/** Just the host: a private feed's token lives in the path or query, and mustn't reach the logs. */
+export function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return "that address";
+  }
+}
+
+type Refusal = ConvexError<{ code: string; message: string }>;
+
+/** Logs which host failed and why, and makes the error the person sees. */
+export function unreachable(url: string, e: unknown): Refusal {
+  const host = hostOf(url);
+  const cause = fetchFailureCause(e);
+  console.warn(`Couldn't fetch from ${host}`, cause);
+  const message =
+    cause === "ENOTFOUND" ? `Couldn't find ${host}. Check the address and try again.` : `Couldn't reach ${host}. Try again later.`;
+  return new ConvexError({ code: "feedUnreachable", message });
+}
+
+/** Apple's directory (search, and Apple links), from a network error or an HTTP status. */
+export function appleUnreachable(url: string, why: unknown): Refusal {
+  console.warn(`Couldn't fetch from ${hostOf(url)}`, typeof why === "number" ? `HTTP ${why}` : fetchFailureCause(why));
+  return new ConvexError({ code: "appleUnreachable", message: "Couldn't reach Apple Podcasts. Try again later." });
+}
+
+/**
+ * Fetch a URL that should be a feed. Follows one `<link rel="alternate">` hop for website URLs.
+ * Failures are ConvexErrors with a message for people: this backs adding a show by its link,
+ * and prod hides any other error's text behind "Server Error".
+ */
 export async function fetchFeedDocument(feedUrl: string): Promise<{ feed: ParsedFeed; finalUrl: string }> {
   let url = feedUrl;
   for (let hop = 0; hop < 2; hop++) {
     const req = requestFor(url);
-    const res = await fetchWithTimeout(req.url, { headers: req.headers });
-    if (!res.ok) throw new Error(`HTTP ${res.status} fetching ${req.url}`);
+    let res: Response;
+    try {
+      res = await fetchWithTimeout(req.url, { headers: req.headers });
+    } catch (e) {
+      throw unreachable(req.url, e);
+    }
+    if (!res.ok) {
+      throw new ConvexError({ code: "feedHttp", message: `${hostOf(req.url)} answered with an error (HTTP ${res.status}).` });
+    }
     const body = await res.text();
     try {
       return { feed: parseFeed(body, url), finalUrl: url };
     } catch (e) {
       const link = /<html/i.test(body) ? discoverFeedLink(body, res.url || url) : undefined;
-      if (!link || hop > 0) throw e;
+      if (!link || hop > 0) {
+        console.warn(`No feed at ${hostOf(url)}`, (e as Error).message);
+        throw new ConvexError({ code: "notAFeed", message: "There's no podcast feed at that address." });
+      }
       url = link;
     }
   }

@@ -33,32 +33,11 @@ final class SubscribeSteps: StepModule {
             guard let url = shows.first(where: { $0["title"] as? String == a.string(0) })?["feedUrl"] as? String else {
                 throw World.Failure("No fixture show \(a.string(0))")
             }
-            UIPasteboard.general.string = url
-            try w.goTo(tab: "discover")
-            // Discover offers Paste for the link on the clipboard. The simulator refuses that direct
-            // read under automation, as if they'd tapped "Don't Allow", so Discover falls back to its
-            // URL field, which is pasted into through the edit menu.
-            if w.element("discover.paste").exists { try w.tap("discover.paste") } else { try w.tap("discover.type") }
-            let field = w.element("discover.urlField")
-            let toast = w.element("discover.toast")
-            try w.eventually("Discover to add it, or to offer the URL field", timeout: 20) {
-                if toast.exists, toast.label.hasPrefix("Following") { w.memo["discoverToast"] = toast.label }
-                return w.memo["discoverToast"] != nil || field.exists
-            }
-            if w.memo["discoverToast"] != nil { return }
-            field.tap()
-            try w.withoutIdleWaits {
-                field.press(forDuration: 1.0)
-                let paste = w.app.menuItems["Paste"].firstMatch
-                guard paste.waitForExistence(timeout: 5) else { throw World.Failure("No Paste in the edit menu") }
-                paste.tap()
-            }
-            try w.eventually("the field to hold the URL") { (field.value as? String) == url }
-            try w.tap("discover.add")
-            try w.eventually("Discover to add the show", timeout: 20) {
-                if toast.exists, toast.label.hasPrefix("Following") { w.memo["discoverToast"] = toast.label; return true }
-                return false
-            }
+            try pasteIntoURLField(w, url)
+        }
+
+        s.when("they paste {string} into Discover's URL field") { w, a in
+            try pasteIntoURLField(w, a.string(0))
         }
 
         s.then("Discover says {string}") { w, a in
@@ -131,6 +110,38 @@ final class SubscribeSteps: StepModule {
                 (try w.call("podcast", ["email": w.email, "show": a.string(0)])["subscribed"] as? Bool) == true
             }
             try w.eventually("the page to say Following") { w.element("podcast.follow").label.contains("Following") }
+        }
+    }
+
+    /// Pastes a link into Discover and adds it, and remembers what Discover said back.
+    @MainActor private static func pasteIntoURLField(_ w: World, _ url: String) throws {
+        UIPasteboard.general.string = url
+        try w.goTo(tab: "discover")
+        // Discover offers Paste for the link on the clipboard. The simulator refuses that direct
+        // read under automation, as if they'd tapped "Don't Allow", so Discover falls back to its
+        // URL field, which is pasted into through the edit menu. That fallback has its own toast,
+        // which isn't the answer.
+        let isAnswer = { (label: String) in !label.isEmpty && !label.hasPrefix("Couldn't read the clipboard") }
+        if w.element("discover.paste").exists { try w.tap("discover.paste") } else { try w.tap("discover.type") }
+        let field = w.element("discover.urlField")
+        let toast = w.element("discover.toast")
+        try w.eventually("Discover to answer, or to offer the URL field", timeout: 20) {
+            if toast.exists, isAnswer(toast.label) { w.memo["discoverToast"] = toast.label }
+            return w.memo["discoverToast"] != nil || field.exists
+        }
+        if w.memo["discoverToast"] != nil { return }
+        field.tap()
+        try w.withoutIdleWaits {
+            field.press(forDuration: 1.0)
+            let paste = w.app.menuItems["Paste"].firstMatch
+            guard paste.waitForExistence(timeout: 5) else { throw World.Failure("No Paste in the edit menu") }
+            paste.tap()
+        }
+        try w.eventually("the field to hold the URL") { (field.value as? String) == url }
+        try w.tap("discover.add")
+        try w.eventually("Discover to answer", timeout: 30) {
+            if toast.exists, isAnswer(toast.label) { w.memo["discoverToast"] = toast.label; return true }
+            return false
         }
     }
 

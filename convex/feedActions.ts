@@ -1,11 +1,11 @@
 "use node";
 
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { userAction } from "./lib/auth";
-import { fetchFeedDocument, refreshPodcast } from "./lib/feedFetch";
+import { appleUnreachable, fetchFeedDocument, fetchWithTimeout, refreshPodcast, USER_AGENT } from "./lib/feedFetch";
 import { normalizeFeedUrl, parseAppleId } from "./lib/parse";
 import { vIngestMode } from "./lib/ingest";
 
@@ -87,6 +87,24 @@ export const openFeed = userAction({
 const PREVIEW_EPISODES = 20;
 
 /**
+ * A show's name typed into the URL field arrives as `https://joerogan`, which only fails once
+ * DNS gives up. Refuse anything that can't be a public web address before fetching it.
+ */
+function webAddress(url: string): string {
+  const refusal = new ConvexError({ code: "badUrl", message: "That doesn't look like a web address." });
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    throw refusal;
+  }
+  if (u.protocol !== "https:" && u.protocol !== "http:") throw refusal;
+  // A dot for a domain or IPv4 address, a colon for IPv6.
+  if (!/[.:]/.test(u.hostname) && u.hostname !== "localhost") throw refusal;
+  return url;
+}
+
+/**
  * Preview a show before subscribing. Accepts an RSS/Atom URL, a website (feed
  * discovered via <link rel="alternate">), a podcasts.apple.com link or an
  * overcast.fm/itunes… link. Nothing is written.
@@ -119,13 +137,20 @@ export const previewFeed = userAction({
     if (/apple\.com|overcast\.fm\/itunes/i.test(feedUrl) || /^\d+$/.test(feedUrl)) {
       const appleId = parseAppleId(feedUrl);
       if (!appleId) throw new Error("Couldn't find an Apple ID in that link");
-      const res = await fetch(`https://itunes.apple.com/lookup?id=${appleId}&entity=podcast&country=AU`);
+      const lookup = `https://itunes.apple.com/lookup?id=${appleId}&entity=podcast&country=AU`;
+      let res: Response;
+      try {
+        res = await fetchWithTimeout(lookup, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }, 10_000);
+      } catch (e) {
+        throw appleUnreachable(lookup, e);
+      }
+      if (!res.ok) throw appleUnreachable(lookup, res.status);
       const body = (await res.json()) as { results?: { feedUrl?: string }[] };
       const found = body.results?.[0]?.feedUrl;
       if (!found) throw new Error("Apple doesn't list a feed for that show");
       feedUrl = found;
     }
-    const { feed, finalUrl } = await fetchFeedDocument(normalizeFeedUrl(feedUrl));
+    const { feed, finalUrl } = await fetchFeedDocument(webAddress(normalizeFeedUrl(feedUrl)));
     const normalized = normalizeFeedUrl(finalUrl);
     const matches: { podcastId: Id<"podcasts">; subscribed: boolean }[] = await ctx.runQuery(
       internal.directoryCache.libraryMatches,
