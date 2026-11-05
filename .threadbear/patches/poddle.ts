@@ -154,6 +154,6 @@ export default {
   hooks: [
     // After a turn that changed a feature file: under a second, and it catches a scenario whose
     // steps have gone missing long before the end-to-end run does.
-    { title: "BDD pairing", on: "turn.end", run: "npm run -s test:bdd-check", edited: "features/**", tell: "failures" },
+    { title: "BDD pairing", on: "turn.end", run: "./scripts/bdd-check.sh", edited: "features/**", tell: "failures" },
   ],
 };
