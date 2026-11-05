@@ -23,16 +23,30 @@ export function requestFor(url: string): { url: string; headers: Record<string, 
   try {
     const u = new URL(url);
     if (u.username || u.password) {
-      const creds = `${decodeURIComponent(u.username)}:${decodeURIComponent(u.password)}`;
-      headers.Authorization = `Basic ${btoa(creds)}`;
+      // Neither step may throw: falling through would hand fetch the URL with its credentials,
+      // and fetch's error message quotes that URL into the logs.
+      headers.Authorization = `Basic ${base64Utf8(`${decodeLoosely(u.username)}:${decodeLoosely(u.password)}`)}`;
       u.username = "";
       u.password = "";
       return { url: u.toString(), headers };
     }
   } catch {
-    // Leave it to fetch to complain.
+    // Not a URL at all. Leave it to fetch to complain.
   }
   return { url, headers };
+}
+
+function decodeLoosely(s: string): string {
+  try {
+    return decodeURIComponent(s);
+  } catch {
+    return s; // A stray % that isn't an escape.
+  }
+}
+
+/** btoa only takes Latin-1, so a password like "漢" threw. Encode the UTF-8 bytes instead. */
+function base64Utf8(s: string): string {
+  return btoa(Array.from(new TextEncoder().encode(s), (b) => String.fromCharCode(b)).join(""));
 }
 
 export async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = TIMEOUT_MS): Promise<Response> {
@@ -40,6 +54,25 @@ export async function fetchWithTimeout(url: string, init: RequestInit = {}, time
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     return await fetch(url, { ...init, signal: controller.signal, redirect: "follow" });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Like `fetchWithTimeout`, but the deadline also covers reading the body, so a host that
+ * sends its headers and then stalls can't hold a person's request open.
+ */
+export async function fetchText(
+  url: string,
+  init: RequestInit = {},
+  timeoutMs = TIMEOUT_MS,
+): Promise<{ res: Response; body: string }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const res = await fetch(url, { ...init, signal: controller.signal, redirect: "follow" });
+    return { res, body: await res.text() };
   } finally {
     clearTimeout(timer);
   }
@@ -54,15 +87,18 @@ export async function sha256Hex(text: string): Promise<string> {
  * Why a fetch got no response at all. Node's fetch throws a bare `TypeError: fetch failed`
  * and keeps the reason in `cause`: ENOTFOUND, ECONNREFUSED, UND_ERR_CONNECT_TIMEOUT, a
  * certificate error. That message alone told us nothing about PODDLE-E.
+ *
+ * Only codes and error names come back, never messages: those can quote the URL, and a
+ * private feed's URL carries its token or password.
  */
 export function fetchFailureCause(e: unknown): string {
   if (e instanceof Error && e.name === "AbortError") return "timeout";
-  const cause = (e as { cause?: { code?: unknown; message?: unknown; errors?: { code?: unknown }[] } } | null)?.cause;
+  const cause = (e as { cause?: { code?: unknown; name?: unknown; errors?: { code?: unknown }[] } } | null)?.cause;
   // A host with several addresses fails with an AggregateError, one error per address.
-  const code = cause?.code ?? cause?.errors?.find((x) => x?.code)?.code;
+  const code = cause?.code ?? cause?.errors?.find((x) => x?.code)?.code ?? (e as { code?: unknown } | null)?.code;
   if (typeof code === "string") return code;
-  if (typeof cause?.message === "string") return cause.message;
-  return e instanceof Error ? e.message : String(e);
+  if (typeof cause?.name === "string") return cause.name;
+  return e instanceof Error ? e.name : "unknown";
 }
 
 /** Just the host: a private feed's token lives in the path or query, and mustn't reach the logs. */
@@ -87,9 +123,28 @@ export function unreachable(url: string, e: unknown): Refusal {
 }
 
 /** Apple's directory (search, and Apple links), from a network error or an HTTP status. */
-export function appleUnreachable(url: string, why: unknown): Refusal {
+function appleUnreachable(url: string, why: unknown): Refusal {
   console.warn(`Couldn't fetch from ${hostOf(url)}`, typeof why === "number" ? `HTTP ${why}` : fetchFailureCause(why));
   return new ConvexError({ code: "appleUnreachable", message: "Couldn't reach Apple Podcasts. Try again later." });
+}
+
+/**
+ * GETs JSON from Apple's directory. Anything short of a 2xx JSON answer in time (no answer,
+ * an error status, a stalled body, an HTML outage page) is the same plain message.
+ */
+export async function appleJson<T>(url: string): Promise<T> {
+  let got: { res: Response; body: string };
+  try {
+    got = await fetchText(url, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }, 10_000);
+  } catch (e) {
+    throw appleUnreachable(url, e);
+  }
+  if (!got.res.ok) throw appleUnreachable(url, got.res.status);
+  try {
+    return JSON.parse(got.body) as T;
+  } catch (e) {
+    throw appleUnreachable(url, e);
+  }
 }
 
 /**
@@ -101,22 +156,23 @@ export async function fetchFeedDocument(feedUrl: string): Promise<{ feed: Parsed
   let url = feedUrl;
   for (let hop = 0; hop < 2; hop++) {
     const req = requestFor(url);
-    let res: Response;
+    let got: { res: Response; body: string };
     try {
-      res = await fetchWithTimeout(req.url, { headers: req.headers });
+      got = await fetchText(req.url, { headers: req.headers });
     } catch (e) {
       throw unreachable(req.url, e);
     }
+    const { res, body } = got;
     if (!res.ok) {
       throw new ConvexError({ code: "feedHttp", message: `${hostOf(req.url)} answered with an error (HTTP ${res.status}).` });
     }
-    const body = await res.text();
     try {
       return { feed: parseFeed(body, url), finalUrl: url };
     } catch (e) {
       const link = /<html/i.test(body) ? discoverFeedLink(body, res.url || url) : undefined;
       if (!link || hop > 0) {
-        console.warn(`No feed at ${hostOf(url)}`, (e as Error).message);
+        // The parser's message can quote the body, which could echo a private feed's token.
+        console.warn(`No feed at ${hostOf(url)}`, e instanceof FeedParseError ? "not a feed" : fetchFailureCause(e));
         throw new ConvexError({ code: "notAFeed", message: "There's no podcast feed at that address." });
       }
       url = link;

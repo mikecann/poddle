@@ -67,6 +67,70 @@ describe("feedActions:previewFeed", () => {
     expect(JSON.stringify(warn.mock.calls)).not.toContain("s3cret");
   });
 
+  test("credentials btoa can't encode, or a stray %, still never reach fetch or the log", async () => {
+    const t = setup();
+    // Node's fetch refuses a URL with credentials and quotes it in the message. Model that.
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      const url = String(input);
+      if (new URL(url).username) throw new TypeError(`Request cannot be constructed from a URL that includes credentials: ${url}`);
+      throw new TypeError("fetch failed", { cause: Object.assign(new Error(`connect ECONNREFUSED ${url}`), { code: "ECONNREFUSED" }) });
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    for (const url of ["https://me:%E6%BC%A2@feeds.example.com/p.xml?token=s3cret", "https://me:50%off@feeds.example.com/p.xml?token=s3cret"]) {
+      expect((await refusal(t.action(api.feedActions.previewFeed, { url }))).code).toBe("feedUnreachable");
+    }
+    for (const [input, init] of fetchMock.mock.calls as unknown as [string, RequestInit][]) {
+      expect(new URL(input).username).toBe("");
+      expect((init.headers as Record<string, string>).Authorization).toMatch(/^Basic /);
+    }
+    const logged = JSON.stringify(warn.mock.calls);
+    expect(logged).not.toContain("s3cret");
+    expect(logged).not.toContain("50%off");
+  });
+
+  test("a body that breaks off after the headers is a 'couldn't reach' message", async () => {
+    const t = setup();
+    const broken = new ReadableStream({
+      start(c) {
+        c.error(new TypeError("terminated", { cause: Object.assign(new Error("other side closed"), { code: "UND_ERR_SOCKET" }) }));
+      },
+    });
+    vi.stubGlobal("fetch", vi.fn(async () => new Response(broken, { status: 200 })));
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const data = await refusal(t.action(api.feedActions.previewFeed, { url: FEED }));
+    expect(data.code).toBe("feedUnreachable");
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining("feeds.example.com"), "UND_ERR_SOCKET");
+  });
+
+  test("the deadline covers a body that stalls after the headers", async () => {
+    vi.useFakeTimers();
+    try {
+      const t = setup();
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (_input: unknown, init?: RequestInit) => {
+          // Headers now, body never, until the request's signal gives up.
+          const stalled = new ReadableStream({
+            start(c) {
+              init?.signal?.addEventListener("abort", () => c.error(new DOMException("aborted", "AbortError")));
+            },
+          });
+          return new Response(stalled, { status: 200 });
+        }),
+      );
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+
+      const pending = refusal(t.action(api.feedActions.previewFeed, { url: FEED }));
+      await vi.advanceTimersByTimeAsync(21_000);
+      expect((await pending).code).toBe("feedUnreachable");
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("a word that isn't a web address is refused without fetching anything", async () => {
     const t = setup();
     const fetchMock = mockFetch({});
@@ -109,6 +173,23 @@ describe("feedActions:previewFeed", () => {
 
     const data = await refusal(t.action(api.feedActions.previewFeed, { url: "617416468" }));
     expect(data.code).toBe("appleUnreachable");
+  });
+
+  test("Apple answering with an HTML outage page is the same message", async () => {
+    const t = setup();
+    mockFetch({ "https://itunes.apple.com/lookup": "<html><body>Service Unavailable</body></html>" });
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    const data = await refusal(t.action(api.feedActions.previewFeed, { url: "617416468" }));
+    expect(data.code).toBe("appleUnreachable");
+  });
+
+  test("an Apple link without a feed says so", async () => {
+    const t = setup();
+    mockFetch({ "https://itunes.apple.com/lookup": JSON.stringify({ results: [{ collectionId: 617416468 }] }) });
+
+    const data = await refusal(t.action(api.feedActions.previewFeed, { url: "617416468" }));
+    expect(data).toEqual({ code: "noAppleFeed", message: "Apple doesn't list a feed for that show." });
   });
 });
 

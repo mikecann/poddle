@@ -5,7 +5,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { internalAction } from "./_generated/server";
 import { userAction } from "./lib/auth";
-import { appleUnreachable, fetchFeedDocument, fetchWithTimeout, refreshPodcast, USER_AGENT } from "./lib/feedFetch";
+import { appleJson, fetchFeedDocument, refreshPodcast } from "./lib/feedFetch";
 import { normalizeFeedUrl, parseAppleId } from "./lib/parse";
 import { vIngestMode } from "./lib/ingest";
 
@@ -79,7 +79,13 @@ export const openFeed = userAction({
       title: episodeTitle,
       pubDate,
     });
-    if (result.status === "error" && opened.episodeCount === 0) throw new Error(result.error ?? "Couldn't load that show");
+    if (result.status === "error" && opened.episodeCount === 0) {
+      // A ConvexError, as prod hides a plain Error's text. The details are in feedStates.lastError.
+      const message = result.httpStatus
+        ? `That show's feed answered with an error (HTTP ${result.httpStatus}).`
+        : "Couldn't load that show. Try again later.";
+      throw new ConvexError({ code: "feedUnavailable", message });
+    }
     return { podcastId, episodeId: opened.episodeId ?? undefined };
   },
 });
@@ -136,18 +142,12 @@ export const previewFeed = userAction({
     let feedUrl = url.trim();
     if (/apple\.com|overcast\.fm\/itunes/i.test(feedUrl) || /^\d+$/.test(feedUrl)) {
       const appleId = parseAppleId(feedUrl);
-      if (!appleId) throw new Error("Couldn't find an Apple ID in that link");
-      const lookup = `https://itunes.apple.com/lookup?id=${appleId}&entity=podcast&country=AU`;
-      let res: Response;
-      try {
-        res = await fetchWithTimeout(lookup, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" } }, 10_000);
-      } catch (e) {
-        throw appleUnreachable(lookup, e);
-      }
-      if (!res.ok) throw appleUnreachable(lookup, res.status);
-      const body = (await res.json()) as { results?: { feedUrl?: string }[] };
+      if (!appleId) throw new ConvexError({ code: "noAppleId", message: "Couldn't find an Apple ID in that link." });
+      const body = await appleJson<{ results?: { feedUrl?: string }[] }>(
+        `https://itunes.apple.com/lookup?id=${appleId}&entity=podcast&country=AU`,
+      );
       const found = body.results?.[0]?.feedUrl;
-      if (!found) throw new Error("Apple doesn't list a feed for that show");
+      if (!found) throw new ConvexError({ code: "noAppleFeed", message: "Apple doesn't list a feed for that show." });
       feedUrl = found;
     }
     const { feed, finalUrl } = await fetchFeedDocument(webAddress(normalizeFeedUrl(feedUrl)));

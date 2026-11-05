@@ -20,8 +20,8 @@ Feature: Following shows
     And "Evening Echoes" is in their Library
 
   Scenario: A link that can't be reached says why
-    When they paste "https://nowhere.invalid/feed.xml" into Discover's URL field
-    Then Discover says "Couldn't find nowhere.invalid. Check the address and try again."
+    When they paste "http://127.0.0.1:1/feed.xml" into Discover's URL field
+    Then Discover says "Couldn't reach 127.0.0.1:1. Try again later."
 
   Scenario: Unsubscribe, then Undo
     Given the listener follows "Morning Tones"

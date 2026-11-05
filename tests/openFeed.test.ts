@@ -78,7 +78,10 @@ describe("feedActions:openFeed", () => {
   test("a feed that can't be loaded is an error, not an empty show", async () => {
     const t = setup();
     mockFetch({ [FEED]: { status: 500, body: "boom" } });
-    await expect(t.action(api.feedActions.openFeed, { feedUrl: FEED })).rejects.toThrow(/500/);
+    // A ConvexError, so prod doesn't hide its message behind "Server Error" (PODDLE-E).
+    await expect(t.action(api.feedActions.openFeed, { feedUrl: FEED })).rejects.toMatchObject({
+      data: { code: "feedUnavailable", message: "That show's feed answered with an error (HTTP 500)." },
+    });
   });
 });
 
