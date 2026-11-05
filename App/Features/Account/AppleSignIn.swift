@@ -8,8 +8,9 @@ import AppKit
 import PoddleKit
 
 /// Sign in with Apple through the iPhone's own sheet (Face ID, no web page), which hands back
-/// an identity token for `auth:signInWithAppleNative` to check. Apple's App Review devices
-/// refuse the web sign-in sheet outright (PODDLE-A), and this doesn't need a browser at all.
+/// an identity token for `auth:signInWithAppleNative` to check. It's what Mike wants in all his
+/// apps (docs/decisions.md). Apple's automated check of each submission fails here with error
+/// 1000, as it does on every other way in (PODDLE-A, C and D), so that isn't a bug in this.
 @MainActor
 final class AppleSignIn: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
     struct Credential: Sendable {

@@ -5,7 +5,7 @@ import Testing
 
 /// The sign-in sheet's ending: how it's read, and that only one ending ever reaches the caller.
 /// iOS can both call the sheet's completion handler with an error and return false from start(),
-/// and a second resume of a continuation crashes the app (PODDLE-8, App Review on 1.0.6).
+/// and a second resume of a continuation crashes the app (PODDLE-8, Apple's automated check of 1.0.6).
 struct WebSignInTests {
     private let cancel = NSError(domain: ASWebAuthenticationSessionErrorDomain,
                                  code: ASWebAuthenticationSessionError.canceledLogin.rawValue)

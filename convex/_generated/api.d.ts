@@ -24,6 +24,7 @@ import type * as feeds from "../feeds.js";
 import type * as http from "../http.js";
 import type * as importActions from "../importActions.js";
 import type * as lib_allowlist from "../lib/allowlist.js";
+import type * as lib_appleIdentityToken from "../lib/appleIdentityToken.js";
 import type * as lib_auth from "../lib/auth.js";
 import type * as lib_e2e from "../lib/e2e.js";
 import type * as lib_feedFetch from "../lib/feedFetch.js";
@@ -84,6 +85,7 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   importActions: typeof importActions;
   "lib/allowlist": typeof lib_allowlist;
+  "lib/appleIdentityToken": typeof lib_appleIdentityToken;
   "lib/auth": typeof lib_auth;
   "lib/e2e": typeof lib_e2e;
   "lib/feedFetch": typeof lib_feedFetch;

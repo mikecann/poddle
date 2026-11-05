@@ -61,7 +61,8 @@ public enum AccountError: Error, Sendable, Hashable, LocalizedError {
     /// The server said no, or sent something unexpected.
     case failed(String)
     /// iOS wouldn't open the web sign-in sheet at all (with its error code, when it gave one).
-    /// Apple's App Review devices do this every time (PODDLE-A), so Google falls back to Safari.
+    /// Apple's automated check of each submission gets this every time (PODDLE-A). Sign-in
+    /// falls back to Safari when it happens.
     case sheetRefused(Int?)
 
     public var errorDescription: String? {

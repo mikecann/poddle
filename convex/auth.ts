@@ -92,9 +92,7 @@ if (!appleBuilders) throw new Error("setupApple didn't bind its provider: native
 
 /**
  * Sign in with the iPhone's own Apple sheet: the app sends the identity token Apple gave it,
- * the nonce it made for this attempt, and (first time only) the name Apple passed on. Apple's
- * App Review devices refuse the web sign-in sheet outright (PODDLE-A), and this needs no
- * browser. Same accounts, allowlist and user callbacks as the web flow, since it's the same
+ * the nonce it made for this attempt, and (first time only) the name Apple passed on. Same accounts, allowlist and user callbacks as the web flow, since it's the same
  * "apple" provider and Apple's `sub` is the same for the app and the website.
  */
 export const signInWithAppleNative = appleBuilders.authAction({

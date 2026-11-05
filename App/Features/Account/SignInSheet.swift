@@ -22,7 +22,7 @@ final class SignInSheet: NSObject, ASWebAuthenticationPresentationContextProvidi
         let opened = Date.now
         let result: Result<URL, AccountError> = await withCheckedContinuation { continuation in
             // iOS can call the completion handler with an error *and* return false from start(), and
-            // resuming a continuation twice crashes the app (PODDLE-8, App Review on 1.0.6). The
+            // resuming a continuation twice crashes the app (PODDLE-8, Apple's automated check of 1.0.6). The
             // first ending wins.
             let finish = FirstAnswer<Result<URL, AccountError>> { continuation.resume(returning: $0) }
             let session = ASWebAuthenticationSession(url: page, callback: .customScheme("poddle")) { url, error in
