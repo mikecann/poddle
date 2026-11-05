@@ -40,6 +40,11 @@ async function itunesJson(ctx: ActionCtx, url: string): Promise<ItunesItem[]> {
   return results;
 }
 
+function dateMillis(iso: string | undefined): number | undefined {
+  const ms = iso ? Date.parse(iso) : NaN;
+  return Number.isNaN(ms) ? undefined : ms;
+}
+
 async function toResults(ctx: ActionCtx & { userId: Id<"users"> }, items: ItunesItem[]): Promise<DirectoryResult[]> {
   const feedUrls = items.map((i) => i.feedUrl).filter((u): u is string => !!u);
   const matches = await ctx.runQuery(internal.directoryCache.libraryMatches, { userId: ctx.userId, feedUrls });
@@ -54,6 +59,9 @@ async function toResults(ctx: ActionCtx & { userId: Id<"users"> }, items: Itunes
       feedUrl: i.feedUrl,
       genre: i.primaryGenreName,
       episodeCount: i.trackCount,
+      // On a show result, Apple's releaseDate is its newest episode. Shows with the same name are
+      // told apart by this (Mike, 5 Nov 2026: ten "How We Got Here"s, most of them long dead).
+      latestEpisodeAt: dateMillis(i.releaseDate),
       podcastId: match?.podcastId,
       subscribed: match?.subscribed ?? false,
     };
@@ -88,7 +96,6 @@ export const searchEpisodes = userAction({
     const url = `${directoryBase()}/search?term=${encodeURIComponent(t.toLowerCase())}&media=podcast&entity=podcastEpisode&country=AU&limit=${n}`;
     return (await itunesJson(ctx, url)).flatMap((i): DirectoryEpisode[] => {
       if (!i.feedUrl || !i.trackName) return [];
-      const released = i.releaseDate ? Date.parse(i.releaseDate) : NaN;
       return [
         {
           appleId: i.trackId,
@@ -99,7 +106,7 @@ export const searchEpisodes = userAction({
           feedUrl: i.feedUrl,
           guid: i.episodeGuid,
           audioUrl: i.episodeUrl,
-          pubDate: Number.isNaN(released) ? undefined : released,
+          pubDate: dateMillis(i.releaseDate),
           duration: i.trackTimeMillis ? Math.round(i.trackTimeMillis / 1000) : undefined,
         },
       ];

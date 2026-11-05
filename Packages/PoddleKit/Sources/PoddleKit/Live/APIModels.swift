@@ -159,6 +159,7 @@ struct DirectoryResultDoc: Decodable, Sendable {
     var feedUrl: String?
     var genre: String?
     var episodeCount: Double?
+    var latestEpisodeAt: Double?
     var podcastId: String?
     var subscribed: Bool
 
@@ -167,7 +168,8 @@ struct DirectoryResultDoc: Decodable, Sendable {
         let apple = appleId.map { String(Int($0)) }
         return SearchResult(
             id: apple ?? feedUrl, title: title, author: author ?? "", genre: genre ?? "Podcast",
-            feedURL: feedUrl, appleId: apple, artworkURL: artworkUrl
+            feedURL: feedUrl, appleId: apple, artworkURL: artworkUrl,
+            episodeCount: episodeCount.map { Int($0) }, latestEpisodeAt: latestEpisodeAt
         )
     }
 }

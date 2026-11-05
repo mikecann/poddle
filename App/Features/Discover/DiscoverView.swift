@@ -20,6 +20,7 @@ struct DiscoverView: View {
     @FocusState private var focused: Bool
     @State private var forYou: ForYou?
     @State private var addingKey = false
+    @AppStorage("discover.searchOrder") private var order: SearchOrder = .relevant
 
     enum ClipboardState: Equatable {
         case none
@@ -139,10 +140,10 @@ struct DiscoverView: View {
                                  message: "Nothing for \"\(query)\". Try a show's or an episode's name, or paste a feed URL above.")
             }
             if !response.results.isEmpty {
-                sectionHeader("Apple Podcasts", count: "\(response.totalCount) results")
+                showsHeader(count: response.totalCount)
             }
             LazyVStack(spacing: 8) {
-                ForEach(response.results) { r in
+                ForEach(order.apply(response.results)) { r in
                     resultRow(r)
                         .cloudCard()
                         .padding(.horizontal, 12)
@@ -194,6 +195,27 @@ struct DiscoverView: View {
         .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
     }
 
+    /// The shows' header, with the order menu in place of a plain count.
+    private func showsHeader(count: Int) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text("Apple Podcasts").font(.rounded(22, .heavy)).foregroundStyle(Palette.ink)
+            Spacer()
+            Menu {
+                Picker("Order", selection: $order.animation(.snappy)) {
+                    ForEach(SearchOrder.allCases, id: \.self) { Text($0.label).tag($0) }
+                }
+            } label: {
+                HStack(spacing: 3) {
+                    Text("\(count) · \(order.label)")
+                    Image(systemName: "chevron.up.chevron.down").font(.system(size: 10, weight: .bold))
+                }
+                .font(.text(13.5, .semibold)).foregroundStyle(Palette.ink2)
+            }
+            .accessibilityIdentifier("discover.order")
+        }
+        .padding(.horizontal, 20).padding(.top, 20).padding(.bottom, 4)
+    }
+
     private func episodeRow(_ e: EpisodeSearchResult) -> some View {
         let details = [e.showTitle, e.pubDate.map { Format.relativeDate($0) }, e.duration.map { Format.duration($0) }].compactMap { $0 }
         return HStack(spacing: 12) {
@@ -237,8 +259,13 @@ struct DiscoverView: View {
             ArtworkView(title: r.title, artworkURL: r.artworkURL, size: 56, cornerRadius: 12)
             VStack(alignment: .leading, spacing: 1) {
                 Text(r.title).font(.text(16, .bold)).foregroundStyle(Palette.ink).lineLimit(1)
-                Text("\(r.author) \(Text("· \(r.genre)").foregroundStyle(Palette.ink3))")
-                    .font(.text(13)).foregroundStyle(Palette.ink2).lineLimit(1)
+                Text(r.author).font(.text(13)).foregroundStyle(Palette.ink2).lineLimit(1)
+                // How fresh the show is, which tells apart shows with the same name.
+                let freshness = [r.latestEpisodeAt.map { Format.episodeAge($0) },
+                                 r.episodeCount.map { $0 == 1 ? "1 episode" : "\($0) episodes" }].compactMap { $0 }
+                if !freshness.isEmpty {
+                    Text(freshness.joined(separator: " · ")).font(.text(12.5)).foregroundStyle(Palette.ink3).lineLimit(1)
+                }
             }
             Spacer(minLength: 4)
             if opening == r.id { ProgressView().tint(Palette.tomato) }

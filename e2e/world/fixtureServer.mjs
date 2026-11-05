@@ -181,7 +181,14 @@ export function startFixtureServer({ port, host = "127.0.0.1" }) {
       feedUrl: feedUrl(slug),
       primaryGenreName: show.genre,
       trackCount: episodesOf(slug).length,
+      // Apple puts the newest episode's date on a show result.
+      ...(newest(slug) && { releaseDate: new Date(newest(slug)).toISOString() }),
     };
+  }
+
+  function newest(slug) {
+    const dates = episodesOf(slug).map((e) => e.pubDate ?? startedAt - e.ago);
+    return dates.length ? Math.max(...dates) : undefined;
   }
 
   function search(url) {

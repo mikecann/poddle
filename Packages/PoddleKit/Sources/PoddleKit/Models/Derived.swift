@@ -99,9 +99,33 @@ public struct SearchResult: Codable, Sendable, Hashable, Identifiable {
     public var feedURL: String
     public var appleId: String?
     public var artworkURL: String?
-    public init(id: String, title: String, author: String, genre: String, feedURL: String, appleId: String? = nil, artworkURL: String? = nil) {
+    public var episodeCount: Int?
+    /// When the show's newest episode came out, so shows with the same name can be told apart.
+    public var latestEpisodeAt: Millis?
+    public init(
+        id: String, title: String, author: String, genre: String, feedURL: String, appleId: String? = nil, artworkURL: String? = nil,
+        episodeCount: Int? = nil, latestEpisodeAt: Millis? = nil
+    ) {
         self.id = id; self.title = title; self.author = author; self.genre = genre; self.feedURL = feedURL
         self.appleId = appleId; self.artworkURL = artworkURL
+        self.episodeCount = episodeCount; self.latestEpisodeAt = latestEpisodeAt
+    }
+}
+
+/// How Discover lists shows: Apple's order, or the newest episode first (Mike, 5 Nov 2026, for
+/// searches like "How We Got Here" that turn up a dozen shows with the same name).
+public enum SearchOrder: String, CaseIterable, Codable, Sendable {
+    case relevant, latest
+
+    public var label: String { self == .relevant ? "Relevant" : "Latest" }
+
+    public func apply(_ results: [SearchResult]) -> [SearchResult] {
+        guard self == .latest else { return results }
+        // Stable, so shows on the same day keep Apple's order. Undated ones go last.
+        return results.enumerated().sorted { a, b in
+            let x = a.element.latestEpisodeAt ?? -.infinity, y = b.element.latestEpisodeAt ?? -.infinity
+            return x != y ? x > y : a.offset < b.offset
+        }.map(\.element)
     }
 }
 

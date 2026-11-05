@@ -99,3 +99,21 @@ import Testing
         #expect(response.episodes.isEmpty)
     }
 }
+
+// Shows with the same name, told apart by their newest episode (Mike, 5 Nov 2026).
+@Suite struct SearchOrderTests {
+    @Test func latestPutsTheNewestShowFirstAndUndatedLast() throws {
+        let json = #"""
+        [{"appleId":1,"title":"How We Got Here","feedUrl":"https://a/","latestEpisodeAt":1000,"episodeCount":52,"subscribed":false},
+         {"appleId":2,"title":"How We Got Here","feedUrl":"https://b/","subscribed":false},
+         {"appleId":3,"title":"How We Got Here with NLW","feedUrl":"https://c/","latestEpisodeAt":9000,"episodeCount":3,"subscribed":false},
+         {"appleId":4,"title":"How We Got Here","feedUrl":"https://d/","latestEpisodeAt":1000,"subscribed":false}]
+        """#
+        let results = try JSONDecoder().decode([DirectoryResultDoc].self, from: Data(json.utf8)).compactMap(\.model)
+        #expect(results[2].latestEpisodeAt == 9000)
+        #expect(results[2].episodeCount == 3)
+        #expect(SearchOrder.relevant.apply(results).map(\.id) == ["1", "2", "3", "4"])
+        // Ties keep Apple's order.
+        #expect(SearchOrder.latest.apply(results).map(\.id) == ["3", "1", "4", "2"])
+    }
+}

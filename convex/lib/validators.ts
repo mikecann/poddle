@@ -49,6 +49,8 @@ export const vDirectoryResult = v.object({
   feedUrl: v.optional(v.string()),
   genre: v.optional(v.string()),
   episodeCount: v.optional(v.number()),
+  /** When the show's newest episode came out (ms), from Apple. */
+  latestEpisodeAt: v.optional(v.number()),
   /** Set when this feed is already in the library. */
   podcastId: v.optional(v.id("podcasts")),
   subscribed: v.boolean(),
