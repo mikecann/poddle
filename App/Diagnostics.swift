@@ -1,4 +1,5 @@
 import Foundation
+import PoddleKit
 import Sentry
 
 /// Crash and error reporting (Sentry project `poddle`), for App Store and TestFlight installs only.
@@ -48,8 +49,13 @@ enum Diagnostics {
     /// Something that went wrong without crashing but that we'd want to know about, like the
     /// sign-in sheet refusing to open. Does nothing when Sentry isn't running (Debug, the
     /// simulator, builds not from the App Store).
+    ///
+    /// Left out on development kernels: Apple's automated check of every submission runs on those,
+    /// and every way of signing in fails there (docs/decisions.md), so it would only bury real
+    /// reports. Crashes from those devices still come through, which is how PODDLE-8 was caught.
     static func note(_ message: String) {
         #if !DEBUG && !targetEnvironment(simulator)
+        guard !DeviceKernel.isDevelopment() else { return }
         SentrySDK.capture(message: message)
         #endif
     }
