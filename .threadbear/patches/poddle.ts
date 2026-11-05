@@ -153,7 +153,8 @@ export default {
   ],
   hooks: [
     // After a turn that changed a feature file: under a second, and it catches a scenario whose
-    // steps have gone missing long before the end-to-end run does.
+    // steps have gone missing long before the end-to-end run does. It runs through a script
+    // because Threadbear only runs a patch's hooks by themselves when they're one script it hashed.
     { title: "BDD pairing", on: "turn.end", run: "./scripts/bdd-check.sh", edited: "features/**", tell: "failures" },
   ],
 };
