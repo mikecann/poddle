@@ -81,8 +81,10 @@ export const openFeed = userAction({
     });
     if (result.status === "error" && opened.episodeCount === 0) {
       // A ConvexError, as prod hides a plain Error's text. The details are in feedStates.lastError.
-      const message = result.httpStatus
-        ? `That show's feed answered with an error (HTTP ${result.httpStatus}).`
+      // A 200 that wouldn't parse also carries its status, and isn't an HTTP error.
+      const status = result.httpStatus;
+      const message = status && (status < 200 || status >= 300)
+        ? `That show's feed answered with an error (HTTP ${status}).`
         : "Couldn't load that show. Try again later.";
       throw new ConvexError({ code: "feedUnavailable", message });
     }

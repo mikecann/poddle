@@ -83,6 +83,14 @@ describe("feedActions:openFeed", () => {
       data: { code: "feedUnavailable", message: "That show's feed answered with an error (HTTP 500)." },
     });
   });
+
+  test("a feed that answers but isn't a feed isn't called an HTTP error", async () => {
+    const t = setup();
+    mockFetch({ [FEED]: "<html><body>Service unavailable</body></html>" });
+    await expect(t.action(api.feedActions.openFeed, { feedUrl: FEED })).rejects.toMatchObject({
+      data: { code: "feedUnavailable", message: "Couldn't load that show. Try again later." },
+    });
+  });
 });
 
 describe("directory:searchEpisodes", () => {

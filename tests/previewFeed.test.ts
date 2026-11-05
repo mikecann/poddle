@@ -1,6 +1,7 @@
 import { ConvexError } from "convex/values";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { api } from "../convex/_generated/api";
+import { requestFor } from "../convex/lib/feedFetch";
 import { fixture, mockFetch, setup } from "./helpers";
 
 // Adding a show by its link (Discover's URL field). When the address can't be reached,
@@ -190,6 +191,15 @@ describe("feedActions:previewFeed", () => {
 
     const data = await refusal(t.action(api.feedActions.previewFeed, { url: "617416468" }));
     expect(data).toEqual({ code: "noAppleFeed", message: "Apple doesn't list a feed for that show." });
+  });
+});
+
+describe("requestFor", () => {
+  test("moves credentials into a Basic header, ASCII exactly as before and UTF-8 as bytes", () => {
+    const plain = requestFor("https://user:pass@feeds.example.com/p.xml");
+    expect(plain.url).toBe("https://feeds.example.com/p.xml");
+    expect(plain.headers.Authorization).toBe("Basic dXNlcjpwYXNz");
+    expect(requestFor("https://me:%E6%BC%A2@feeds.example.com/p.xml").headers.Authorization).toBe("Basic bWU65ryi");
   });
 });
 
