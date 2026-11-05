@@ -54,7 +54,9 @@ const config = {
   developerDir: process.env.E2E_DEVELOPER_DIR ?? `${home}/Applications/Xcode-27.1.app/Contents/Developer`,
 };
 ssh(`mkdir -p ${quote(upload)}`);
-const rsync = (from, to) => command("rsync", ["-az", "-e", "ssh -o BatchMode=yes -o ConnectTimeout=15", from, `${host}:${quote(to)}`], { stdio: "inherit" });
+// Background priority and no -z: syncing the Swift package cache to tinker-desk used to hold a
+// whole core on the M5 for 5+ minutes compressing for a LAN that doesn't need it (5 Nov 2026).
+const rsync = (from, to) => command("taskpolicy", ["-b", "rsync", "-a", "-e", "ssh -o BatchMode=yes -o ConnectTimeout=15", from, `${host}:${quote(to)}`], { stdio: "inherit" });
 for (const file of ["e2e-remote-worker.mjs", "e2e-remote-lib.mjs"]) rsync(path.join(root, "scripts", file), `${upload}/${file}`);
 if (config.source) rsync(`${source}/`, `${config.source}/`);
 const encoded = Buffer.from(JSON.stringify(config)).toString("base64");
@@ -64,7 +66,7 @@ rmSync(results, { recursive: true, force: true });
 const run = spawnSync("ssh", [...sshOptions, host, invocation], { stdio: "inherit" });
 mkdirSync(results, { recursive: true });
 // Collect even if a test/build failed. Do not copy world.json or the disposable backend.
-const copy = spawnSync("rsync", ["-az", "-e", "ssh -o BatchMode=yes", `${host}:${quote(`${remoteRoot}/results/${sha}/${id}/`)}`, `${results}/`], { stdio: "inherit" });
+const copy = spawnSync("taskpolicy", ["-b", "rsync", "-a", "-e", "ssh -o BatchMode=yes", `${host}:${quote(`${remoteRoot}/results/${sha}/${id}/`)}`, `${results}/`], { stdio: "inherit" });
 ssh(`rm -rf ${quote(upload)}`);
 if (run.status === 75) console.error("[e2e remote] tinker-desk is busy: another e2e/render-box job holds ~/.blender-queue.lock. Try again later.");
 try {
