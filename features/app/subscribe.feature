@@ -11,6 +11,7 @@ Feature: Following shows
     When they search Discover for "tones"
     And they follow "Morning Tones" from the results
     Then "Morning Tones" is in their Library
+    And the keyboard has gone away
     And the page for "Morning Tones" lists "Commute in D", "Breakfast in C" and "Sunrise in A"
 
   Scenario: Add a show by pasting its feed URL

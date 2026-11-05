@@ -22,6 +22,12 @@ final class SubscribeSteps: StepModule {
             try w.eventually("the button to say Following") { w.element("discover.follow.\(id)").label.contains("Following") }
         }
 
+        // Every tab stays alive underneath, so the search field used to keep its keyboard up over
+        // the Library, with the mini player pushed up to mid-screen (5 Nov 2026).
+        s.then("the keyboard has gone away") { w, _ in
+            try w.eventually("the keyboard to go", timeout: 5) { !w.app.keyboards.firstMatch.exists }
+        }
+
         s.when("they paste the feed URL for {string} into Discover's URL field") { w, a in
             let shows = try w.call("shows")["shows"] as? [[String: Any]] ?? []
             guard let url = shows.first(where: { $0["title"] as? String == a.string(0) })?["feedUrl"] as? String else {

@@ -70,6 +70,12 @@ private struct PhoneRoot: View {
             }
         }
         .environment(\.bottomBarHeight, barHeight)
+        // Every tab stays alive underneath (opacity, above), so Discover's search field keeps focus
+        // when you switch away and its keyboard sat over the next tab with the mini player pushed
+        // up to mid-screen. Leaving a tab puts the keyboard away.
+        .onChange(of: app.tab) {
+            UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
+        }
         // An overlay that each screen makes room for (`bottomBarRoom`), not a `safeAreaInset`.
         .overlay(alignment: .bottom) {
             VStack(spacing: 8) {
