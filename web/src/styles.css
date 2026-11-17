@@ -353,5 +353,11 @@ html.reveal-ready .tw:not(.on) { opacity: .3; }
 
 /* The admin Machines page (pages/MachinesPage.tsx): the viewer sizes to its container. */
 .machines-page {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
+}
+/* The viewer's own background, down to the bottom of the window rather than the site's cream. */
+.machines-page > .mv {
+  flex: 1;
 }
