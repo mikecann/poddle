@@ -485,8 +485,8 @@ export const feedFetched = internalMutation({
   args: {
     batchId: v.id("importBatches"),
     rowId: v.id("importQueue"),
-    /** The claim this fetch was made under. Absent only from runs scheduled before claims had one. */
-    claimedAt: v.optional(v.number()),
+    /** The claim this fetch was made under (claimFetches). A run from before claims had one can't report. */
+    claimedAt: v.number(),
     ok: v.boolean(),
     status: v.optional(v.number()),
     error: v.optional(v.string()),
@@ -504,7 +504,7 @@ export const feedFetched = internalMutation({
  * against them, and only counts the feed as failed if that fetch never ends.
  */
 export const feedBusy = internalMutation({
-  args: { batchId: v.id("importBatches"), rowId: v.id("importQueue"), claimedAt: v.optional(v.number()) },
+  args: { batchId: v.id("importBatches"), rowId: v.id("importQueue"), claimedAt: v.number() },
   returns: v.null(),
   handler: async (ctx, { batchId, rowId, claimedAt }) => {
     const row = await ctx.db.get(rowId);
@@ -526,8 +526,7 @@ export const feedBusy = internalMutation({
  * reports after a newer run claimed the show again (or after it was fetched), and
  * its answer mustn't overwrite the newer run's.
  */
-function holdsClaim(row: Doc<"importQueue">, claimedAt: number | undefined) {
-  // A run from before claims had an identity brings none: it's only trusted on a row no run has claimed since.
+function holdsClaim(row: Doc<"importQueue">, claimedAt: number) {
   return row.phase === "fetch" && row.claimedAt === claimedAt;
 }
 
@@ -535,7 +534,7 @@ async function markFetched(
   ctx: MutationCtx,
   batchId: Id<"importBatches">,
   rowId: Id<"importQueue">,
-  claimedAt: number | undefined,
+  claimedAt: number,
   { ok, status, error }: { ok: boolean; status?: number; error?: string },
 ) {
   const row = await ctx.db.get(rowId);
@@ -895,7 +894,10 @@ async function requeueOrphans(ctx: MutationCtx, batchId: Id<"importBatches">) {
     console.warn(`Import ${batchId}: show ${item.podcastId} had staged episodes but no queue row; queueing it again`);
     // The row's dates (for episodes published since, which go to Up Next) as near
     // as they can be rebuilt: the newest staged episode left, and when the
-    // subscription began (stageFeeds set that from Overcast's added date).
+    // subscription began. stageFeeds set that from Overcast's added date unless he'd
+    // followed the show in Poddle since, and then the later date can leave out
+    // untouched episodes from between the two. Only imports the old code broke
+    // have orphans, and there were none on prod when this shipped (17 Nov 2026).
     const podcastId = item.podcastId;
     const staged = await ctx.db
       .query("importItems")
