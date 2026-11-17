@@ -38,6 +38,36 @@ describe("moving the import onto state machines", () => {
   });
 });
 
+describe("narrowing after the switch", () => {
+  test("the old lifecycle fields are unset, and nothing else", async () => {
+    const t = setup();
+    const userId = await t.userId();
+    const [batchId, rowId, stateId] = await t.run(async (ctx) => {
+      const podcastId = await ctx.db.insert("podcasts", { feedUrl: "https://x.example.com/rss", title: "X", isPrivate: false, episodeCount: 0, createdAt: NOW, updatedAt: NOW });
+      const batchId = await ctx.db.insert("importBatches", {
+        userId, source: "overcast", state: { kind: "done", finishedAt: NOW }, stateTimers: [], status: "done", finishedAt: NOW, worker: 2,
+        assumedSpeed: 2, startedAt: NOW, counts, playlists: [], updatedAt: NOW,
+      });
+      const rowId = await ctx.db.insert("importQueue", {
+        batchId, podcastId, state: { kind: "waiting", notBefore: 0, busyCount: 0 }, phase: "fetch", claimedAt: 5, newestExportedAt: 7,
+      });
+      const stateId = await ctx.db.insert("feedStates", { podcastId, active: true, nextCheckAt: NOW, consecutiveErrors: 0, fetchingUntil: NOW });
+      return [batchId, rowId, stateId] as const;
+    });
+    expect(await t.query(internal.migrations.legacyLifecycleFieldsLeft, {})).toEqual({ importBatches: 1, importQueue: 1, feedStates: 1 });
+    await t.mutation(internal.migrations.unsetLegacyLifecycleFields, {});
+    await drain(t);
+    expect(await t.query(internal.migrations.legacyLifecycleFieldsLeft, {})).toEqual({ importBatches: 0, importQueue: 0, feedStates: 0 });
+    const [batch, row, feedState] = await t.run(async (ctx) => [await ctx.db.get(batchId), await ctx.db.get(rowId), await ctx.db.get(stateId)] as const);
+    expect(batch).toMatchObject({ state: { kind: "done" }, assumedSpeed: 2 });
+    expect(batch).not.toHaveProperty("status");
+    expect(row).toMatchObject({ newestExportedAt: 7 });
+    expect(row).not.toHaveProperty("claimedAt");
+    expect(feedState).toMatchObject({ active: true });
+    expect(feedState).not.toHaveProperty("fetchingUntil");
+  });
+});
+
 // docs/state-machines.md is drawn from the rules the backend runs (convex/machines.ts),
 // so this fails when a rule changes and the doc doesn't. `npm run machines:diagrams` rewrites it.
 describe("the machines' rules", () => {
