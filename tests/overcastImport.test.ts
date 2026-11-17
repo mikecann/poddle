@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api } from "../convex/_generated/api";
+import { api, internal } from "../convex/_generated/api";
+import type { Id } from "../convex/_generated/dataModel";
 import { countsAsListened, parseOvercastOpml } from "../convex/lib/opml";
 import { drain, fixture, mockFetch, podcastViews, setup, type T } from "./helpers";
 
@@ -200,3 +201,156 @@ describe("Overcast import", () => {
     expect(batch?.counts.subscribedPodcasts).toBe(1);
   });
 });
+
+// The import runs as a chain of scheduled actions (importActions.processBatch).
+// These cover what happens when that chain is interrupted or races something.
+describe("Overcast import, when things go wrong", () => {
+  const MIN = 60_000;
+  const TTW = "https://feeds.example.com/techtalk.xml";
+
+  /** Starts an import and runs only the parse: the batch is fetching, its first worker run is scheduled but hasn't run. */
+  async function parsedOnly(t: T) {
+    const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: fixture("overcast-all-data.opml"), assumedSpeed: 1.5 });
+    vi.runOnlyPendingTimers();
+    await t.finishInProgressScheduledFunctions();
+    return batchId;
+  }
+
+  /** The worker chain dies: whatever it scheduled next finds it's no longer the batch's worker, and stops. */
+  async function killWorker(t: T, batchId: Id<"importBatches">) {
+    await t.run(async (ctx) => {
+      const batch = (await ctx.db.get(batchId))!;
+      await ctx.db.patch(batchId, { worker: (batch.worker ?? 0) + 100 });
+    });
+  }
+
+  const batchOf = async (t: T, batchId: Id<"importBatches">) => (await t.query(api.overcastImport.getImport, { batchId }))!;
+  const scratchRows = (t: T) =>
+    t.run(async (ctx) => [
+      ...(await ctx.db.query("importItems").collect()),
+      ...(await ctx.db.query("importQueue").collect()),
+      ...(await ctx.db.query("importUpNext").collect()),
+    ]);
+
+  /** A run of the watchdog cron, after `minutes` without progress. */
+  async function watchdogAfter(t: T, minutes: number) {
+    vi.setSystemTime(Date.now() + minutes * MIN);
+    await t.mutation(internal.overcastImport.resumeStalled, {});
+    await drain(t);
+  }
+
+  // A fetch of the same feed already running (the poller, someone else adding the
+  // show) made the import's claim answer "busy", which it took as fetched. It then
+  // matched the history against whatever episodes happened to be stored: here none,
+  // so every played episode became a ghost.
+  test("a feed another fetch is holding is fetched once it's free, not matched against nothing", async () => {
+    const t = setup();
+    const podcastId = await t.mutation(internal.podcasts.ensurePodcast, { feedUrl: TTW, title: "Tech Talk Weekly" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("feedStates", { podcastId, active: false, nextCheckAt: NOW, consecutiveErrors: 0, fetchingUntil: NOW + 2 * MIN });
+    });
+    const batch = await runImport(t);
+    expect(batch.status).toBe("done");
+    expect(batch.counts).toMatchObject({ podcastsProcessed: 3, episodesMatched: 6, ghostEpisodes: 2, upNextEpisodes: 3 });
+    const db = await snapshot(t);
+    expect(db.episodes.find((e) => e.title === "TTW 1: Played")?.isGhost).toBe(false);
+  });
+
+  // Nothing watched the chain: if one of its actions died, the batch said
+  // "fetching" forever and the app's import screen never finished.
+  test("an import whose worker died picks up where it left off", async () => {
+    const t = setup();
+    const batchId = await parsedOnly(t);
+    await killWorker(t, batchId);
+    await drain(t);
+    expect((await batchOf(t, batchId)).status).toBe("fetching");
+
+    await watchdogAfter(t, 2);
+    expect((await batchOf(t, batchId)).status).toBe("fetching"); // not stalled long enough yet
+
+    await watchdogAfter(t, 6);
+    const batch = await batchOf(t, batchId);
+    expect(batch.status).toBe("done");
+    expect(batch.counts).toMatchObject({ podcastsProcessed: 3, episodesMatched: 6, sessions: 6, upNextEpisodes: 3 });
+    expect(await scratchRows(t)).toEqual([]);
+  });
+
+  // claimMatches deleted the shows' queue rows before matching them, so a worker
+  // that died mid-match lost those shows: a restarted run found nothing left to
+  // match and finished without their history.
+  test("a worker that dies mid-match loses no shows and doubles no history", async () => {
+    const t = setup();
+    const batchId = await parsedOnly(t);
+    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    // One worker run fetches all three feeds, then the chain dies just after
+    // claiming shows to match, and once more part way through matching one.
+    await t.action(internal.importActions.processBatch, { batchId, worker });
+    await killWorker(t, batchId);
+    await t.mutation(internal.overcastImport.claimMatches, { batchId, count: 6 });
+    const [row] = await t.run(async (ctx) => await ctx.db.query("importQueue").collect());
+    await t.mutation(internal.overcastImport.matchPodcast, { batchId, rowId: row!._id });
+    await drain(t);
+
+    await watchdogAfter(t, 6);
+    const batch = await batchOf(t, batchId);
+    expect(batch.status).toBe("done");
+    expect(batch.counts).toMatchObject({ podcastsProcessed: 3, episodesMatched: 6, ghostEpisodes: 2, sessions: 6, playedEpisodes: 5 });
+    const db = await snapshot(t);
+    expect(db.sessions).toHaveLength(6);
+    expect(await t.query(api.queue.upNext, {})).toHaveLength(3);
+  });
+
+  test("an import that keeps dying gives up, says so and clears its scratch rows", async () => {
+    const t = setup();
+    const batchId = await parsedOnly(t);
+    await killWorker(t, batchId);
+    await drain(t);
+    // Each restart dies before it gets anywhere.
+    let restarts = 0;
+    while ((await batchOf(t, batchId)).status === "fetching" && restarts < 10) {
+      vi.setSystemTime(Date.now() + 6 * MIN);
+      await t.mutation(internal.overcastImport.resumeStalled, {});
+      await killWorker(t, batchId);
+      await drain(t);
+      restarts++;
+    }
+    expect(restarts).toBe(4); // three restarts, then it gives up
+    const batch = await batchOf(t, batchId);
+    expect(batch.status).toBe("failed");
+    expect(batch.error).toMatch(/stopped/);
+    expect(batch.finishedAt).toBeDefined();
+    await drain(t);
+    expect(await scratchRows(t)).toEqual([]);
+
+    // A late run of a worker from before it gave up changes nothing.
+    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    await t.action(internal.importActions.processBatch, { batchId, worker });
+    await t.mutation(internal.overcastImport.finishBatch, { batchId });
+    expect(await batchOf(t, batchId)).toMatchObject({ status: "failed" });
+    expect(await t.query(api.queue.upNext, {})).toEqual([]);
+  });
+
+  test("reading a file that never finishes fails the import instead of leaving it reading", async () => {
+    const t = setup();
+    const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: fixture("overcast-all-data.opml"), assumedSpeed: 1.5 });
+    // The parse action is lost before it runs.
+    await t.run(async (ctx) => {
+      for (const job of await ctx.db.system.query("_scheduled_functions").collect()) await ctx.scheduler.cancel(job._id);
+    });
+    await watchdogAfter(t, 10);
+    expect((await batchOf(t, batchId)).status).toBe("parsing");
+    await watchdogAfter(t, 6);
+    expect(await batchOf(t, batchId)).toMatchObject({ status: "failed", error: expect.stringMatching(/stopped/) });
+  });
+
+  test("finishing twice seeds Up Next once", async () => {
+    const t = setup();
+    const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: fixture("overcast-all-data.opml"), assumedSpeed: 1.5 });
+    await drain(t);
+    await t.mutation(internal.overcastImport.finishBatch, { batchId });
+    const batch = await batchOf(t, batchId);
+    expect(batch.counts.upNextEpisodes).toBe(3);
+    expect(await t.query(api.queue.upNext, {})).toHaveLength(3);
+  });
+});
+

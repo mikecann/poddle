@@ -110,7 +110,7 @@ See [Settings](#settings). Both also carry `fieldTimes: { [field]: ms }` (per-fi
 `_id`, `deviceId`, `name`, `platform`, `apnsToken?`, `apnsEnvironment?` (`sandbox`/`production`), `lastSeenAt`, `updatedAt`.
 
 ### Import batch (`importBatches`)
-`_id`, `source: "overcast"`, `status` (`parsing` → `fetching` → `done`, or `failed`), `assumedSpeed`, `startedAt`, `finishedAt?`, `error?`, `warning?`, `playlists: [{ title, smart: Bool, sorting?, podcastIds: [Id], priorityPodcastIds?: [Id], episodeCount? }]` (every Overcast playlist; `podcastIds` is what a smart playlist is limited to, `episodeCount` how many episodes it lists by hand), `failedFeeds?: [{ podcastId, title, feedUrl, status?: Int, error }]` (feeds that couldn't be fetched; `status` is the HTTP status when there was one), `medianDuration?` (seconds, used for unknown durations), `upNextPlan?` (internal: how Up Next gets seeded), `updatedAt`, and `counts`:
+`_id`, `source: "overcast"`, `status` (`parsing` → `fetching` → `done`, or `failed`), `assumedSpeed`, `startedAt`, `finishedAt?`, `error?`, `warning?`, `playlists: [{ title, smart: Bool, sorting?, podcastIds: [Id], priorityPodcastIds?: [Id], episodeCount? }]` (every Overcast playlist; `podcastIds` is what a smart playlist is limited to, `episodeCount` how many episodes it lists by hand), `failedFeeds?: [{ podcastId, title, feedUrl, status?: Int, error }]` (feeds that couldn't be fetched; `status` is the HTTP status when there was one), `medianDuration?` (seconds, used for unknown durations), `upNextPlan?` (internal: how Up Next gets seeded), `worker?` and `restarts?` (internal: which run of the import's worker owns it, and how many times it's been restarted since it last got anywhere), `updatedAt` (also when it last made progress), and `counts`:
 
 | Count | Meaning |
 |---|---|
@@ -334,6 +334,8 @@ What it does: parses the extended export; creates every show (only `subscribed="
 Up Next (decisions.md): Overcast has no Inbox, so unplayed, undeleted episodes of subscribed shows go to Up Next, plus episodes a subscribed show has published since the newest one in the export (the export only lists episodes he's touched). Order follows Overcast's main playlist ("All Episodes"): manual playlists' `includeEpisodeIds` and its `sortedEpisodeIds` first, then its `priorityPodcastIds` shows, then the rest, by its `sorting` (newest first unless `chronological`). Everything else in the export is archived, so the Inbox is empty afterwards. `priorityPodcastIds` shows get the `newEpisodes = upNextTop` override.
 
 Re-running is safe: shows match by Overcast ID or feed URL, sessions and events have deterministic IDs, and state only changes where Overcast's date is newer than what Poddle has. A show an earlier import wrongly subscribed is unsubscribed again unless it's been changed in Poddle since. Up Next never gets duplicates, and episodes removed from Up Next, played or archived in Poddle since aren't re-added. If the file is the plain subscriptions export, the batch finishes with `warning` set and only subscriptions imported.
+
+If the import stops making progress for 5 minutes (a step of its worker died), a cron starts it again from where it stopped; after 3 restarts in a row without progress it fails with an `error` saying so. A file whose reading stops part way fails after 15 minutes. A feed that's already being fetched by something else (the poller, someone adding the show) is retried until that fetch ends, rather than matched against half-stored episodes.
 
 ### Devices and push (`devices:*`, `apns:*`)
 

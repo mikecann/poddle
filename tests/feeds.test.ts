@@ -322,3 +322,28 @@ async function seedQueue(t: T, podcastId: Id<"podcasts">, titles: string[]) {
   for (const episodeId of ids) await t.mutation(api.queue.add, { episodeId, position: "bottom", at: Date.now() });
   return ids;
 }
+
+describe("the fetch lease", () => {
+  // A fetch that ran past its 5-minute lease used to clear the lease of the fetch
+  // that took over when it finally reported, letting a third start alongside it,
+  // and wrote its older answer over the newer one's bookkeeping.
+  test("a fetch that outlived its lease can't release or overwrite the one that took over", async () => {
+    const t = setup();
+    const podcastId = await t.mutation(internal.podcasts.ensurePodcast, { feedUrl: FEED, title: "Odd" });
+    const slow = (await t.mutation(internal.feeds.claimFetch, { podcastId }))!;
+    expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).toBeNull();
+
+    vi.setSystemTime(NOW + 6 * 60_000);
+    const fresh = (await t.mutation(internal.feeds.claimFetch, { podcastId }))!;
+    expect(fresh.lease).not.toBe(slow.lease);
+
+    await t.mutation(internal.feeds.recordFetch, { podcastId, lease: slow.lease, status: 500, error: "HTTP 500", changed: false });
+    const state = await t.run(async (ctx) => await ctx.db.query("feedStates").first());
+    expect(state).toMatchObject({ fetchingUntil: fresh.lease, consecutiveErrors: 0 });
+    expect(state?.lastError).toBeUndefined();
+    expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).toBeNull();
+
+    await t.mutation(internal.feeds.recordFetch, { podcastId, lease: fresh.lease, status: 200, changed: false });
+    expect((await t.run(async (ctx) => await ctx.db.query("feedStates").first()))?.fetchingUntil).toBeUndefined();
+  });
+});

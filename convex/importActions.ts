@@ -85,19 +85,25 @@ function chunkFeeds(feeds: OvercastFeed[]): OvercastFeed[][] {
 }
 
 /**
- * Fetch a handful of feeds, then schedule the next handful. Once every feed is
- * in, match a handful of shows per run instead, then finish.
+ * One run of the worker chain: fetch a handful of feeds, then schedule the
+ * next run. Once every feed is in, match a handful of shows per run instead,
+ * then finish. `worker` says which run of the chain this is: when the watchdog
+ * (overcastImport.resumeStalled) has started a newer one, this one stops.
  */
 export const processBatch = internalAction({
-  args: { batchId: v.id("importBatches") },
+  args: { batchId: v.id("importBatches"), worker: v.optional(v.number()) },
   returns: v.null(),
-  handler: async (ctx, { batchId }) => {
+  handler: async (ctx, { batchId, worker }) => {
     const batch = await ctx.runQuery(internal.overcastImport.getBatch, { batchId });
     if (!batch || batch.status !== "fetching") return null;
-    const fetches = await ctx.runMutation(internal.overcastImport.claimFetches, { batchId, count: FETCH_BATCH });
-    if (fetches.length) {
+    // A run scheduled before runs were numbered is the batch's current one.
+    const me = worker ?? batch.worker ?? 0;
+    const next = (delayMs = 0) => ctx.scheduler.runAfter(delayMs, internal.importActions.processBatch, { batchId, worker: me });
+    const claim = await ctx.runMutation(internal.overcastImport.claimFetches, { batchId, count: FETCH_BATCH, worker: me });
+    if (claim.stale) return null;
+    if (claim.rows.length) {
       const results = await Promise.all(
-        fetches.map(({ podcastId }) =>
+        claim.rows.map(({ podcastId }) =>
           refreshPodcast(ctx, podcastId, { mode: "import", force: true }).catch((e: Error) => ({
             status: "error" as const,
             newEpisodes: 0,
@@ -106,16 +112,23 @@ export const processBatch = internalAction({
           })),
         ),
       );
-      for (const [i, { rowId }] of fetches.entries()) {
+      for (const [i, { rowId }] of claim.rows.entries()) {
         const r = results[i]!;
-        await ctx.runMutation(internal.overcastImport.feedFetched, {
-          batchId,
-          rowId,
-          ok: r.status !== "error",
-          status: r.httpStatus,
-          error: r.error,
-        });
+        // Busy: another fetch of this feed is running, so its episodes may be half
+        // stored. Matching now would turn his history into ghosts; wait for it.
+        if (r.status === "busy") await ctx.runMutation(internal.overcastImport.feedBusy, { batchId, rowId });
+        else
+          await ctx.runMutation(internal.overcastImport.feedFetched, {
+            batchId,
+            rowId,
+            ok: r.status !== "error",
+            status: r.httpStatus,
+            error: r.error,
+          });
       }
+    } else if (claim.waitMs !== undefined) {
+      await next(claim.waitMs);
+      return null;
     } else {
       const rows = await ctx.runMutation(internal.overcastImport.claimMatches, { batchId, count: FETCH_BATCH });
       if (rows.length === 0) {
@@ -124,10 +137,10 @@ export const processBatch = internalAction({
       }
       for (const row of rows) {
         let done = false;
-        while (!done) done = await ctx.runMutation(internal.overcastImport.matchPodcast, { batchId, row });
+        while (!done) done = await ctx.runMutation(internal.overcastImport.matchPodcast, { batchId, rowId: row.rowId });
       }
     }
-    await ctx.scheduler.runAfter(0, internal.importActions.processBatch, { batchId });
+    await next();
     return null;
   },
 });

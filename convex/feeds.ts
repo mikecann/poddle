@@ -65,6 +65,8 @@ export const claimFetch = internalMutation({
       bodyHash: v.optional(v.string()),
       isFirstFetch: v.boolean(),
       latestEpisodeAt: v.optional(v.number()),
+      /** This claim's lease (its expiry). recordFetch takes it back, so only the claim's own fetch can release it. */
+      lease: v.number(),
     }),
   ),
   handler: async (ctx, { podcastId }) => {
@@ -74,8 +76,10 @@ export const claimFetch = internalMutation({
     const stateId = await ensureFeedState(ctx, podcastId, await hasSubscribers(ctx, podcastId), false);
     const state = (await ctx.db.get(stateId))!;
     if (state.fetchingUntil !== undefined && state.fetchingUntil > now) return null;
-    await ctx.db.patch(stateId, { fetchingUntil: now + FETCH_LEASE_MS });
+    const lease = now + FETCH_LEASE_MS;
+    await ctx.db.patch(stateId, { fetchingUntil: lease });
     return {
+      lease,
       feedUrl: podcast.feedUrl,
       etag: state.etag,
       lastModified: state.lastModified,
@@ -89,6 +93,8 @@ export const claimFetch = internalMutation({
 export const recordFetch = internalMutation({
   args: {
     podcastId: v.id("podcasts"),
+    /** The claim's lease. Absent only from fetches scheduled before leases were checked. */
+    lease: v.optional(v.number()),
     status: v.number(),
     error: v.optional(v.string()),
     etag: v.optional(v.string()),
@@ -103,6 +109,14 @@ export const recordFetch = internalMutation({
     if (!podcast) return null;
     const stateId = await ensureFeedState(ctx, a.podcastId, await hasSubscribers(ctx, a.podcastId), false);
     const state = (await ctx.db.get(stateId))!;
+    // A fetch that ran past its lease, after another claimed the feed (or that one
+    // already finished): its answer is older, and releasing the lease would let a
+    // third fetch start alongside the one holding it. Its episodes were stored
+    // anyway; ingesting is idempotent.
+    if (a.lease !== undefined && state.fetchingUntil !== a.lease) {
+      console.warn(`A fetch of ${podcast._id} reported after its lease was taken over; ignoring its bookkeeping`);
+      return null;
+    }
     const ok = !a.error;
     const consecutiveErrors = ok ? 0 : state.consecutiveErrors + 1;
     await ctx.db.patch(stateId, {

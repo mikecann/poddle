@@ -202,7 +202,7 @@ export async function refreshPodcast(
   } catch (e) {
     // Always release the lease and record the failure (and its backoff).
     const error = `Failed: ${(e as Error).message}`;
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, status: 0, error, changed: false });
+    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: 0, error, changed: false });
     return { status: "error", newEpisodes: 0, error };
   }
 }
@@ -222,7 +222,7 @@ async function fetchAndIngest(
   if (conditional && info.lastModified) req.headers["If-Modified-Since"] = info.lastModified;
 
   const fail = async (status: number, error: string): Promise<RefreshResult> => {
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, status, error, changed: false });
+    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status, error, changed: false });
     return { status: "error", newEpisodes: 0, error, httpStatus: status || undefined };
   };
 
@@ -233,7 +233,7 @@ async function fetchAndIngest(
     return await fail(0, `Network error: ${(e as Error).message}`);
   }
   if (res.status === 304) {
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, status: 304, changed: false });
+    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: 304, changed: false });
     return { status: "notModified", newEpisodes: 0 };
   }
   if (!res.ok) return await fail(res.status, `HTTP ${res.status}`);
@@ -243,7 +243,7 @@ async function fetchAndIngest(
   const lastModified = res.headers.get("last-modified") ?? undefined;
   const bodyHash = await sha256Hex(body);
   if (conditional && bodyHash === info.bodyHash) {
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, status: res.status, etag, lastModified, changed: false });
+    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: res.status, etag, lastModified, changed: false });
     return { status: "unchanged", newEpisodes: 0 };
   }
 
@@ -280,6 +280,7 @@ async function fetchAndIngest(
   }
   await ctx.runMutation(internal.feeds.recordFetch, {
     podcastId,
+    lease: info.lease,
     status: res.status,
     etag,
     lastModified,
