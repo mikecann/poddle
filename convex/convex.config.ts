@@ -6,6 +6,7 @@ import google from "@convex-dev/auth/components/google/convex.config.js";
 import anonymous from "@convex-dev/auth/components/anonymous/convex.config.js";
 import staticHosting from "@convex-dev/static-hosting/convex.config.js";
 import feedback from "@convex-dev/feedback/convex.config.js";
+import stateMachines from "@convex-dev/state-machines/convex.config.js";
 
 const app = defineApp({
   env: {
@@ -87,5 +88,8 @@ app.use(staticHosting);
 
 // Chef: requests, voting and approvals.
 app.use(feedback);
+
+// State machines (convex/machines.ts): each machine's history, and nothing else.
+app.use(stateMachines);
 
 export default app;

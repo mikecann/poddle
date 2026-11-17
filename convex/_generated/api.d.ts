@@ -47,6 +47,9 @@ import type * as lib_statsMath from "../lib/statsMath.js";
 import type * as lib_suggestions from "../lib/suggestions.js";
 import type * as lib_testSignIn from "../lib/testSignIn.js";
 import type * as lib_validators from "../lib/validators.js";
+import type * as lifecycles_feedFetch from "../lifecycles/feedFetch.js";
+import type * as machines from "../machines.js";
+import type * as machinesViewer from "../machinesViewer.js";
 import type * as maintenance from "../maintenance.js";
 import type * as migrations from "../migrations.js";
 import type * as overcastImport from "../overcastImport.js";
@@ -108,6 +111,9 @@ declare const fullApi: ApiFromModules<{
   "lib/suggestions": typeof lib_suggestions;
   "lib/testSignIn": typeof lib_testSignIn;
   "lib/validators": typeof lib_validators;
+  "lifecycles/feedFetch": typeof lifecycles_feedFetch;
+  machines: typeof machines;
+  machinesViewer: typeof machinesViewer;
   maintenance: typeof maintenance;
   migrations: typeof migrations;
   overcastImport: typeof overcastImport;
@@ -157,4 +163,5 @@ export declare const components: {
   authAnonymous: import("@convex-dev/auth/components/anonymous/_generated/component.js").ComponentApi<"authAnonymous">;
   staticHosting: import("@convex-dev/static-hosting/_generated/component.js").ComponentApi<"staticHosting">;
   feedback: import("@convex-dev/feedback/_generated/component.js").ComponentApi<"feedback">;
+  stateMachines: import("@convex-dev/state-machines/_generated/component.js").ComponentApi<"stateMachines">;
 };

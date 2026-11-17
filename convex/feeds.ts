@@ -11,6 +11,7 @@ import { addToQueue } from "./lib/queue";
 import type { NewEpisodeRule } from "./lib/settings";
 import { resolvedSettingsFor } from "./lib/settingsDb";
 import { systemAt } from "./lib/state";
+import { asMutationCtx, feedFetch, machines } from "./machines";
 
 // Feed bookkeeping and ingestion. The fetching itself happens in feedActions.ts.
 // Feeds are shared: each is polled once, and each new episode is then applied
@@ -53,8 +54,22 @@ export async function ensureFeedState(ctx: MutationCtx, podcastId: Id<"podcasts"
 /** A fetch holds this lease so the cron, refreshNow and imports never fetch one feed twice at once. */
 const FETCH_LEASE_MS = 5 * MINUTE;
 
-/** Claim a feed for fetching. Returns null if it's unknown or already being fetched. */
-export const claimFetch = internalMutation({
+/** The feed's fetch claim (the feedFetch machine), if it's ever been fetched since claims moved there. */
+export async function feedFetchFor(ctx: QueryCtx, podcastId: Id<"podcasts">) {
+  return await ctx.db
+    .query("feedFetches")
+    .withIndex("by_podcast", (q) => q.eq("podcastId", podcastId))
+    .unique();
+}
+
+/** Whether a fetch of the feed holds a claim that hasn't run out. */
+export async function isBeingFetched(ctx: QueryCtx, podcastId: Id<"podcasts">, now: number) {
+  const claim = (await feedFetchFor(ctx, podcastId))?.state;
+  return claim?.kind === "fetching" && claim.until > now;
+}
+
+/** Claim a feed for fetching (feedFetch's CLAIM). Returns null if it's unknown or already being fetched. */
+export const claimFetch = machines.internalMutation({
   args: { podcastId: v.id("podcasts") },
   returns: v.union(
     v.null(),
@@ -69,15 +84,21 @@ export const claimFetch = internalMutation({
       lease: v.number(),
     }),
   ),
-  handler: async (ctx, { podcastId }) => {
+  handler: async (machineCtx, { podcastId }) => {
+    const ctx = asMutationCtx(machineCtx);
     const podcast = await ctx.db.get(podcastId);
     if (!podcast) return null;
     const now = Date.now();
+    const lease = now + FETCH_LEASE_MS;
+    const claim = await feedFetchFor(ctx, podcastId);
+    // A fetch claimed on feedStates before claims moved to feedFetches still holds the feed until its lease runs out.
+    if (!claim && ((await feedStateFor(ctx, podcastId))?.fetchingUntil ?? 0) > now) return null;
+    const claimed = claim
+      ? await feedFetch.send(machineCtx, claim._id, { type: "CLAIM", lease })
+      : await feedFetch.create(machineCtx, { podcastId }, { type: "CLAIM", lease });
+    if (claimed.status !== "done") return null;
     const stateId = await ensureFeedState(ctx, podcastId, await hasSubscribers(ctx, podcastId), false);
     const state = (await ctx.db.get(stateId))!;
-    if (state.fetchingUntil !== undefined && state.fetchingUntil > now) return null;
-    const lease = now + FETCH_LEASE_MS;
-    await ctx.db.patch(stateId, { fetchingUntil: lease });
     return {
       lease,
       feedUrl: podcast.feedUrl,
@@ -90,7 +111,8 @@ export const claimFetch = internalMutation({
   },
 });
 
-export const recordFetch = internalMutation({
+/** How a fetch went (and feedFetch's FINISHED, which lets the feed go). */
+export const recordFetch = machines.internalMutation({
   args: {
     podcastId: v.id("podcasts"),
     /** The claim's lease, from claimFetch. */
@@ -102,22 +124,26 @@ export const recordFetch = internalMutation({
     bodyHash: v.optional(v.string()),
     changed: v.boolean(),
   },
-  /** False: the fetch had lost its lease, and nothing was recorded. */
+  /** False: the fetch had lost its claim, and nothing was recorded. */
   returns: v.boolean(),
-  handler: async (ctx, a) => {
+  handler: async (machineCtx, a) => {
+    const ctx = asMutationCtx(machineCtx);
     const now = Date.now();
     const podcast = await ctx.db.get(a.podcastId);
     if (!podcast) return false;
-    const stateId = await ensureFeedState(ctx, a.podcastId, await hasSubscribers(ctx, a.podcastId), false);
-    const state = (await ctx.db.get(stateId))!;
-    // A fetch that ran past its lease, after another claimed the feed (or that one
-    // already finished): its answer is older, and releasing the lease would let a
-    // third fetch start alongside the one holding it. Its episodes were stored
-    // anyway; ingesting is idempotent.
-    if (state.fetchingUntil !== a.lease) {
-      console.warn(`A fetch of ${podcast._id} reported after its lease was taken over; ignoring its bookkeeping`);
+    // A fetch that ran past its claim, after another took the feed over (or that
+    // one already finished), is refused: its answer is older, and letting the feed
+    // go would let a third fetch start alongside the one holding it. A fetch
+    // claimed before claims moved to feedFetches has no row there, and is checked
+    // against its old lease on feedStates.
+    if (!(await holdsLease(ctx, a.podcastId, a.lease))) {
+      console.warn(`A fetch of ${podcast._id} reported after its claim was taken over; ignoring its bookkeeping`);
       return false;
     }
+    const claim = await feedFetchFor(ctx, a.podcastId);
+    if (claim && (await feedFetch.send(machineCtx, claim._id, { type: "FINISHED", lease: a.lease })).status !== "done") return false;
+    const stateId = await ensureFeedState(ctx, a.podcastId, await hasSubscribers(ctx, a.podcastId), false);
+    const state = (await ctx.db.get(stateId))!;
     const ok = !a.error;
     const consecutiveErrors = ok ? 0 : state.consecutiveErrors + 1;
     await ctx.db.patch(stateId, {
@@ -145,7 +171,10 @@ export const recordFetch = internalMutation({
  * stores nothing more: the one that took over has a newer answer.
  */
 async function holdsLease(ctx: QueryCtx, podcastId: Id<"podcasts">, lease: number) {
-  return (await feedStateFor(ctx, podcastId))?.fetchingUntil === lease;
+  const claim = await feedFetchFor(ctx, podcastId);
+  // No claim row: a fetch claimed on feedStates before claims moved to feedFetches.
+  if (!claim) return (await feedStateFor(ctx, podcastId))?.fetchingUntil === lease;
+  return claim.state.kind === "fetching" && claim.state.until === lease;
 }
 
 export const updatePodcastMeta = internalMutation({
@@ -327,7 +356,7 @@ export const feedsToRefresh = internalQuery({
       const state = await feedStateFor(ctx, sub.podcastId);
       if (!state) continue;
       if (state.lastCheckedAt && now - state.lastCheckedAt < 2 * MINUTE) continue;
-      if (state.fetchingUntil !== undefined && state.fetchingUntil > now) continue;
+      if (await isBeingFetched(ctx, sub.podcastId, now)) continue;
       due.push(sub.podcastId);
     }
     return due;

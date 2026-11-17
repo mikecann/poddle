@@ -247,7 +247,7 @@ describe("Overcast import, when things go wrong", () => {
     const t = setup();
     const podcastId = await t.mutation(internal.podcasts.ensurePodcast, { feedUrl: TTW, title: "Tech Talk Weekly" });
     await t.run(async (ctx) => {
-      await ctx.db.insert("feedStates", { podcastId, active: false, nextCheckAt: NOW, consecutiveErrors: 0, fetchingUntil: NOW + 2 * MIN });
+      await ctx.db.insert("feedFetches", { podcastId, state: { kind: "fetching", until: NOW + 2 * MIN, startedAt: NOW } });
     });
     const batch = await runImport(t);
     expect(batch.status).toBe("done");

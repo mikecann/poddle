@@ -16,6 +16,7 @@
     "typecheck": "tsc --noEmit -p convex && tsc --noEmit -p tsconfig.json && tsc --noEmit -p web",
     "test": "vitest run",
     "test:watch": "vitest",
+    "machines:diagrams": "UPDATE_MACHINE_DIAGRAMS=1 vitest run tests/stateMachines.test.ts",
     "check": "npm run typecheck && npm test && npm run test:bdd-check",
     "web:dev": "vite web",
     "web:build": "vite build web",
@@ -31,6 +32,7 @@
   "dependencies": {
     "@convex-dev/auth": "^2.0.0-beta.0",
     "@convex-dev/feedback": "file:vendor/convex-dev-feedback-0.0.1.tgz",
+    "@convex-dev/state-machines": "file:vendor/convex-dev-state-machines-0.1.3-viewer.tgz",
     "@convex-dev/static-hosting": "^0.2.1",
     "@sentry/react": "^11.10.0",
     "convex": "^1.49.0",

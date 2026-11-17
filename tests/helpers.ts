@@ -1,4 +1,5 @@
 import { readFileSync } from "node:fs";
+import { register as registerStateMachines } from "@convex-dev/state-machines/test";
 import { convexTest } from "convex-test";
 import { vi } from "vitest";
 import type { Id } from "../convex/_generated/dataModel";
@@ -9,7 +10,11 @@ export const modules = import.meta.glob("../convex/**/*.*s");
 export const TOKEN = "test-token-0123456789";
 export const MIKE = "mike.cann@gmail.com";
 
-const make = () => convexTest(schema, modules);
+const make = () => {
+  const t = convexTest(schema, modules);
+  registerStateMachines(t); // the component, as convex.config.ts installs it
+  return t;
+};
 export type Raw = ReturnType<typeof make>;
 
 /**

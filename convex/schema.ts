@@ -1,3 +1,4 @@
+import { machineTimers } from "@convex-dev/state-machines";
 import { defineSchema, defineTable } from "convex/server";
 import { vSuggestion } from "./lib/suggestions";
 import { v } from "convex/values";
@@ -40,6 +41,40 @@ export const vImportStatus = v.union(
   v.literal("fetching"),
   v.literal("done"),
   v.literal("failed"),
+);
+
+// ---- State machines (@convex-dev/state-machines; the rules are in convex/lifecycles/) ----
+
+/** feedFetch: whether a feed is being fetched right now (lifecycles/feedFetch.ts). */
+export const vFeedFetchState = v.union(
+  v.object({ kind: v.literal("idle") }),
+  /** `until`: when the claim runs out. It's also the claim's token: only the fetch holding it may finish it. */
+  v.object({ kind: v.literal("fetching"), until: v.number(), startedAt: v.number() }),
+);
+
+/** importBatch: one Overcast import (lifecycles/importBatch.ts). */
+export const vImportBatchState = v.union(
+  v.object({ kind: v.literal("parsing") }),
+  /** `worker`: which run of the worker chain owns it. `restarts`: in a row without progress. */
+  v.object({ kind: v.literal("fetching"), worker: v.number(), restarts: v.number() }),
+  v.object({ kind: v.literal("done"), finishedAt: v.number() }),
+  v.object({ kind: v.literal("failed"), finishedAt: v.number(), error: v.string() }),
+);
+
+/** importShow: one show's feed fetch and matching within an import (lifecycles/importShow.ts). */
+export const vImportShowState = v.union(
+  /** `notBefore`: another fetch of the feed was running, so not until then. */
+  v.object({ kind: v.literal("waiting"), notBefore: v.number(), busyCount: v.number() }),
+  v.object({ kind: v.literal("fetching"), claimedAt: v.number(), busyCount: v.number() }),
+  v.object({
+    kind: v.literal("fetched"),
+    feedOk: v.boolean(),
+    oldestFeedPubDate: v.optional(v.number()),
+    medianDuration: v.optional(v.number()),
+    /** Known durations, for the batch-wide median. */
+    durations: v.array(v.number()),
+  }),
+  v.object({ kind: v.literal("matched") }),
 );
 
 /**
@@ -175,11 +210,23 @@ export default defineSchema({
     lastStatus: v.optional(v.number()),
     lastError: v.optional(v.string()),
     consecutiveErrors: v.number(),
-    /** Lease held while a fetch is in flight. */
+    /** Old lease, replaced by `feedFetches`. Unset everywhere, then removed (narrow step). */
     fetchingUntil: v.optional(v.number()),
   })
     .index("by_podcast", ["podcastId"])
     .index("by_active_nextCheckAt", ["active", "nextCheckAt"]),
+
+  /**
+   * One per feed that's ever been fetched: whether a fetch is running (the
+   * feedFetch machine). Apart from feedStates, so claiming and finishing a fetch
+   * don't conflict with the poller rescheduling it.
+   */
+  feedFetches: defineTable({
+    podcastId: v.id("podcasts"),
+    state: vFeedFetchState,
+  })
+    .index("by_podcast", ["podcastId"])
+    .index("by_state", ["state.kind"]),
 
   episodes: defineTable({
     podcastId: v.id("podcasts"),
@@ -379,6 +426,9 @@ export default defineSchema({
     userId: vOwner,
     source: v.literal("overcast"),
     status: vImportStatus,
+    /** The importBatch machine's state. Optional until the backfill (migrations.ts) has filled it. */
+    state: v.optional(vImportBatchState),
+    stateTimers: v.optional(machineTimers),
     /**
      * Which run of the worker chain owns the batch (importActions.processBatch). The
      * watchdog (overcastImport.resumeStalled) starts a new one when the batch stops
@@ -484,6 +534,8 @@ export default defineSchema({
     batchId: v.id("importBatches"),
     podcastId: v.id("podcasts"),
     phase: v.union(v.literal("fetch"), v.literal("match")),
+    /** The importShow machine's state. Optional until the backfill (migrations.ts) has filled it. */
+    state: v.optional(vImportShowState),
     /** Newest pubDate among the show's exported episodes, and Overcast's added date. */
     newestExportedAt: v.optional(v.number()),
     addedAt: v.optional(v.number()),

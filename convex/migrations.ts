@@ -8,6 +8,7 @@ import { addToQueue, orderedQueue, queueItemFor } from "./lib/queue";
 import { resolveGlobalSettings } from "./lib/settings";
 import { globalSettingsDoc } from "./lib/settingsDb";
 import { systemAt } from "./lib/state";
+import { mirrorBatch, mirrorShow } from "./lib/importStates";
 
 // The accounts migration (docs/runbooks/accounts-prod.md). Everything that
 // existed before accounts is Mike's, so this makes his user and gives it every
@@ -342,4 +343,42 @@ export const inboxReport = internalQuery({
     }
     return out;
   },
+});
+
+// ---- State machines: the import's tables (widen, backfill, switch) ----
+//
+// Fills `state` on importBatches and importQueue from their old fields, so the
+// switch can make it required and put the importBatch and importShow machines on
+// it. Writes `state` directly, round the machines, as a migration has to: there's
+// no machine on these fields yet. Safe to run again: it rewrites each row's state
+// from its old fields, which every import write also does (lib/importStates.ts).
+//
+//   npx convex run migrations:backfillImportStates     (repeats itself until done)
+//   npx convex run migrations:importStatesLeft         rows still to fill, per table
+
+const STATE_PAGE = 200;
+
+export const backfillImportStates = internalMutation({
+  args: { table: v.optional(v.union(v.literal("importBatches"), v.literal("importQueue"))), cursor: v.optional(v.union(v.string(), v.null())) },
+  returns: v.null(),
+  handler: async (ctx, { table = "importBatches", cursor = null }) => {
+    const page = await ctx.db.query(table).paginate({ numItems: STATE_PAGE, cursor });
+    for (const row of page.page) {
+      // Every row, again if need be: what's there may be from an earlier run.
+      if (table === "importBatches") await mirrorBatch(ctx, row._id as Id<"importBatches">);
+      else await mirrorShow(ctx, row._id as Id<"importQueue">);
+    }
+    if (!page.isDone) await ctx.scheduler.runAfter(0, internal.migrations.backfillImportStates, { table, cursor: page.continueCursor });
+    else if (table === "importBatches") await ctx.scheduler.runAfter(0, internal.migrations.backfillImportStates, { table: "importQueue" });
+    return null;
+  },
+});
+
+export const importStatesLeft = internalQuery({
+  args: {},
+  returns: v.object({ importBatches: v.number(), importQueue: v.number() }),
+  handler: async (ctx) => ({
+    importBatches: (await ctx.db.query("importBatches").collect()).filter((r) => !r.state || !r.stateTimers).length,
+    importQueue: (await ctx.db.query("importQueue").collect()).filter((r) => !r.state).length,
+  }),
 });

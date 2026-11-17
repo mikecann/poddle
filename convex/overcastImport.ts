@@ -12,6 +12,7 @@ import { addToQueue, queueItemFor, type AddedBy } from "./lib/queue";
 import { getOrCreatePodcast, setSubscribed } from "./podcasts";
 import { upsertSession } from "./sessions";
 import { setArchived, setPlayed, setPosition, setStarred, stateFor, userUtcOffset } from "./lib/state";
+import { mirrorBatch, mirrorShow } from "./lib/importStates";
 import { vImportBatchDoc } from "./lib/validators";
 
 // Overcast "All data" import (spec §2.2, decisions.md), into the library of
@@ -57,6 +58,7 @@ async function moveBatch(
   const now = Date.now();
   const final = BATCH_MOVES[to].length === 0;
   await ctx.db.patch(batch._id, { ...patch, status: to, ...(final ? { finishedAt: now } : {}), updatedAt: now });
+  await mirrorBatch(ctx, batch._id);
   // A finished or failed batch's leftover scratch rows go, a page at a time.
   if (to === "failed") await ctx.scheduler.runAfter(0, internal.overcastImport.discardScratch, { batchId: batch._id });
   return true;
@@ -126,6 +128,7 @@ export const startOvercastImport = userMutation({
       playlists: [],
       updatedAt: now,
     });
+    await mirrorBatch(ctx, batchId);
     await ctx.scheduler.runAfter(0, internal.importActions.parse, { batchId, storageId, opml });
     return batchId;
   },
@@ -180,6 +183,7 @@ async function bumpCounts(ctx: MutationCtx, batchId: Id<"importBatches">, delta:
     else counts[k] = (counts[k] ?? 0) + val;
   }
   await ctx.db.patch(batchId, { counts, ...progressed(batch) });
+  if (batch.restarts) await mirrorBatch(ctx, batchId);
 }
 
 /** What a step that got somewhere writes: the time the watchdog checks, and no restarts owed. */
@@ -255,7 +259,8 @@ export const stageFeeds = internalMutation({
         if (e.pubDate !== undefined) newestExportedAt = Math.max(newestExportedAt ?? -Infinity, e.pubDate);
       }
       episodes += feed.episodes.length;
-      await ctx.db.insert("importQueue", { batchId, podcastId: podcast._id, phase: "fetch", newestExportedAt, addedAt: feed.addedAt });
+      const rowId = await ctx.db.insert("importQueue", { batchId, podcastId: podcast._id, phase: "fetch", newestExportedAt, addedAt: feed.addedAt });
+      await mirrorShow(ctx, rowId);
     }
     await bumpCounts(ctx, batchId, { podcasts: feeds.length, subscribedPodcasts: subscribed, episodes });
     return null;
@@ -416,6 +421,7 @@ export const resumeStalled = internalMutation({
       const worker = (batch.worker ?? 0) + 1;
       console.warn(`Import ${batch._id} made no progress for ${Math.round((now - batch.updatedAt) / 60_000)} min: restarting it (run ${worker})`);
       await ctx.db.patch(batch._id, { worker, restarts: restarts + 1, updatedAt: now });
+      await mirrorBatch(ctx, batch._id);
       await ctx.scheduler.runAfter(0, internal.importActions.processBatch, { batchId: batch._id, worker });
     }
     return null;
@@ -470,7 +476,10 @@ export const claimFetches = internalMutation({
     // When each row may next be taken.
     const freeAt = (r: Doc<"importQueue">) => Math.max(r.notBefore ?? 0, r.claimedAt !== undefined ? r.claimedAt + CLAIM_STALE_MS : 0);
     const free = rows.filter((r) => freeAt(r) <= now).slice(0, count);
-    for (const r of free) await ctx.db.patch(r._id, { claimedAt: now });
+    for (const r of free) {
+      await ctx.db.patch(r._id, { claimedAt: now });
+      await mirrorShow(ctx, r._id);
+    }
     const waiting = rows.filter((r) => !free.includes(r));
     const waitMs = !free.length && waiting.length ? Math.max(1000, Math.min(...waiting.map(freeAt)) - now) : undefined;
     return { stale: false, rows: free.map((r) => ({ rowId: r._id, podcastId: r.podcastId, claimedAt: now })), waitMs };
@@ -516,7 +525,9 @@ export const feedBusy = internalMutation({
       return null;
     }
     await ctx.db.patch(rowId, { busyCount, claimedAt: undefined, notBefore: Date.now() + BUSY_RETRY_MS });
+    await mirrorShow(ctx, rowId);
     await ctx.db.patch(batchId, progressed(batch));
+    if (batch.restarts) await mirrorBatch(ctx, batchId);
     return null;
   },
 });
@@ -547,6 +558,7 @@ async function markFetched(
         ? [...(batch.failedFeeds ?? []), { podcastId: podcast._id, title: podcast.title, feedUrl: podcast.feedUrl, status, error: error ?? "Fetch failed" }]
         : batch.failedFeeds;
     await ctx.db.patch(batchId, { failedFeeds, ...progressed(batch) });
+    if (batch.restarts) await mirrorBatch(ctx, batchId);
     const episodes = await ctx.db
       .query("episodes")
       .withIndex("by_podcast_pubDate", (q) => q.eq("podcastId", row.podcastId))
@@ -563,6 +575,7 @@ async function markFetched(
       claimedAt: undefined,
       notBefore: undefined,
     });
+    await mirrorShow(ctx, rowId);
   }
 }
 
@@ -906,13 +919,14 @@ async function requeueOrphans(ctx: MutationCtx, batchId: Id<"importBatches">) {
     const dates = staged.map((i) => i.pubDate).filter((d): d is number => d !== undefined);
     const batch = (await ctx.db.get(batchId))!;
     const sub = await subscriptionFor(asUser(ctx, batch.userId!), podcastId);
-    await ctx.db.insert("importQueue", {
+    const rowId = await ctx.db.insert("importQueue", {
       batchId,
       podcastId,
       phase: "fetch",
       newestExportedAt: dates.length ? Math.max(...dates) : undefined,
       addedAt: sub?.subscribedAt,
     });
+    await mirrorShow(ctx, rowId);
     requeued = true;
     after = item.podcastId;
   }

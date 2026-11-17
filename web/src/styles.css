@@ -350,3 +350,8 @@ html.reveal-ready .tw:not(.on) { opacity: .3; }
   html.reveal-ready .reveal:not(.is-in) { transform: none; }
   .landing-v2 * { transition-property: opacity, color, background-color !important; }
 }
+
+/* The admin Machines page (pages/MachinesPage.tsx): the viewer sizes to its container. */
+.machines-page {
+  min-height: 100vh;
+}

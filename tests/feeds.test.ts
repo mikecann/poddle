@@ -257,7 +257,10 @@ describe("refreshing everything", () => {
     vi.setSystemTime(NOW + 3 * 60_000);
     await t.run(async (ctx) => {
       for (const s of await ctx.db.query("feedStates").collect()) {
-        if (s.podcastId === busy) await ctx.db.patch(s._id, { fetchingUntil: Date.now() + 60_000 });
+        if (s.podcastId === busy) {
+          const claim = (await ctx.db.query("feedFetches").withIndex("by_podcast", (q) => q.eq("podcastId", busy)).unique())!;
+          await ctx.db.patch(claim._id, { state: { kind: "fetching", until: Date.now() + 60_000, startedAt: Date.now() } });
+        }
         if (s.podcastId === fresh) await ctx.db.patch(s._id, { lastCheckedAt: Date.now() - 60_000 });
       }
     });
@@ -338,13 +341,15 @@ describe("the fetch lease", () => {
     expect(fresh.lease).not.toBe(slow.lease);
 
     await t.mutation(internal.feeds.recordFetch, { podcastId, lease: slow.lease, status: 500, error: "HTTP 500", changed: false });
+    const claim = () => t.run(async (ctx) => (await ctx.db.query("feedFetches").first())?.state);
+    expect(await claim()).toMatchObject({ kind: "fetching", until: fresh.lease });
     const state = await t.run(async (ctx) => await ctx.db.query("feedStates").first());
-    expect(state).toMatchObject({ fetchingUntil: fresh.lease, consecutiveErrors: 0 });
+    expect(state).toMatchObject({ consecutiveErrors: 0 });
     expect(state?.lastError).toBeUndefined();
     expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).toBeNull();
 
     await t.mutation(internal.feeds.recordFetch, { podcastId, lease: fresh.lease, status: 200, changed: false });
-    expect((await t.run(async (ctx) => await ctx.db.query("feedStates").first()))?.fetchingUntil).toBeUndefined();
+    expect(await claim()).toEqual({ kind: "idle" });
   });
 
   // From a cross-lab review: a fetch stalled reading its body past the claim
@@ -367,5 +372,17 @@ describe("the fetch lease", () => {
     const podcast = await t.run(async (ctx) => await ctx.db.get(podcastId));
     expect(podcast?.title).toBe("Odd");
   });
-});
 
+  // From a Codex review: a fetch claimed on feedStates just before the deploy that
+  // moved claims to feedFetches was overtaken by the next fetch at once.
+  test("a claim from before claims moved still holds the feed until it runs out", async () => {
+    const t = setup();
+    const podcastId = await t.mutation(internal.podcasts.ensurePodcast, { feedUrl: FEED, title: "Odd" });
+    await t.run(async (ctx) => {
+      await ctx.db.insert("feedStates", { podcastId, active: false, nextCheckAt: NOW, consecutiveErrors: 0, fetchingUntil: NOW + 60_000 });
+    });
+    expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).toBeNull();
+    vi.setSystemTime(NOW + 61_000);
+    expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).not.toBeNull();
+  });
+});
