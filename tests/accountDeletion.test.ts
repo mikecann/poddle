@@ -100,12 +100,12 @@ async function seedPerson(t: T, ids: { podcastId: Id<"podcasts">; episodeId: Id<
         estimatedListenSeconds: 0,
       };
       const batchId = await ctx.db.insert("importBatches", {
-        userId, source: "overcast", status: "fetching", assumedSpeed: 2, startedAt: at + i, counts, playlists: [], updatedAt: at,
+        userId, source: "overcast", state: { kind: "fetching", worker: 1, restarts: 0 }, stateTimers: [], assumedSpeed: 2, startedAt: at + i, counts, playlists: [], updatedAt: at,
       });
       await ctx.db.insert("importItems", {
         batchId, podcastId, overcastId: i, title: "Ep", played: false, userDeleted: false,
       });
-      await ctx.db.insert("importQueue", { batchId, podcastId, phase: "fetch" });
+      await ctx.db.insert("importQueue", { batchId, podcastId, state: { kind: "waiting", notBefore: 0, busyCount: 0 } });
       await ctx.db.insert("importUpNext", { batchId, episodeId, podcastId, at });
     }
     // One of each per person: suggestions.ts reads them with .unique().

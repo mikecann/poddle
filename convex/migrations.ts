@@ -8,7 +8,7 @@ import { addToQueue, orderedQueue, queueItemFor } from "./lib/queue";
 import { resolveGlobalSettings } from "./lib/settings";
 import { globalSettingsDoc } from "./lib/settingsDb";
 import { systemAt } from "./lib/state";
-import { mirrorBatch, mirrorShow } from "./lib/importStates";
+import { asMutationCtx, importBatch, machines } from "./machines";
 
 // The accounts migration (docs/runbooks/accounts-prod.md). Everything that
 // existed before accounts is Mike's, so this makes his user and gives it every
@@ -345,40 +345,28 @@ export const inboxReport = internalQuery({
   },
 });
 
-// ---- State machines: the import's tables (widen, backfill, switch) ----
+// ---- State machines: the import's tables ----
 //
-// Fills `state` on importBatches and importQueue from their old fields, so the
-// switch can make it required and put the importBatch and importShow machines on
-// it. Writes `state` directly, round the machines, as a migration has to: there's
-// no machine on these fields yet. Safe to run again: it rewrites each row's state
-// from its old fields, which every import write also does (lib/importStates.ts).
+// The switch put the importBatch machine on importBatches.state, filled by a
+// backfill that wrote it directly. A batch it left parsing or fetching has none
+// of its state's timers (the 15-minute read deadline, the 5-minute CHECK), so
+// this arms them, as if it had just entered that state. Run once after the switch:
 //
-//   npx convex run migrations:backfillImportStates     (repeats itself until done)
-//   npx convex run migrations:importStatesLeft         rows still to fill, per table
+//   npx convex run migrations:armImportTimers
 
-const STATE_PAGE = 200;
-
-export const backfillImportStates = internalMutation({
-  args: { table: v.optional(v.union(v.literal("importBatches"), v.literal("importQueue"))), cursor: v.optional(v.union(v.string(), v.null())) },
-  returns: v.null(),
-  handler: async (ctx, { table = "importBatches", cursor = null }) => {
-    const page = await ctx.db.query(table).paginate({ numItems: STATE_PAGE, cursor });
-    for (const row of page.page) {
-      // Every row, again if need be: what's there may be from an earlier run.
-      if (table === "importBatches") await mirrorBatch(ctx, row._id as Id<"importBatches">);
-      else await mirrorShow(ctx, row._id as Id<"importQueue">);
-    }
-    if (!page.isDone) await ctx.scheduler.runAfter(0, internal.migrations.backfillImportStates, { table, cursor: page.continueCursor });
-    else if (table === "importBatches") await ctx.scheduler.runAfter(0, internal.migrations.backfillImportStates, { table: "importQueue" });
-    return null;
-  },
-});
-
-export const importStatesLeft = internalQuery({
+export const armImportTimers = machines.internalMutation({
   args: {},
-  returns: v.object({ importBatches: v.number(), importQueue: v.number() }),
-  handler: async (ctx) => ({
-    importBatches: (await ctx.db.query("importBatches").collect()).filter((r) => !r.state || !r.stateTimers).length,
-    importQueue: (await ctx.db.query("importQueue").collect()).filter((r) => !r.state).length,
-  }),
+  returns: v.number(),
+  handler: async (ctx) => {
+    let armed = 0;
+    for (const kind of ["parsing", "fetching"] as const) {
+      const rows = await asMutationCtx(ctx).db.query("importBatches").withIndex("by_state", (q) => q.eq("state.kind", kind)).collect();
+      for (const row of rows) {
+        if (row.stateTimers?.length) continue;
+        await importBatch.armTimers(ctx, row._id);
+        armed++;
+      }
+    }
+    return armed;
+  },
 });

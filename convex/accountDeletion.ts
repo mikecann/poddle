@@ -122,7 +122,7 @@ const SWEEPS: Record<PersonalTable | "chefRequests", Sweep> = {
         .take(left);
       if (scratch.length < left) {
         scratch.push(
-          ...(await ctx.db.query("importQueue").withIndex("by_batch_phase", (q) => q.eq("batchId", batch._id)).take(left - scratch.length)),
+          ...(await ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batch._id)).take(left - scratch.length)),
         );
       }
       if (scratch.length < left) {

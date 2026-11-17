@@ -80,9 +80,21 @@ export function mockFetch(routes: Record<string, Reply | ((init?: RequestInit) =
   return fn;
 }
 
-/** Run everything scheduled (and anything those schedule). Needs fake timers. */
+/**
+ * Run everything scheduled (and anything those schedule), as real time would.
+ * While anything runs, the fake clock moves a second at a time, so an action's
+ * own pauses pass; when nothing does, it jumps to the next timer. Jumping past
+ * every timer at once (vi.runAllTimers) fired the import's 15-minute read
+ * deadline while the read was still running. Needs fake timers.
+ */
 export async function drain(t: T) {
-  await t.finishAllScheduledFunctions(() => vi.runAllTimers());
+  for (let jumps = 0; jumps < 500; jumps++) {
+    // Gives up after 20 idle seconds, hence the jumps.
+    await t.finishAllScheduledFunctions(() => vi.advanceTimersByTime(1000), 2000);
+    if (vi.getTimerCount() === 0) return;
+    vi.advanceTimersToNextTimer();
+  }
+  throw new Error("drain: timers still pending after 500 jumps (something keeps rescheduling itself)");
 }
 
 /** Every show in `t`'s user's library as the app sees it (shared show + their subscription). */

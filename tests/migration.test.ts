@@ -88,7 +88,8 @@ async function seedLegacy(t: T) {
     await ctx.db.insert("devices", { deviceId: "phone", name: "iPhone", platform: "iOS", apnsToken: "aa", lastSeenAt: 1, updatedAt: 1 });
     await ctx.db.insert("importBatches", {
       source: "overcast",
-      status: "done",
+      state: { kind: "done", finishedAt: 1 },
+      stateTimers: [],
       assumedSpeed: 2,
       startedAt: 1,
       counts: {
@@ -159,7 +160,7 @@ describe("accounts migration", () => {
     expect(await mike.query(api.devices.list, {})).toHaveLength(1);
     expect(await mike.query(api.overcastImport.latestImport, {})).not.toBeNull();
     const synced = await mike.query(api.sync.changes, { table: "podcasts", since: 0, paginationOpts: { cursor: null, numItems: 10 } });
-    expect(synced.page.map((p) => (p as { subscribed: boolean }).subscribed).sort()).toEqual([false, true]);
+    expect((synced.page as { subscribed: boolean }[]).map((p) => p.subscribed).sort()).toEqual([false, true]);
 
     // Someone else signing in afterwards starts empty.
     const ana = t.as("ana@example.com");

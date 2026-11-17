@@ -425,22 +425,17 @@ export default defineSchema({
   importBatches: defineTable({
     userId: vOwner,
     source: v.literal("overcast"),
-    status: vImportStatus,
-    /** The importBatch machine's state. Optional until the backfill (migrations.ts) has filled it. */
-    state: v.optional(vImportBatchState),
-    stateTimers: v.optional(machineTimers),
-    /**
-     * Which run of the worker chain owns the batch (importActions.processBatch). The
-     * watchdog (overcastImport.resumeStalled) starts a new one when the batch stops
-     * making progress, and an older run stops at its next step.
-     */
+    /** The importBatch machine's state (lifecycles/importBatch.ts). The API still shows it as `status`. */
+    state: vImportBatchState,
+    stateTimers: machineTimers,
+    // Before the importBatch machine: no longer written, and unset then removed in the narrow step.
+    status: v.optional(vImportStatus),
     worker: v.optional(v.number()),
-    /** Restarts since the batch last made progress; the watchdog gives up after a few. */
     restarts: v.optional(v.number()),
-    assumedSpeed: v.number(),
-    startedAt: v.number(),
     finishedAt: v.optional(v.number()),
     error: v.optional(v.string()),
+    assumedSpeed: v.number(),
+    startedAt: v.number(),
     warning: v.optional(v.string()),
     counts: v.object({
       podcasts: v.number(),
@@ -507,8 +502,8 @@ export default defineSchema({
   })
     .index("by_user_startedAt", ["userId", "startedAt"])
     .index("by_user_updatedAt", ["userId", "updatedAt"])
-    // Not by user: the watchdog looks for every person's stalled imports.
-    .index("by_status_updatedAt", ["status", "updatedAt"]),
+    // Not by user: the admin Machines page counts every person's imports per state.
+    .index("by_state", ["state.kind"]),
 
   // importItems, importQueue and importUpNext are scratch space for one batch,
   // so they're keyed by the (personal) batch rather than the user.
@@ -533,24 +528,22 @@ export default defineSchema({
   importQueue: defineTable({
     batchId: v.id("importBatches"),
     podcastId: v.id("podcasts"),
-    phase: v.union(v.literal("fetch"), v.literal("match")),
-    /** The importShow machine's state. Optional until the backfill (migrations.ts) has filled it. */
-    state: v.optional(vImportShowState),
+    /** The importShow machine's state (lifecycles/importShow.ts). */
+    state: vImportShowState,
+    // Before the importShow machine: no longer written, and unset then removed in the narrow step.
+    phase: v.optional(v.union(v.literal("fetch"), v.literal("match"))),
     /** Newest pubDate among the show's exported episodes, and Overcast's added date. */
     newestExportedAt: v.optional(v.number()),
     addedAt: v.optional(v.number()),
-    /** Set once fetched. */
+    // Before the importShow machine, now in its states: unset then removed in the narrow step.
     feedOk: v.optional(v.boolean()),
     oldestFeedPubDate: v.optional(v.number()),
     medianDuration: v.optional(v.number()),
-    /** Known durations, for the batch-wide median. */
     durations: v.optional(v.array(v.number())),
-    /** While fetching: when a worker took it. Another can take it once that's stale. */
     claimedAt: v.optional(v.number()),
-    /** Another fetch of the feed was running: try again after this. */
     notBefore: v.optional(v.number()),
     busyCount: v.optional(v.number()),
-  }).index("by_batch_phase", ["batchId", "phase"]),
+  }).index("by_batch_state", ["batchId", "state.kind"]),
 
   /** Episodes to put in Up Next when an import finishes. */
   importUpNext: defineTable({

@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
+import { internalQuery, type MutationCtx } from "./_generated/server";
 import { ensureFeedState } from "./feeds";
 import { asUser, userMutation, userQuery, type UserMutationCtx } from "./lib/auth";
 import { ensureLibraryRow, hasSubscribers, subscriptionFor } from "./lib/library";
@@ -12,8 +12,9 @@ import { addToQueue, queueItemFor, type AddedBy } from "./lib/queue";
 import { getOrCreatePodcast, setSubscribed } from "./podcasts";
 import { upsertSession } from "./sessions";
 import { setArchived, setPlayed, setPosition, setStarred, stateFor, userUtcOffset } from "./lib/state";
-import { mirrorBatch, mirrorShow } from "./lib/importStates";
-import { vImportBatchDoc } from "./lib/validators";
+import { importBatchView, vImportBatchDoc, vImportBatchRow } from "./lib/validators";
+import { CLAIM_STALE_MS } from "./lifecycles/importShow";
+import { asMutationCtx, importBatch, importShow, machines, type MachineCtx } from "./machines";
 
 // Overcast "All data" import (spec §2.2, decisions.md), into the library of
 // whoever started it (the batch's `userId`). Pipeline:
@@ -28,53 +29,18 @@ import { vImportBatchDoc } from "./lib/validators";
 // Overcast's dates, sessions and events have deterministic ids, and Up Next
 // only gains episodes that aren't already queued or since removed.
 //
-// The batch's lifecycle is `BATCH_MOVES` below, and every status change goes
-// through `moveBatch`, so a late result (a parse or worker run that outlived
-// its batch) can't move it backwards or finish it twice. The worker chain can
-// die (an action that throws or is lost), so the `resumeStalled` cron watches
-// for batches that stop making progress: it starts a new run of the chain,
-// which picks up where the old one stopped, and gives up after a few tries.
-// A show's queue row stays until its episodes are all matched, so nothing a
-// dead run had claimed is lost.
+//
+// The batch is the importBatch machine (lifecycles/importBatch.ts) and each
+// show in it an importShow (lifecycles/importShow.ts); docs/state-machines.md
+// draws both. A late result (a parse or worker run that outlived its batch, a
+// fetch report from a run whose claim was taken over) is refused by the state
+// it finds. The worker chain can die, so the batch's own timer checks every 5
+// minutes that it's getting somewhere, starts a new run if not, and gives up
+// after three. A show's row stays until its episodes are all matched, so
+// nothing a dead run had claimed is lost.
 
-type ImportStatus = Doc<"importBatches">["status"];
-
-/** Where each status may go next. done and failed are final. */
-const BATCH_MOVES: Record<ImportStatus, readonly ImportStatus[]> = {
-  parsing: ["fetching", "failed"],
-  fetching: ["done", "failed"],
-  done: [],
-  failed: [],
-};
-
-/** Moves the batch on if its lifecycle allows it from where it is now. False (and nothing written) if not. */
-async function moveBatch(
-  ctx: MutationCtx,
-  batch: Doc<"importBatches">,
-  to: ImportStatus,
-  patch: Partial<Doc<"importBatches">> = {},
-): Promise<boolean> {
-  if (!BATCH_MOVES[batch.status].includes(to)) return false;
-  const now = Date.now();
-  const final = BATCH_MOVES[to].length === 0;
-  await ctx.db.patch(batch._id, { ...patch, status: to, ...(final ? { finishedAt: now } : {}), updatedAt: now });
-  await mirrorBatch(ctx, batch._id);
-  // A finished or failed batch's leftover scratch rows go, a page at a time.
-  if (to === "failed") await ctx.scheduler.runAfter(0, internal.overcastImport.discardScratch, { batchId: batch._id });
-  return true;
-}
-
-/** No progress for this long and the watchdog starts the worker again. */
-export const IMPORT_STALL_MS = 5 * 60_000;
-/** Reading the file is one action, which Convex stops after 10 minutes. */
-export const PARSE_STALL_MS = 15 * 60_000;
-/** Restarts in a row without progress before the import gives up. */
-const MAX_RESTARTS = 3;
-/** A fetch claim older than this belongs to a run that died, and another may take it. */
-const CLAIM_STALE_MS = 3 * 60_000;
-/** Another fetch of the feed is running: try again this much later, this many times (past its 5-minute lease). */
+/** Another fetch of the feed is running: try again this much later. */
 const BUSY_RETRY_MS = 30_000;
-const BUSY_LIMIT = 12;
 
 /** Upload URL for the OPML file (POST the file, then pass the storageId). */
 export const generateUploadUrl = userMutation({
@@ -117,20 +83,27 @@ export const startOvercastImport = userMutation({
   handler: async (ctx, { storageId, opml, assumedSpeed }) => {
     if (!storageId && !opml) throw new Error("Pass storageId or opml");
     if (!(assumedSpeed >= 0.5 && assumedSpeed <= 3)) throw new Error("assumedSpeed must be between 0.5 and 3");
-    const now = Date.now();
-    const batchId = await ctx.db.insert("importBatches", {
-      userId: ctx.userId,
-      source: "overcast",
-      status: "parsing",
-      assumedSpeed,
-      startedAt: now,
-      counts: emptyCounts(),
-      playlists: [],
-      updatedAt: now,
-    });
-    await mirrorBatch(ctx, batchId);
-    await ctx.scheduler.runAfter(0, internal.importActions.parse, { batchId, storageId, opml });
+    // The batch is born by importBatch's START, a server event, so through an internal mutation.
+    const batchId: Id<"importBatches"> = await ctx.runMutation(internal.overcastImport.createBatch, { userId: ctx.userId, storageId, opml, assumedSpeed });
     return batchId;
+  },
+});
+
+export const createBatch = machines.internalMutation({
+  args: { userId: v.id("users"), storageId: v.optional(v.id("_storage")), opml: v.optional(v.string()), assumedSpeed: v.number() },
+  returns: v.id("importBatches"),
+  handler: async (ctx, { userId, storageId, opml, assumedSpeed }) => {
+    const now = Date.now();
+    const created = await importBatch.create(
+      ctx,
+      { userId, source: "overcast", assumedSpeed, startedAt: now, counts: emptyCounts(), playlists: [], updatedAt: now },
+      { type: "START" },
+    );
+    if (created.status !== "done") throw new Error(created.reasons.join(" "));
+    // The row has to exist before the reading can be scheduled for it, so it's
+    // here rather than in START's effect. The file's text stays out of history.
+    await ctx.scheduler.runAfter(0, internal.importActions.parse, { batchId: created.id, storageId, opml });
+    return created.id;
   },
 });
 
@@ -140,19 +113,21 @@ export const getImport = userQuery({
   returns: v.union(vImportBatchDoc, v.null()),
   handler: async (ctx, { batchId }) => {
     const batch = await ctx.db.get(batchId);
-    return batch?.userId === ctx.userId ? batch : null;
+    return batch?.userId === ctx.userId ? importBatchView(batch) : null;
   },
 });
 
 export const latestImport = userQuery({
   args: {},
   returns: v.union(vImportBatchDoc, v.null()),
-  handler: async (ctx) =>
-    await ctx.db
+  handler: async (ctx) => {
+    const batch = await ctx.db
       .query("importBatches")
       .withIndex("by_user_startedAt", (q) => q.eq("userId", ctx.userId))
       .order("desc")
-      .first(),
+      .first();
+    return batch ? importBatchView(batch) : null;
+  },
 });
 
 /** The batch and a ctx acting as its owner. */
@@ -166,13 +141,13 @@ async function batchCtx(ctx: MutationCtx, batchId: Id<"importBatches">) {
 
 export const getBatch = internalQuery({
   args: { batchId: v.id("importBatches") },
-  returns: v.union(vImportBatchDoc, v.null()),
+  returns: v.union(vImportBatchRow, v.null()),
   handler: async (ctx, { batchId }) => await ctx.db.get(batchId),
 });
 
 type Counts = Doc<"importBatches">["counts"];
 
-/** Adds to the batch's counts. Every call is progress, which the watchdog looks for in `updatedAt`. */
+/** Adds to the batch's counts. Every call is progress, which the batch's CHECK timer looks for in `updatedAt`. */
 async function bumpCounts(ctx: MutationCtx, batchId: Id<"importBatches">, delta: Partial<Counts>) {
   const batch = await ctx.db.get(batchId);
   if (!batch) return;
@@ -182,13 +157,12 @@ async function bumpCounts(ctx: MutationCtx, batchId: Id<"importBatches">, delta:
     if (k === "earliestListenAt") counts.earliestListenAt = Math.min(counts.earliestListenAt ?? Infinity, val);
     else counts[k] = (counts[k] ?? 0) + val;
   }
-  await ctx.db.patch(batchId, { counts, ...progressed(batch) });
-  if (batch.restarts) await mirrorBatch(ctx, batchId);
+  await ctx.db.patch(batchId, { counts, ...progressed() });
 }
 
-/** What a step that got somewhere writes: the time the watchdog checks, and no restarts owed. */
-function progressed(batch: Doc<"importBatches">) {
-  return { updatedAt: Date.now(), ...(batch.restarts ? { restarts: 0 } : {}) };
+/** What a step that got somewhere writes: the time importBatch's CHECK looks at. */
+function progressed() {
+  return { updatedAt: Date.now() };
 }
 
 const vStagedEpisode = v.object({
@@ -205,7 +179,7 @@ const vStagedEpisode = v.object({
 });
 
 /** Create (or find) the shows from one chunk of the export and stage their episodes. */
-export const stageFeeds = internalMutation({
+export const stageFeeds = machines.internalMutation({
   args: {
     batchId: v.id("importBatches"),
     feeds: v.array(
@@ -221,10 +195,10 @@ export const stageFeeds = internalMutation({
     ),
   },
   returns: v.null(),
-  handler: async (rawCtx, { batchId, feeds }) => {
-    const owned = await batchCtx(rawCtx, batchId);
-    // A parse that outlived its batch (the watchdog failed it) stages nothing.
-    if (!owned || owned.batch.status !== "parsing") return null;
+  handler: async (machineCtx, { batchId, feeds }) => {
+    const owned = await batchCtx(asMutationCtx(machineCtx), batchId);
+    // A parse that outlived its batch (its READ_STALLED timer failed it) stages nothing.
+    if (!owned || owned.batch.state.kind !== "parsing") return null;
     const { ctx } = owned;
     let subscribed = 0;
     let episodes = 0;
@@ -259,13 +233,21 @@ export const stageFeeds = internalMutation({
         if (e.pubDate !== undefined) newestExportedAt = Math.max(newestExportedAt ?? -Infinity, e.pubDate);
       }
       episodes += feed.episodes.length;
-      const rowId = await ctx.db.insert("importQueue", { batchId, podcastId: podcast._id, phase: "fetch", newestExportedAt, addedAt: feed.addedAt });
-      await mirrorShow(ctx, rowId);
+      await queueShow(machineCtx, { batchId, podcastId: podcast._id, newestExportedAt, addedAt: feed.addedAt });
     }
     await bumpCounts(ctx, batchId, { podcasts: feeds.length, subscribedPodcasts: subscribed, episodes });
     return null;
   },
 });
+
+/** A show's row in the batch's queue: an importShow, born waiting for a worker. */
+async function queueShow(
+  ctx: MachineCtx,
+  fields: { batchId: Id<"importBatches">; podcastId: Id<"podcasts">; newestExportedAt?: number; addedAt?: number },
+) {
+  const queued = await importShow.create(ctx, fields, { type: "QUEUED" });
+  if (queued.status !== "done") throw new Error(queued.reasons.join(" "));
+}
 
 /**
  * A show Overcast has as unsubscribed. New shows just get their added date.
@@ -327,7 +309,7 @@ const vPlaylist = v.object({
 });
 
 /** All feeds staged: record the playlists, apply priority shows and start fetching. */
-export const beginFetching = internalMutation({
+export const beginFetching = machines.internalMutation({
   args: {
     batchId: v.id("importBatches"),
     warning: v.optional(v.string()),
@@ -339,9 +321,9 @@ export const beginFetching = internalMutation({
     }),
   },
   returns: v.null(),
-  handler: async (rawCtx, { batchId, warning, playlists, upNextPlan }) => {
-    const owned = await batchCtx(rawCtx, batchId);
-    if (!owned || owned.batch.status !== "parsing") return null;
+  handler: async (machineCtx, { batchId, warning, playlists, upNextPlan }) => {
+    const owned = await batchCtx(asMutationCtx(machineCtx), batchId);
+    if (!owned || owned.batch.state.kind !== "parsing") return null;
     const { ctx } = owned;
     const resolve = async (overcastIds: number[]) => {
       const podcasts: Doc<"podcasts">[] = [];
@@ -371,94 +353,60 @@ export const beginFetching = internalMutation({
       const sub = await subscriptionFor(ctx, podcast._id);
       await setShowOverride(ctx, podcast._id, { newEpisodes: "upNextTop" }, sub?.subscribedAt ?? 1);
     }
-    await moveBatch(ctx, owned.batch, "fetching", {
+    await ctx.db.patch(batchId, {
       warning,
       playlists: resolved,
       upNextPlan: { ...upNextPlan, priorityPodcastIds: priority.map((p) => p._id) },
-      worker: 1,
-      restarts: 0,
+      ...progressed(),
     });
-    await ctx.scheduler.runAfter(0, internal.importActions.processBatch, { batchId, worker: 1 });
+    await importBatch.send(machineCtx, batchId, { type: "PARSED" });
     return null;
   },
 });
 
-export const failBatch = internalMutation({
+export const failBatch = machines.internalMutation({
   args: { batchId: v.id("importBatches"), error: v.string() },
   returns: v.null(),
   handler: async (ctx, { batchId, error }) => {
-    const batch = await ctx.db.get(batchId);
-    if (batch) await moveBatch(ctx, batch, "failed", { error });
-    return null;
-  },
-});
-
-/**
- * Cron: imports that have stopped making progress. A fetching one gets a new
- * run of the worker chain, and the old run (if it's only slow) stops at its next
- * step. After MAX_RESTARTS in a row without progress, or a parse that never
- * finished, it fails with a message the app shows.
- */
-export const resumeStalled = internalMutation({
-  args: {},
-  returns: v.null(),
-  handler: async (ctx) => {
-    const now = Date.now();
-    const stalled = (status: ImportStatus, ms: number) =>
-      ctx.db
-        .query("importBatches")
-        .withIndex("by_status_updatedAt", (q) => q.eq("status", status).lt("updatedAt", now - ms))
-        .take(20);
-    for (const batch of await stalled("parsing", PARSE_STALL_MS)) {
-      await moveBatch(ctx, batch, "failed", { error: "Reading the file stopped part way. Try importing it again." });
-    }
-    for (const batch of await stalled("fetching", IMPORT_STALL_MS)) {
-      const restarts = batch.restarts ?? 0;
-      if (restarts >= MAX_RESTARTS) {
-        await moveBatch(ctx, batch, "failed", { error: "The import stopped part way and couldn't restart. Try importing the file again." });
-        continue;
-      }
-      const worker = (batch.worker ?? 0) + 1;
-      console.warn(`Import ${batch._id} made no progress for ${Math.round((now - batch.updatedAt) / 60_000)} min: restarting it (run ${worker})`);
-      await ctx.db.patch(batch._id, { worker, restarts: restarts + 1, updatedAt: now });
-      await mirrorBatch(ctx, batch._id);
-      await ctx.scheduler.runAfter(0, internal.importActions.processBatch, { batchId: batch._id, worker });
-    }
+    // Refused if it's already moved on (its READ_STALLED timer failed it first): nothing to do.
+    await importBatch.send(ctx, batchId, { type: "FAILED", error });
     return null;
   },
 });
 
 const SCRATCH_PAGE = 500;
 
-/** A failed batch's scratch rows, a page at a time. */
-export const discardScratch = internalMutation({
+/** A failed batch's scratch rows, a page at a time (importBatch's failing effects schedule it). */
+export const discardScratch = machines.internalMutation({
   args: { batchId: v.id("importBatches") },
   returns: v.null(),
-  handler: async (ctx, { batchId }) => {
+  handler: async (machineCtx, { batchId }) => {
+    const ctx = asMutationCtx(machineCtx);
     const batch = await ctx.db.get(batchId);
-    if (batch && batch.status !== "failed") return null;
-    const rows: { _id: Id<"importItems"> | Id<"importQueue"> | Id<"importUpNext"> }[] = [
+    if (batch && batch.state.kind !== "failed") return null;
+    const shows = await ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batchId)).take(SCRATCH_PAGE);
+    for (const row of shows) await importShow.purge(machineCtx, row._id, { force: true });
+    const rows: { _id: Id<"importItems"> | Id<"importUpNext"> }[] = [
       ...(await ctx.db.query("importItems").withIndex("by_batch_podcast", (q) => q.eq("batchId", batchId)).take(SCRATCH_PAGE)),
-      ...(await ctx.db.query("importQueue").withIndex("by_batch_phase", (q) => q.eq("batchId", batchId)).take(SCRATCH_PAGE)),
       ...(await ctx.db.query("importUpNext").withIndex("by_batch", (q) => q.eq("batchId", batchId)).take(SCRATCH_PAGE)),
     ];
     for (const row of rows) await ctx.db.delete(row._id);
-    if (rows.length) await ctx.scheduler.runAfter(0, internal.overcastImport.discardScratch, { batchId });
+    if (rows.length || shows.length) await ctx.scheduler.runAfter(0, internal.overcastImport.discardScratch, { batchId });
     return null;
   },
 });
 
 /** Whether `worker` is still the batch's run of the chain, and the batch still fetching. */
 const isCurrent = (batch: Doc<"importBatches"> | null, worker: number | undefined): batch is Doc<"importBatches"> =>
-  batch?.status === "fetching" && (worker === undefined || (batch.worker ?? 0) === worker);
+  batch?.state.kind === "fetching" && (worker === undefined || batch.state.worker === worker);
 
 /**
- * The next few feeds to fetch, claimed for this run. None and no `waitMs`: every
- * feed is in. None with `waitMs`: some are waiting (another fetch of the feed is
- * running, or a run that died claimed it), so look again then. `stale`: this
- * run is no longer the batch's, and should stop.
+ * The next few feeds to fetch, claimed for this run (importShow's CLAIM). None
+ * and no `waitMs`: every feed is in. None with `waitMs`: some are waiting
+ * (another fetch of the feed is running, or a run that died claimed it), so look
+ * again then. `stale`: this run is no longer the batch's, and should stop.
  */
-export const claimFetches = internalMutation({
+export const claimFetches = machines.internalMutation({
   args: { batchId: v.id("importBatches"), count: v.number(), worker: v.optional(v.number()) },
   returns: v.object({
     stale: v.boolean(),
@@ -466,99 +414,49 @@ export const claimFetches = internalMutation({
     rows: v.array(v.object({ rowId: v.id("importQueue"), podcastId: v.id("podcasts"), claimedAt: v.number() })),
     waitMs: v.optional(v.number()),
   }),
-  handler: async (ctx, { batchId, count, worker }) => {
+  handler: async (machineCtx, { batchId, count, worker }) => {
+    const ctx = asMutationCtx(machineCtx);
     if (!isCurrent(await ctx.db.get(batchId), worker)) return { stale: true, rows: [] };
     const now = Date.now();
-    const rows = await ctx.db
-      .query("importQueue")
-      .withIndex("by_batch_phase", (q) => q.eq("batchId", batchId).eq("phase", "fetch"))
-      .collect();
-    // When each row may next be taken.
-    const freeAt = (r: Doc<"importQueue">) => Math.max(r.notBefore ?? 0, r.claimedAt !== undefined ? r.claimedAt + CLAIM_STALE_MS : 0);
-    const free = rows.filter((r) => freeAt(r) <= now).slice(0, count);
-    for (const r of free) {
-      await ctx.db.patch(r._id, { claimedAt: now });
-      await mirrorShow(ctx, r._id);
+    const inState = (kind: "waiting" | "fetching") =>
+      ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batchId).eq("state.kind", kind)).collect();
+    const rows = [...(await inState("waiting")), ...(await inState("fetching"))];
+    // When each row may next be taken: a busy feed's retry time, or when a claim goes stale.
+    const freeAt = ({ state }: Doc<"importQueue">) =>
+      state.kind === "waiting" ? state.notBefore : state.kind === "fetching" ? state.claimedAt + CLAIM_STALE_MS : Infinity;
+    const claimed: { rowId: Id<"importQueue">; podcastId: Id<"podcasts">; claimedAt: number }[] = [];
+    for (const r of rows) {
+      if (claimed.length >= count || freeAt(r) > now) continue;
+      if ((await importShow.send(machineCtx, r._id, { type: "CLAIM", claimedAt: now })).status === "done") {
+        claimed.push({ rowId: r._id, podcastId: r.podcastId, claimedAt: now });
+      }
     }
-    const waiting = rows.filter((r) => !free.includes(r));
-    const waitMs = !free.length && waiting.length ? Math.max(1000, Math.min(...waiting.map(freeAt)) - now) : undefined;
-    return { stale: false, rows: free.map((r) => ({ rowId: r._id, podcastId: r.podcastId, claimedAt: now })), waitMs };
+    const waiting = rows.filter((r) => !claimed.some((c) => c.rowId === r._id));
+    const waitMs = !claimed.length && waiting.length ? Math.max(1000, Math.min(...waiting.map(freeAt)) - now) : undefined;
+    return { stale: false, rows: claimed, waitMs };
   },
 });
 
 /** Most recent known durations kept per show for the batch-wide median. */
 const DURATION_SAMPLE = 500;
 
-/** A feed has been fetched (or failed): note what matching needs and queue it for matching. */
-export const feedFetched = internalMutation({
+/** A feed has been fetched (or failed): importShow's FETCHED, with what matching needs. */
+export const feedFetched = machines.internalMutation({
   args: {
     batchId: v.id("importBatches"),
     rowId: v.id("importQueue"),
-    /** The claim this fetch was made under (claimFetches). A run from before claims had one can't report. */
+    /** The claim this fetch was made under (claimFetches). */
     claimedAt: v.number(),
     ok: v.boolean(),
     status: v.optional(v.number()),
     error: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { batchId, rowId, claimedAt, ok, status, error }) => {
-    await markFetched(ctx, batchId, rowId, claimedAt, { ok, status, error });
-    return null;
-  },
-});
-
-/**
- * Another fetch of the feed was running when this run tried, so the stored
- * episodes may be half there. It waits and tries again rather than matching
- * against them, and only counts the feed as failed if that fetch never ends.
- */
-export const feedBusy = internalMutation({
-  args: { batchId: v.id("importBatches"), rowId: v.id("importQueue"), claimedAt: v.number() },
-  returns: v.null(),
-  handler: async (ctx, { batchId, rowId, claimedAt }) => {
+  handler: async (machineCtx, { batchId, rowId, claimedAt, ok, status, error }) => {
+    const ctx = asMutationCtx(machineCtx);
     const row = await ctx.db.get(rowId);
     const batch = await ctx.db.get(batchId);
-    if (!row || !holdsClaim(row, claimedAt) || batch?.status !== "fetching") return null;
-    const busyCount = (row.busyCount ?? 0) + 1;
-    if (busyCount >= BUSY_LIMIT) {
-      await markFetched(ctx, batchId, rowId, claimedAt, { ok: false, error: "Another fetch of this feed never finished" });
-      return null;
-    }
-    await ctx.db.patch(rowId, { busyCount, claimedAt: undefined, notBefore: Date.now() + BUSY_RETRY_MS });
-    await mirrorShow(ctx, rowId);
-    await ctx.db.patch(batchId, progressed(batch));
-    if (batch.restarts) await mirrorBatch(ctx, batchId);
-    return null;
-  },
-});
-
-/**
- * Whether a report belongs to the row's current claim. A run that was only slow
- * reports after a newer run claimed the show again (or after it was fetched), and
- * its answer mustn't overwrite the newer run's.
- */
-function holdsClaim(row: Doc<"importQueue">, claimedAt: number) {
-  return row.phase === "fetch" && row.claimedAt === claimedAt;
-}
-
-async function markFetched(
-  ctx: MutationCtx,
-  batchId: Id<"importBatches">,
-  rowId: Id<"importQueue">,
-  claimedAt: number,
-  { ok, status, error }: { ok: boolean; status?: number; error?: string },
-) {
-  const row = await ctx.db.get(rowId);
-  const batch = await ctx.db.get(batchId);
-  if (!row || !holdsClaim(row, claimedAt) || batch?.status !== "fetching") return;
-  {
-    const podcast = await ctx.db.get(row.podcastId);
-    const failedFeeds =
-      !ok && podcast
-        ? [...(batch.failedFeeds ?? []), { podcastId: podcast._id, title: podcast.title, feedUrl: podcast.feedUrl, status, error: error ?? "Fetch failed" }]
-        : batch.failedFeeds;
-    await ctx.db.patch(batchId, { failedFeeds, ...progressed(batch) });
-    if (batch.restarts) await mirrorBatch(ctx, batchId);
+    if (!row || batch?.state.kind !== "fetching") return null;
     const episodes = await ctx.db
       .query("episodes")
       .withIndex("by_podcast_pubDate", (q) => q.eq("podcastId", row.podcastId))
@@ -566,18 +464,51 @@ async function markFetched(
     const inFeed = episodes.filter((e) => !e.isGhost);
     const durations = inFeed.map((e) => e.duration).filter((d): d is number => d !== undefined && d > 0);
     const dates = inFeed.map((e) => e.pubDate).filter((d): d is number => d !== undefined);
-    await ctx.db.patch(rowId, {
-      phase: "match",
+    const oldest = dates.length ? Math.min(...dates) : undefined;
+    const medianDuration = median(durations);
+    const fetched = await importShow.send(machineCtx, rowId, {
+      type: "FETCHED",
+      claimedAt,
       feedOk: ok,
-      oldestFeedPubDate: dates.length ? Math.min(...dates) : undefined,
-      medianDuration: median(durations),
+      ...(oldest !== undefined ? { oldestFeedPubDate: oldest } : {}),
+      ...(medianDuration !== undefined ? { medianDuration } : {}),
       durations: durations.slice(-DURATION_SAMPLE),
-      claimedAt: undefined,
-      notBefore: undefined,
     });
-    await mirrorShow(ctx, rowId);
-  }
+    // Refused: a run that was only slow, reporting after a newer run claimed the show again or fetched it.
+    if (fetched.status !== "done") return null;
+    await ctx.db.patch(batchId, { ...(ok ? {} : { failedFeeds: withFailedFeed(await ctx.db.get(row.podcastId), batch, status, error) }), ...progressed() });
+    return null;
+  },
+});
+
+function withFailedFeed(podcast: Doc<"podcasts"> | null, batch: Doc<"importBatches">, status: number | undefined, error: string | undefined) {
+  const failed = batch.failedFeeds ?? [];
+  if (!podcast) return failed;
+  return [...failed, { podcastId: podcast._id, title: podcast.title, feedUrl: podcast.feedUrl, status, error: error ?? "Fetch failed" }];
 }
+
+/**
+ * Another fetch of the feed was running when this run tried, so the stored
+ * episodes may be half there (importShow's BUSY). It waits and tries again rather
+ * than matching against them, and only counts the feed as failed if that fetch
+ * never ends.
+ */
+export const feedBusy = machines.internalMutation({
+  args: { batchId: v.id("importBatches"), rowId: v.id("importQueue"), claimedAt: v.number() },
+  returns: v.null(),
+  handler: async (machineCtx, { batchId, rowId, claimedAt }) => {
+    const ctx = asMutationCtx(machineCtx);
+    const row = await ctx.db.get(rowId);
+    const batch = await ctx.db.get(batchId);
+    if (!row || batch?.state.kind !== "fetching") return null;
+    const busy = await importShow.send(machineCtx, rowId, { type: "BUSY", claimedAt, retryAt: Date.now() + BUSY_RETRY_MS });
+    if (busy.status !== "done") return null;
+    const gaveUp = busy.to === "fetched";
+    const failedFeeds = gaveUp ? withFailedFeed(await ctx.db.get(row.podcastId), batch, undefined, "Another fetch of this feed never finished") : undefined;
+    await ctx.db.patch(batchId, { ...(failedFeeds ? { failedFeeds } : {}), ...progressed() });
+    return null;
+  },
+});
 
 export function median(values: number[]): number | undefined {
   if (!values.length) return undefined;
@@ -600,16 +531,17 @@ const vMatchRow = v.object({
  * Take the next few fetched shows to match. Called only once every feed is in,
  * so the first call can work out the batch-wide median duration.
  */
-export const claimMatches = internalMutation({
+export const claimMatches = machines.internalMutation({
   args: { batchId: v.id("importBatches"), count: v.number() },
   returns: v.array(vMatchRow),
-  handler: async (ctx, { batchId, count }) => {
+  handler: async (machineCtx, { batchId, count }) => {
+    const ctx = asMutationCtx(machineCtx);
     const batch = await ctx.db.get(batchId);
-    if (batch?.status !== "fetching") return [];
+    if (batch?.state.kind !== "fetching") return [];
     const pending = () =>
-      ctx.db.query("importQueue").withIndex("by_batch_phase", (q) => q.eq("batchId", batchId).eq("phase", "match"));
+      ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batchId).eq("state.kind", "fetched"));
     if (batch.medianDuration === undefined) {
-      const overall = median((await pending().collect()).flatMap((r) => r.durations ?? []));
+      const overall = median((await pending().collect()).flatMap((r) => (r.state.kind === "fetched" ? r.state.durations : [])));
       if (overall !== undefined) await ctx.db.patch(batchId, { medianDuration: overall });
     }
     // The rows stay until their show is matched (matchPodcast deletes each), so a
@@ -618,9 +550,9 @@ export const claimMatches = internalMutation({
     return rows.map((r) => ({
       rowId: r._id,
       podcastId: r.podcastId,
-      feedOk: r.feedOk ?? false,
-      oldestFeedPubDate: r.oldestFeedPubDate,
-      medianDuration: r.medianDuration,
+      feedOk: r.state.kind === "fetched" && r.state.feedOk,
+      oldestFeedPubDate: r.state.kind === "fetched" ? r.state.oldestFeedPubDate : undefined,
+      medianDuration: r.state.kind === "fetched" ? r.state.medianDuration : undefined,
       newestExportedAt: r.newestExportedAt,
       addedAt: r.addedAt,
     }));
@@ -636,18 +568,24 @@ const DAY = 86_400_000;
  * Each staged episode is deleted in the same step that applies it, so two runs
  * on one show (a restart while the old run was only slow) never apply one twice.
  */
-export const matchPodcast = internalMutation({
+export const matchPodcast = machines.internalMutation({
   args: { batchId: v.id("importBatches"), rowId: v.id("importQueue") },
   returns: v.boolean(),
-  handler: async (rawCtx, { batchId, rowId }) => {
+  handler: async (machineCtx, { batchId, rowId }) => {
+    const rawCtx = asMutationCtx(machineCtx);
     const owned = await batchCtx(rawCtx, batchId);
     const queued = await rawCtx.db.get(rowId);
     // Gone: another run finished this show. Not fetching: the batch is over.
-    if (!owned || owned.batch.status !== "fetching" || !queued || queued.phase !== "match") return true;
-    const row = { ...queued, feedOk: queued.feedOk ?? false };
+    if (!owned || owned.batch.state.kind !== "fetching" || !queued || queued.state.kind !== "fetched") return true;
+    const row = { ...queued, ...queued.state };
+    // Its staged episodes are all applied (or its show's gone): importShow's MATCHED, and the row goes.
+    const matched = async () => {
+      await importShow.send(machineCtx, rowId, { type: "MATCHED" });
+      await importShow.purge(machineCtx, rowId);
+    };
     const podcast = await rawCtx.db.get(row.podcastId);
     if (!podcast) {
-      await rawCtx.db.delete(rowId);
+      await matched();
       return true;
     }
     const { batch, ctx } = owned;
@@ -682,7 +620,7 @@ export const matchPodcast = internalMutation({
     }
     const done = items.length < MATCH_PAGE;
     if (done) {
-      await ctx.db.delete(rowId);
+      await matched();
       delta.podcastsProcessed = 1;
       if (!row.feedOk) delta.feedsFailed = 1;
       if (subscribed && row.feedOk) await stageUntouchedEpisodes(ctx, batchId, podcast._id, row);
@@ -853,21 +791,22 @@ async function applyImportedState(
  * or archived since, are left alone, as are ones he's removed from Up Next
  * after Overcast's date (the queue tombstone wins).
  */
-export const finishBatch = internalMutation({
+export const finishBatch = machines.internalMutation({
   args: { batchId: v.id("importBatches") },
   /** False: there's more to do after all, so the worker carries on. */
   returns: v.boolean(),
-  handler: async (rawCtx, { batchId }) => {
-    const owned = await batchCtx(rawCtx, batchId);
+  handler: async (machineCtx, { batchId }) => {
+    const owned = await batchCtx(asMutationCtx(machineCtx), batchId);
     // Only once, and only when every show is in: a second or late call does nothing.
-    if (!owned || owned.batch.status !== "fetching") return true;
+    if (!owned || owned.batch.state.kind !== "fetching") return true;
     const { batch, ctx } = owned;
     const unfinished = await ctx.db
       .query("importQueue")
-      .withIndex("by_batch_phase", (q) => q.eq("batchId", batchId))
+      .withIndex("by_batch_state", (q) => q.eq("batchId", batchId))
       .first();
     if (unfinished) return false;
-    if (await requeueOrphans(ctx, batchId)) return false;
+    if (await requeueOrphans(machineCtx, ctx, batchId)) return false;
+    if ((await importBatch.send(machineCtx, batchId, { type: "ALL_MATCHED" })).status !== "done") return true;
     const rows = await ctx.db
       .query("importUpNext")
       .withIndex("by_batch", (q) => q.eq("batchId", batchId))
@@ -884,7 +823,7 @@ export const finishBatch = internalMutation({
       if (await addToQueue(ctx, episode, "bottom", row.at, addedBy)) upNext++;
     }
     for (const row of rows) await ctx.db.delete(row._id);
-    await moveBatch(ctx, batch, "done", { counts: { ...batch.counts, upNextEpisodes: upNext } });
+    await ctx.db.patch(batchId, { counts: { ...batch.counts, upNextEpisodes: upNext }, updatedAt: Date.now() });
     return true;
   },
 });
@@ -895,7 +834,7 @@ export const finishBatch = internalMutation({
  * behind. Their shows go back in the queue, to be fetched and matched like the
  * rest. True if any did.
  */
-async function requeueOrphans(ctx: MutationCtx, batchId: Id<"importBatches">) {
+async function requeueOrphans(machineCtx: MachineCtx, ctx: MutationCtx, batchId: Id<"importBatches">) {
   let requeued = false;
   let after: Id<"podcasts"> | undefined;
   for (;;) {
@@ -919,14 +858,12 @@ async function requeueOrphans(ctx: MutationCtx, batchId: Id<"importBatches">) {
     const dates = staged.map((i) => i.pubDate).filter((d): d is number => d !== undefined);
     const batch = (await ctx.db.get(batchId))!;
     const sub = await subscriptionFor(asUser(ctx, batch.userId!), podcastId);
-    const rowId = await ctx.db.insert("importQueue", {
+    await queueShow(machineCtx, {
       batchId,
       podcastId,
-      phase: "fetch",
-      newestExportedAt: dates.length ? Math.max(...dates) : undefined,
-      addedAt: sub?.subscribedAt,
+      ...(dates.length ? { newestExportedAt: Math.max(...dates) } : {}),
+      ...(sub?.subscribedAt !== undefined ? { addedAt: sub.subscribedAt } : {}),
     });
-    await mirrorShow(ctx, rowId);
     requeued = true;
     after = item.podcastId;
   }

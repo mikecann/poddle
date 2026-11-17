@@ -87,17 +87,16 @@ function chunkFeeds(feeds: OvercastFeed[]): OvercastFeed[][] {
 /**
  * One run of the worker chain: fetch a handful of feeds, then schedule the
  * next run. Once every feed is in, match a handful of shows per run instead,
- * then finish. `worker` says which run of the chain this is: when the watchdog
- * (overcastImport.resumeStalled) has started a newer one, this one stops.
+ * then finish. `worker` says which run of the chain this is: when the batch's
+ * CHECK timer (lifecycles/importBatch.ts) has started a newer one, this one stops.
  */
 export const processBatch = internalAction({
   args: { batchId: v.id("importBatches"), worker: v.optional(v.number()) },
   returns: v.null(),
   handler: async (ctx, { batchId, worker }) => {
     const batch = await ctx.runQuery(internal.overcastImport.getBatch, { batchId });
-    if (!batch || batch.status !== "fetching") return null;
-    // A run scheduled before runs were numbered is the batch's current one.
-    const me = worker ?? batch.worker ?? 0;
+    if (batch?.state.kind !== "fetching") return null;
+    const me = worker ?? batch.state.worker;
     const next = (delayMs = 0) => ctx.scheduler.runAfter(delayMs, internal.importActions.processBatch, { batchId, worker: me });
     const claim = await ctx.runMutation(internal.overcastImport.claimFetches, { batchId, count: FETCH_BATCH, worker: me });
     if (claim.stale) return null;

@@ -6,6 +6,8 @@ import { internalMutation, internalQuery, mutation, type MutationCtx } from "./_
 // Import the machines from here rather than their own modules: sending needs the
 // catalog, and importing this loads it.
 import { feedFetch } from "./lifecycles/feedFetch";
+import { importBatch } from "./lifecycles/importBatch";
+import { importShow } from "./lifecycles/importShow";
 import schema from "./schema";
 
 // Every state machine in Poddle (@convex-dev/state-machines, vendored in
@@ -16,10 +18,7 @@ import schema from "./schema";
 // which carries the library's internal brand. The rest of the app stays on
 // Convex's own builders (and lib/auth.ts's wrappers of them).
 //
-// The import's tables are still moving over (widen, backfill, switch): until the
-// switch, their `state` fields are optional, which the catalog doesn't take to
-// be a machine's.
-export const machines: Machines<typeof schema> = defineMachines(schema, [feedFetch], {
+export const machines: Machines<typeof schema> = defineMachines(schema, [feedFetch, importBatch, importShow], {
   mutation,
   internalMutation,
   internalQuery,
@@ -27,7 +26,7 @@ export const machines: Machines<typeof schema> = defineMachines(schema, [feedFet
   component: components.stateMachines,
 });
 
-export { feedFetch };
+export { feedFetch, importBatch, importShow };
 
 /** A catalog handler's ctx, for the app's helpers that take Convex's MutationCtx. */
 export type MachineCtx = AppCtx<DataModel> & InternalCtx;

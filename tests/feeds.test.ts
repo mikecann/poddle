@@ -203,12 +203,13 @@ describe("refreshing", () => {
     // Subscribing happens with the app open, so it wakes nothing.
     expect(await pendingWakes(t)).toHaveLength(0);
 
+    const publishedAt = Date.now(); // the setup's scheduled work has moved the clock on a little
     await publishFresh(t, podcastId);
     const [wake] = await pendingWakes(t);
     expect(wake?.args).toEqual([{ userId: await t.userId() }]);
     // Two minutes out, so the rest of the poll lands first.
-    expect(wake!.scheduledTime - NOW).toBeGreaterThanOrEqual(SYNC_WAKE_DELAY);
-    expect(wake!.scheduledTime - NOW).toBeLessThan(SYNC_WAKE_DELAY + 1000);
+    expect(wake!.scheduledTime - publishedAt).toBeGreaterThanOrEqual(SYNC_WAKE_DELAY);
+    expect(wake!.scheduledTime - publishedAt).toBeLessThan(SYNC_WAKE_DELAY + 1000);
 
     // More of the same poll, a minute later: it rides along on the same push.
     vi.setSystemTime(NOW + 60_000);

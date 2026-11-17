@@ -211,17 +211,33 @@ describe("Overcast import, when things go wrong", () => {
   /** Starts an import and runs only the parse: the batch is fetching, its first worker run is scheduled but hasn't run. */
   async function parsedOnly(t: T) {
     const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: fixture("overcast-all-data.opml"), assumedSpeed: 1.5 });
-    vi.runOnlyPendingTimers();
-    await t.finishInProgressScheduledFunctions();
+    await clockOn(t, 0); // the read, which is due now, and not the read's 15-minute deadline
     return batchId;
   }
 
-  /** The worker chain dies: whatever it scheduled next finds it's no longer the batch's worker, and stops. */
-  async function killWorker(t: T, batchId: Id<"importBatches">) {
+  /** Scheduled jobs of `fn` that haven't run are lost, as if the deployment dropped them. */
+  async function lose(t: T, fn: "processBatch" | "parse") {
     await t.run(async (ctx) => {
-      const batch = (await ctx.db.get(batchId))!;
-      await ctx.db.patch(batchId, { worker: (batch.worker ?? 0) + 100 });
+      for (const job of await ctx.db.system.query("_scheduled_functions").collect()) {
+        if (job.state.kind === "pending" && job.name.includes(fn)) await ctx.scheduler.cancel(job._id);
+      }
     });
+  }
+
+  /** The worker chain dies: the next run it scheduled never happens. */
+  const killWorker = (t: T, _batchId: Id<"importBatches">) => lose(t, "processBatch");
+
+  /** Which run of the worker owns the batch now. */
+  const workerOf = (t: T, batchId: Id<"importBatches">) =>
+    t.run(async (ctx) => {
+      const state = (await ctx.db.get(batchId))!.state;
+      return state.kind === "fetching" ? state.worker : 0;
+    });
+
+  /** The clock moves on `minutes`, and whatever timer falls due fires (but not what it schedules). */
+  async function clockOn(t: T, minutes: number) {
+    vi.advanceTimersByTime(minutes * MIN);
+    await t.finishInProgressScheduledFunctions();
   }
 
   const batchOf = async (t: T, batchId: Id<"importBatches">) => (await t.query(api.overcastImport.getImport, { batchId }))!;
@@ -232,12 +248,8 @@ describe("Overcast import, when things go wrong", () => {
       ...(await ctx.db.query("importUpNext").collect()),
     ]);
 
-  /** A run of the watchdog cron, after `minutes` without progress. */
-  async function watchdogAfter(t: T, minutes: number) {
-    vi.setSystemTime(Date.now() + minutes * MIN);
-    await t.mutation(internal.overcastImport.resumeStalled, {});
-    await drain(t);
-  }
+  /** The batch's CHECK timer (and anything it starts) runs, 5 minutes on. */
+  const watchdog = (t: T) => drain(t);
 
   // A fetch of the same feed already running (the poller, someone else adding the
   // show) made the import's claim answer "busy", which it took as fetched. It then
@@ -262,13 +274,11 @@ describe("Overcast import, when things go wrong", () => {
     const t = setup();
     const batchId = await parsedOnly(t);
     await killWorker(t, batchId);
-    await drain(t);
-    expect((await batchOf(t, batchId)).status).toBe("fetching");
-
-    await watchdogAfter(t, 2);
+    await clockOn(t, 4);
     expect((await batchOf(t, batchId)).status).toBe("fetching"); // not stalled long enough yet
+    expect(await workerOf(t, batchId)).toBe(1);
 
-    await watchdogAfter(t, 6);
+    await watchdog(t);
     const batch = await batchOf(t, batchId);
     expect(batch.status).toBe("done");
     expect(batch.counts).toMatchObject({ podcastsProcessed: 3, episodesMatched: 6, sessions: 6, upNextEpisodes: 3 });
@@ -281,7 +291,7 @@ describe("Overcast import, when things go wrong", () => {
   test("a worker that dies mid-match loses no shows and doubles no history", async () => {
     const t = setup();
     const batchId = await parsedOnly(t);
-    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    const worker = await workerOf(t, batchId);
     // One worker run fetches all three feeds, then the chain dies just after
     // claiming shows to match, and once more part way through matching one.
     await t.action(internal.importActions.processBatch, { batchId, worker });
@@ -291,7 +301,7 @@ describe("Overcast import, when things go wrong", () => {
     await t.mutation(internal.overcastImport.matchPodcast, { batchId, rowId: row!._id });
     await drain(t);
 
-    await watchdogAfter(t, 6);
+    await watchdog(t);
     const batch = await batchOf(t, batchId);
     expect(batch.status).toBe("done");
     expect(batch.counts).toMatchObject({ podcastsProcessed: 3, episodesMatched: 6, ghostEpisodes: 2, sessions: 6, playedEpisodes: 5 });
@@ -304,17 +314,14 @@ describe("Overcast import, when things go wrong", () => {
     const t = setup();
     const batchId = await parsedOnly(t);
     await killWorker(t, batchId);
-    await drain(t);
-    // Each restart dies before it gets anywhere.
-    let restarts = 0;
-    while ((await batchOf(t, batchId)).status === "fetching" && restarts < 10) {
-      vi.setSystemTime(Date.now() + 6 * MIN);
-      await t.mutation(internal.overcastImport.resumeStalled, {});
+    // Each check finds nothing done, and each restart dies before it gets anywhere.
+    let checks = 0;
+    while ((await batchOf(t, batchId)).status === "fetching" && checks < 10) {
+      await clockOn(t, 6); // one CHECK each time: they come every 5 minutes
       await killWorker(t, batchId);
-      await drain(t);
-      restarts++;
+      checks++;
     }
-    expect(restarts).toBe(4); // three restarts, then it gives up
+    expect(checks).toBe(4); // three restarts, then it gives up
     const batch = await batchOf(t, batchId);
     expect(batch.status).toBe("failed");
     expect(batch.error).toMatch(/stopped/);
@@ -323,7 +330,7 @@ describe("Overcast import, when things go wrong", () => {
     expect(await scratchRows(t)).toEqual([]);
 
     // A late run of a worker from before it gave up changes nothing.
-    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    const worker = await workerOf(t, batchId);
     await t.action(internal.importActions.processBatch, { batchId, worker });
     await t.mutation(internal.overcastImport.finishBatch, { batchId });
     expect(await batchOf(t, batchId)).toMatchObject({ status: "failed" });
@@ -334,12 +341,13 @@ describe("Overcast import, when things go wrong", () => {
     const t = setup();
     const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: fixture("overcast-all-data.opml"), assumedSpeed: 1.5 });
     // The parse action is lost before it runs.
-    await t.run(async (ctx) => {
-      for (const job of await ctx.db.system.query("_scheduled_functions").collect()) await ctx.scheduler.cancel(job._id);
-    });
-    await watchdogAfter(t, 10);
+    await lose(t, "parse");
+    await clockOn(t, 10);
     expect((await batchOf(t, batchId)).status).toBe("parsing");
-    await watchdogAfter(t, 6);
+    const before = (await batchOf(t, batchId)).updatedAt;
+    await clockOn(t, 6);
+    // From a Codex review: sync pages by updatedAt, so failing has to move it.
+    expect((await batchOf(t, batchId)).updatedAt).toBeGreaterThan(before);
     expect(await batchOf(t, batchId)).toMatchObject({ status: "failed", error: expect.stringMatching(/stopped/) });
   });
 
@@ -358,17 +366,16 @@ describe("Overcast import, when things go wrong", () => {
   test("a slow run's late fetch report can't overwrite the newer run's", async () => {
     const t = setup();
     const batchId = await parsedOnly(t);
-    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    const worker = await workerOf(t, batchId);
     const first = await t.mutation(internal.overcastImport.claimFetches, { batchId, count: 1, worker });
     vi.setSystemTime(Date.now() + 4 * MIN); // its claim goes stale
-    const second = await t.mutation(internal.overcastImport.claimFetches, { batchId, count: 1, worker });
-    const { rowId } = second.rows[0]!;
-    expect(rowId).toBe(first.rows[0]!.rowId);
+    const second = await t.mutation(internal.overcastImport.claimFetches, { batchId, count: 6, worker });
+    const { rowId } = second.rows.find((r) => r.rowId === first.rows[0]!.rowId)!;
 
     await t.mutation(internal.overcastImport.feedFetched, { batchId, rowId, claimedAt: first.rows[0]!.claimedAt, ok: false, error: "timeout" });
-    expect(await t.run(async (ctx) => (await ctx.db.get(rowId))?.phase)).toBe("fetch");
-    await t.mutation(internal.overcastImport.feedFetched, { batchId, rowId, claimedAt: second.rows[0]!.claimedAt, ok: true });
-    expect(await t.run(async (ctx) => await ctx.db.get(rowId))).toMatchObject({ phase: "match", feedOk: true });
+    expect(await t.run(async (ctx) => (await ctx.db.get(rowId))?.state.kind)).toBe("fetching");
+    await t.mutation(internal.overcastImport.feedFetched, { batchId, rowId, claimedAt: second.rows.find((r) => r.rowId === rowId)!.claimedAt, ok: true });
+    expect(await t.run(async (ctx) => (await ctx.db.get(rowId))?.state)).toMatchObject({ kind: "fetched", feedOk: true });
     expect((await batchOf(t, batchId)).failedFeeds ?? []).toEqual([]);
   });
 
@@ -386,9 +393,8 @@ describe("Overcast import, when things go wrong", () => {
   test("a show interrupted part way through matching is finished once, with no history twice", async () => {
     const t = setup();
     const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: bigExport(150), assumedSpeed: 1.5 });
-    vi.runOnlyPendingTimers();
-    await t.finishInProgressScheduledFunctions();
-    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    await clockOn(t, 0);
+    const worker = await workerOf(t, batchId);
     await t.action(internal.importActions.processBatch, { batchId, worker });
     await killWorker(t, batchId);
     const [row] = await t.mutation(internal.overcastImport.claimMatches, { batchId, count: 6 });
@@ -396,7 +402,7 @@ describe("Overcast import, when things go wrong", () => {
     expect(await t.mutation(internal.overcastImport.matchPodcast, { batchId, rowId: row!.rowId })).toBe(false);
     await drain(t);
 
-    await watchdogAfter(t, 6);
+    await watchdog(t);
     // And the slow run wakes up and tries the same show once more.
     expect(await t.mutation(internal.overcastImport.matchPodcast, { batchId, rowId: row!.rowId })).toBe(true);
     const batch = await batchOf(t, batchId);
@@ -411,7 +417,7 @@ describe("Overcast import, when things go wrong", () => {
   test("a show the old code dropped from the queue is queued again and matched", async () => {
     const t = setup();
     const batchId = await parsedOnly(t);
-    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    const worker = await workerOf(t, batchId);
     await t.action(internal.importActions.processBatch, { batchId, worker });
     await killWorker(t, batchId);
     await t.run(async (ctx) => {
@@ -419,7 +425,7 @@ describe("Overcast import, when things go wrong", () => {
     });
     await drain(t);
 
-    await watchdogAfter(t, 6);
+    await watchdog(t);
     const batch = await batchOf(t, batchId);
     expect(batch.status).toBe("done");
     expect(batch.counts).toMatchObject({ podcastsProcessed: 3, playedEpisodes: 5, sessions: 6 });

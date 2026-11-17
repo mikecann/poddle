@@ -1,10 +1,12 @@
 import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { stream } from "convex-helpers/server/stream";
+import type { Doc } from "./_generated/dataModel";
 import schema from "./schema";
 import { userQuery, type UserQueryCtx } from "./lib/auth";
 import { podcastView } from "./lib/library";
 import {
+  importBatchView,
   vDeletionDoc,
   vDeviceDoc,
   vEpisodeDoc,
@@ -125,6 +127,9 @@ export const changes = userQuery({
               .paginate(paginationOpts);
     const page = result.page as { updatedAt: number }[];
     const max = page.reduce<number | null>((m, d) => Math.max(m ?? 0, d.updatedAt), null);
-    return { page: result.page, isDone: result.isDone, continueCursor: result.continueCursor, maxUpdatedAt: max };
+    // Import batches go out as the app has always read them (lib/validators.ts).
+    const out = table === "importBatches" ? (result.page as Doc<"importBatches">[]).map(importBatchView) : result.page;
+    // The page's type can't follow the swap per table; the returns validator still checks every row.
+    return { page: out as never, isDone: result.isDone, continueCursor: result.continueCursor, maxUpdatedAt: max };
   },
 });

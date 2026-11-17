@@ -1,9 +1,9 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { explainTransitions, linkedDiagram, missingDescriptions, stateDiagram } from "@convex-dev/state-machines";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { api, internal } from "../convex/_generated/api";
+import { internal } from "../convex/_generated/api";
 import { machines } from "../convex/machines";
-import { drain, fixture, mockFetch, setup } from "./helpers";
+import { drain, setup } from "./helpers";
 
 const NOW = Date.UTC(2025, 9, 15);
 beforeEach(() => {
@@ -18,57 +18,23 @@ const counts = {
 };
 
 describe("moving the import onto state machines", () => {
-  test("the backfill gives every old batch and queue row the state its old fields describe", async () => {
+  // The backfill wrote each batch's state directly, so one it left fetching has no
+  // CHECK timer, and nothing would notice its worker had died.
+  test("arming a backfilled batch's timers lets it notice its dead worker", async () => {
     const t = setup();
     const userId = await t.userId();
-    const ids = await t.run(async (ctx) => {
-      const batch = (status: "parsing" | "fetching" | "done" | "failed", extra = {}) =>
-        ctx.db.insert("importBatches", { userId, source: "overcast", status, assumedSpeed: 2, startedAt: NOW, counts, playlists: [], updatedAt: NOW, ...extra });
-      const podcastId = await ctx.db.insert("podcasts", { feedUrl: "https://x.example.com/rss", title: "X", isPrivate: false, episodeCount: 0, createdAt: NOW, updatedAt: NOW });
-      const fetching = await batch("fetching", { worker: 2, restarts: 1 });
-      return {
-        parsing: await batch("parsing"),
-        fetching,
-        done: await batch("done", { finishedAt: NOW + 5 }),
-        failed: await batch("failed", { error: "Boom" }),
-        waiting: await ctx.db.insert("importQueue", { batchId: fetching, podcastId, phase: "fetch" }),
-        claimed: await ctx.db.insert("importQueue", { batchId: fetching, podcastId, phase: "fetch", claimedAt: NOW - 1, busyCount: 2 }),
-        fetched: await ctx.db.insert("importQueue", { batchId: fetching, podcastId, phase: "match", feedOk: true, medianDuration: 60, durations: [60] }),
-      };
-    });
-    await t.mutation(internal.migrations.backfillImportStates, {});
+    const batchId = await t.run(async (ctx) =>
+      ctx.db.insert("importBatches", {
+        userId, source: "overcast", state: { kind: "fetching", worker: 3, restarts: 0 }, stateTimers: [],
+        assumedSpeed: 2, startedAt: NOW, counts, playlists: [], updatedAt: NOW,
+      }),
+    );
+    expect(await t.mutation(internal.migrations.armImportTimers, {})).toBe(1);
+    expect(await t.mutation(internal.migrations.armImportTimers, {})).toBe(0); // already armed
+    // Its queue is empty, so the restarted run finds nothing left and finishes it.
     await drain(t);
-    const state = (id: string) => t.run(async (ctx) => (await ctx.db.get(id as never) as { state?: unknown } | null)?.state);
-    expect(await state(ids.parsing)).toEqual({ kind: "parsing" });
-    expect(await t.run(async (ctx) => (await ctx.db.get(ids.parsing))?.stateTimers)).toEqual([]); // the switch requires it
-    expect(await state(ids.fetching)).toEqual({ kind: "fetching", worker: 2, restarts: 1 });
-    expect(await state(ids.done)).toEqual({ kind: "done", finishedAt: NOW + 5 });
-    expect(await state(ids.failed)).toEqual({ kind: "failed", finishedAt: NOW, error: "Boom" });
-    expect(await state(ids.waiting)).toEqual({ kind: "waiting", notBefore: 0, busyCount: 0 });
-    expect(await state(ids.claimed)).toEqual({ kind: "fetching", claimedAt: NOW - 1, busyCount: 2 });
-    expect(await state(ids.fetched)).toEqual({ kind: "fetched", feedOk: true, medianDuration: 60, durations: [60] });
-    expect(await t.query(internal.migrations.importStatesLeft, {})).toEqual({ importBatches: 0, importQueue: 0 });
-  });
-
-  // From a Codex review: rows backfilled while an import was running went stale as
-  // it moved on, so the switch would have found a finished import still "parsing".
-  test("an import running before the switch keeps its state current at every step", async () => {
-    const t = setup();
-    mockFetch({
-      "https://feeds.example.com/techtalk.xml": fixture("techtalk-feed.xml"),
-      "https://feeds.example.com/oldfav.xml": fixture("oldfav-feed.xml"),
-    });
-    const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: fixture("overcast-all-data.opml"), assumedSpeed: 1.5 });
-    const row = () => t.run(async (ctx) => await ctx.db.get(batchId));
-    expect((await row())?.state).toEqual({ kind: "parsing" });
-    vi.runOnlyPendingTimers();
-    await t.finishInProgressScheduledFunctions();
-    expect((await row())?.state).toEqual({ kind: "fetching", worker: 1, restarts: 0 });
-    const shows = await t.run(async (ctx) => await ctx.db.query("importQueue").collect());
-    expect(shows.map((s) => s.state)).toEqual(shows.map(() => ({ kind: "waiting", notBefore: 0, busyCount: 0 })));
-    await drain(t);
-    expect(await row()).toMatchObject({ status: "done", state: { kind: "done" }, stateTimers: [] });
-    expect(await t.query(internal.migrations.importStatesLeft, {})).toEqual({ importBatches: 0, importQueue: 0 });
+    const batch = await t.run(async (ctx) => await ctx.db.get(batchId));
+    expect(batch?.state).toMatchObject({ kind: "done" });
   });
 });
 

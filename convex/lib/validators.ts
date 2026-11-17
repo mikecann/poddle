@@ -1,6 +1,7 @@
 import { v, type Infer } from "convex/values";
 import { doc } from "convex-helpers/validators";
-import schema, { podcastFields } from "../schema";
+import type { Doc } from "../_generated/dataModel";
+import schema, { podcastFields, vImportStatus } from "../schema";
 
 /** A show as the app sees it: the shared show plus the caller's subscription (lib/library.ts). */
 export const vPodcastDoc = v.object({
@@ -20,7 +21,34 @@ export const vGlobalSettingsDoc = doc(schema, "globalSettings");
 export const vSessionDoc = doc(schema, "listeningSessions");
 export const vLibraryEventDoc = doc(schema, "libraryEvents");
 export const vDeviceDoc = doc(schema, "devices");
-export const vImportBatchDoc = doc(schema, "importBatches");
+/** An import batch as stored, for internal code. */
+export const vImportBatchRow = doc(schema, "importBatches");
+const { state: _state, stateTimers: _timers, status: _status, worker: _worker, restarts: _restarts, finishedAt: _finished, error: _error, ...batchFields } =
+  schema.tables.importBatches.validator.fields;
+/**
+ * An import batch as the app and website see it (docs/api.md): the importBatch
+ * machine's state shown as the `status`, `finishedAt` and `error` they've always
+ * read, so apps from before the machine keep working.
+ */
+export const vImportBatchDoc = v.object({
+  _id: v.id("importBatches"),
+  _creationTime: v.number(),
+  ...batchFields,
+  status: vImportStatus,
+  finishedAt: v.optional(v.number()),
+  error: v.optional(v.string()),
+});
+export type ImportBatchView = Infer<typeof vImportBatchDoc>;
+
+export function importBatchView(row: Doc<"importBatches">): ImportBatchView {
+  const { state, stateTimers: _t, status: _s, worker: _w, restarts: _r, finishedAt: _f, error: _e, ...rest } = row;
+  return {
+    ...rest,
+    status: state.kind,
+    ...(state.kind === "done" || state.kind === "failed" ? { finishedAt: state.finishedAt } : {}),
+    ...(state.kind === "failed" ? { error: state.error } : {}),
+  };
+}
 export const vDeletionDoc = doc(schema, "deletions");
 export const vEpisodeNotesDoc = doc(schema, "episodeNotes");
 
