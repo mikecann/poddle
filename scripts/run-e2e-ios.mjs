@@ -42,7 +42,8 @@ export async function runIos({ world } = {}) {
   const started = Date.now();
   mkdirSync(runtime, { recursive: true });
   const udid = ensureSimulator();
-  const derivedData = path.join(os.homedir(), "Library/Developer/Xcode/DerivedData", `Poddle-e2e-${createHash("sha1").update(root).digest("hex").slice(0, 8)}`);
+  // The remote worker puts this on tinker-desk's external SSD; locally it's Xcode's usual place.
+  const derivedData = process.env.E2E_DERIVED_DATA ?? path.join(os.homedir(), "Library/Developer/Xcode/DerivedData", `Poddle-e2e-${createHash("sha1").update(root).digest("hex").slice(0, 8)}`);
   const common = ["-project", "Poddle.xcodeproj", "-scheme", "Poddle", "-configuration", "Debug", "-destination", `id=${udid}`, "-derivedDataPath", derivedData];
 
   // Reuse resolved private packages on runners without GitHub access to ChefKit.

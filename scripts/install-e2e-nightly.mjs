@@ -7,7 +7,8 @@ import { fileURLToPath } from "node:url";
 import { command } from "./e2e-remote-lib.mjs";
 const scripts = path.dirname(fileURLToPath(import.meta.url));
 const home = os.homedir();
-const root = process.env.E2E_REMOTE_ROOT ?? path.join(home, ".local/share/poddle-e2e");
+// On the external SSD, where builds have room (see e2e-remote.mjs).
+const root = process.env.E2E_REMOTE_ROOT ?? "/Volumes/TinkerSSD/poddle-e2e";
 const tools = path.join(root, "tools");
 const logs = path.join(home, "Library/Logs/Poddle E2E");
 for (const directory of [tools, logs]) mkdirSync(directory, { recursive: true });
@@ -23,7 +24,8 @@ writeFileSync(config, JSON.stringify({
   simName: process.env.E2E_SIM_NAME ?? "Poddle E2E",
   simRuntime: process.env.E2E_SIM_RUNTIME ?? "27.0",
   simType: process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro",
-  developerDir: process.env.E2E_DEVELOPER_DIR ?? path.join(home, "Applications/Xcode-27.1.app/Contents/Developer"),
+  // Unset means the Mac's selected Xcode (xcode-select -p).
+  developerDir: process.env.E2E_DEVELOPER_DIR,
 }, null, 2) + "\n");
 const label = "com.mikecann.poddle-e2e-nightly";
 const tag = "# poddle-e2e-nightly";

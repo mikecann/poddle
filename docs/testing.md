@@ -73,11 +73,11 @@ npm run test:e2e:remote -- --suite ios --feature up-next
 npm run test:e2e:remote -- --commit <pushed-sha> --suite web -g "Sign in"
 ```
 
-The runner fetches `origin` and refuses a commit that is not reachable from a pushed branch. It tests the commit, not your uncommitted files. Push the commit first. It uses SSH (no GitHub CLI login), fetches on tinker-desk, checks out the commit in its own worktree under `~/.local/share/poddle-e2e/worktree`, runs `npm ci`, verifies and syncs the Swift package cache, installs Playwright Chromium in its own browser cache when needed, and runs the selected suite. The main checkout at `~/dev/me/poddle` is left alone. Arguments after `--suite` are passed to that suite; a `-g` filter on the default combined run reaches both harnesses. Use `--suite ios` for `--feature` and iOS-only flags.
+The runner fetches `origin` and refuses a commit that is not reachable from a pushed branch. It tests the commit, not your uncommitted files. Push the commit first. It uses SSH (no GitHub CLI login), fetches on tinker-desk, checks out the commit in its own worktree under `/Volumes/TinkerSSD/poddle-e2e/worktree`, runs `npm ci`, verifies and syncs the Swift package cache, installs Playwright Chromium in its own browser cache when needed, and runs the selected suite. The main checkout at `~/dev/me/poddle` is left alone. Arguments after `--suite` are passed to that suite; a `-g` filter on the default combined run reaches both harnesses. Use `--suite ios` for `--feature` and iOS-only flags.
 
 The whole remote run holds `~/.blender-queue.lock` with `lockf`, the same lock render-box (another job on tinker-desk) uses. It refuses immediately if another render or e2e run owns it. The OS releases the lock when the process exits; do not delete the lock file. `caffeinate -i` keeps the Mac awake during the run.
 
-Results return to `e2e/.remote-results/<sha>/`: `latest.json` contains pass/fail per scenario and setup failures, alongside the xcresult, Xcode logs, web JSON/HTML report and traces, failure screenshots and iOS accessibility dumps. A failing run exits nonzero. Disposable backend configuration and `world.json` are never downloaded or published. Remote copies remain under `~/.local/share/poddle-e2e/results/<sha>/<run-id>/`; these can be removed after inspecting/downloading them. One reusable worktree and package cache avoid growing a checkout and DerivedData per commit.
+Results return to `e2e/.remote-results/<sha>/`: `latest.json` contains pass/fail per scenario and setup failures, alongside the xcresult, Xcode logs, web JSON/HTML report and traces, failure screenshots and iOS accessibility dumps. A failing run exits nonzero. Disposable backend configuration and `world.json` are never downloaded or published. Remote copies remain under `/Volumes/TinkerSSD/poddle-e2e/results/<sha>/<run-id>/`; these can be removed after inspecting/downloading them. One reusable worktree, package cache and DerivedData (all on the external SSD, as tinker-desk's internal disk is small) avoid growing a checkout and a build per commit.
 
 Local commands for focused checks:
 
@@ -125,7 +125,7 @@ The deploy key pushes a small results commit to the **orphan `e2e-nightly` branc
    crontab -l | grep poddle-e2e-nightly
    ```
 
-   This copies the worker and reporter to `~/.local/share/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, replaces the tagged crontab line (keeping any other entries), and removes the launch agent earlier installs used, without starting a suite. The nightly refreshes those worker and lib copies from the commit it tests before running, so they keep up with `main` by themselves; rerun the installer only to change the schedule or `nightly.json`. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed.
+   This copies the worker and reporter to `/Volumes/TinkerSSD/poddle-e2e/tools`, writes `nightly.json` there, creates `~/Library/Logs/Poddle E2E/`, replaces the tagged crontab line (keeping any other entries), and removes the launch agent earlier installs used, without starting a suite. The nightly refreshes those worker and lib copies from the commit it tests before running, so they keep up with `main` by themselves; rerun the installer only to change the schedule or `nightly.json`. Logs are `nightly.log` and `nightly.error.log`. No sudo is needed.
 6. The first iOS run creates the dedicated simulator. To create it once after Xcode setup, without running tests:
 
    ```sh

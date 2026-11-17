@@ -41,7 +41,8 @@ if (suite !== "web") verifyPackages(root, source);
 const sshOptions = ["-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=30", "-o", "ServerAliveCountMax=6"];
 const ssh = (script) => command("ssh", [...sshOptions, host, script]);
 const home = ssh("printf '%s' \"$HOME\"");
-const remoteRoot = process.env.E2E_REMOTE_ROOT ?? `${home}/.local/share/poddle-e2e`;
+// On tinker-desk's external SSD: its internal disk is small and was filling up mid-build.
+const remoteRoot = process.env.E2E_REMOTE_ROOT ?? "/Volumes/TinkerSSD/poddle-e2e";
 const id = `${Date.now()}-${process.pid}`;
 const upload = `${remoteRoot}/incoming/${id}`;
 const node = process.env.E2E_REMOTE_NODE ?? `${home}/.nvm/versions/node/v24.12.0/bin/node`;

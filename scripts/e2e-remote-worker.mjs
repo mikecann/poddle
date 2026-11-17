@@ -52,6 +52,7 @@ const env = {
   PLAYWRIGHT_BROWSERS_PATH: path.join(root, "browsers"),
   PLAYWRIGHT_JSON_OUTPUT_FILE: path.join(checkout, "e2e/.runtime/web-results.json"),
   E2E_SIM_NAME: config.simName ?? "Poddle E2E", E2E_SOURCE_PACKAGES: path.join(root, "SourcePackages"),
+  E2E_DERIVED_DATA: path.join(root, "DerivedData"),
   // tinker-desk's /Applications/Xcode.app (26.6) can't build Poddle, so a newer Xcode is
   // named here. When that one's gone (27.1 was replaced by /Applications/Xcode-27.2.app,
   // which xcode-select points at, in Nov 2026), the Mac's selected Xcode is used instead.
