@@ -456,7 +456,8 @@ export const claimFetches = internalMutation({
   args: { batchId: v.id("importBatches"), count: v.number(), worker: v.optional(v.number()) },
   returns: v.object({
     stale: v.boolean(),
-    rows: v.array(v.object({ rowId: v.id("importQueue"), podcastId: v.id("podcasts") })),
+    /** `claimedAt` is the claim's identity: a report must bring it back (feedFetched, feedBusy). */
+    rows: v.array(v.object({ rowId: v.id("importQueue"), podcastId: v.id("podcasts"), claimedAt: v.number() })),
     waitMs: v.optional(v.number()),
   }),
   handler: async (ctx, { batchId, count, worker }) => {
@@ -472,7 +473,7 @@ export const claimFetches = internalMutation({
     for (const r of free) await ctx.db.patch(r._id, { claimedAt: now });
     const waiting = rows.filter((r) => !free.includes(r));
     const waitMs = !free.length && waiting.length ? Math.max(1000, Math.min(...waiting.map(freeAt)) - now) : undefined;
-    return { stale: false, rows: free.map((r) => ({ rowId: r._id, podcastId: r.podcastId })), waitMs };
+    return { stale: false, rows: free.map((r) => ({ rowId: r._id, podcastId: r.podcastId, claimedAt: now })), waitMs };
   },
 });
 
@@ -484,13 +485,15 @@ export const feedFetched = internalMutation({
   args: {
     batchId: v.id("importBatches"),
     rowId: v.id("importQueue"),
+    /** The claim this fetch was made under. Absent only from runs scheduled before claims had one. */
+    claimedAt: v.optional(v.number()),
     ok: v.boolean(),
     status: v.optional(v.number()),
     error: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { batchId, rowId, ok, status, error }) => {
-    await markFetched(ctx, batchId, rowId, { ok, status, error });
+  handler: async (ctx, { batchId, rowId, claimedAt, ok, status, error }) => {
+    await markFetched(ctx, batchId, rowId, claimedAt, { ok, status, error });
     return null;
   },
 });
@@ -501,15 +504,15 @@ export const feedFetched = internalMutation({
  * against them, and only counts the feed as failed if that fetch never ends.
  */
 export const feedBusy = internalMutation({
-  args: { batchId: v.id("importBatches"), rowId: v.id("importQueue") },
+  args: { batchId: v.id("importBatches"), rowId: v.id("importQueue"), claimedAt: v.optional(v.number()) },
   returns: v.null(),
-  handler: async (ctx, { batchId, rowId }) => {
+  handler: async (ctx, { batchId, rowId, claimedAt }) => {
     const row = await ctx.db.get(rowId);
     const batch = await ctx.db.get(batchId);
-    if (!row || row.phase !== "fetch" || batch?.status !== "fetching") return null;
+    if (!row || !holdsClaim(row, claimedAt) || batch?.status !== "fetching") return null;
     const busyCount = (row.busyCount ?? 0) + 1;
     if (busyCount >= BUSY_LIMIT) {
-      await markFetched(ctx, batchId, rowId, { ok: false, error: "Another fetch of this feed never finished" });
+      await markFetched(ctx, batchId, rowId, claimedAt, { ok: false, error: "Another fetch of this feed never finished" });
       return null;
     }
     await ctx.db.patch(rowId, { busyCount, claimedAt: undefined, notBefore: Date.now() + BUSY_RETRY_MS });
@@ -518,16 +521,25 @@ export const feedBusy = internalMutation({
   },
 });
 
+/**
+ * Whether a report belongs to the row's current claim. A run that was only slow
+ * reports after a newer run claimed the show again (or after it was fetched), and
+ * its answer mustn't overwrite the newer run's.
+ */
+function holdsClaim(row: Doc<"importQueue">, claimedAt: number | undefined) {
+  return row.phase === "fetch" && (claimedAt === undefined || row.claimedAt === claimedAt);
+}
+
 async function markFetched(
   ctx: MutationCtx,
   batchId: Id<"importBatches">,
   rowId: Id<"importQueue">,
+  claimedAt: number | undefined,
   { ok, status, error }: { ok: boolean; status?: number; error?: string },
 ) {
   const row = await ctx.db.get(rowId);
   const batch = await ctx.db.get(batchId);
-  // Already fetched (by a run that was only slow), or the batch is over: a late result.
-  if (!row || row.phase !== "fetch" || batch?.status !== "fetching") return;
+  if (!row || !holdsClaim(row, claimedAt) || batch?.status !== "fetching") return;
   {
     const podcast = await ctx.db.get(row.podcastId);
     const failedFeeds =
@@ -830,17 +842,19 @@ async function applyImportedState(
  */
 export const finishBatch = internalMutation({
   args: { batchId: v.id("importBatches") },
-  returns: v.null(),
+  /** False: there's more to do after all, so the worker carries on. */
+  returns: v.boolean(),
   handler: async (rawCtx, { batchId }) => {
     const owned = await batchCtx(rawCtx, batchId);
     // Only once, and only when every show is in: a second or late call does nothing.
-    if (!owned || owned.batch.status !== "fetching") return null;
+    if (!owned || owned.batch.status !== "fetching") return true;
     const { batch, ctx } = owned;
     const unfinished = await ctx.db
       .query("importQueue")
       .withIndex("by_batch_phase", (q) => q.eq("batchId", batchId))
       .first();
-    if (unfinished) return null;
+    if (unfinished) return false;
+    if (await requeueOrphans(ctx, batchId)) return false;
     const rows = await ctx.db
       .query("importUpNext")
       .withIndex("by_batch", (q) => q.eq("batchId", batchId))
@@ -858,9 +872,31 @@ export const finishBatch = internalMutation({
     }
     for (const row of rows) await ctx.db.delete(row._id);
     await moveBatch(ctx, batch, "done", { counts: { ...batch.counts, upNextEpisodes: upNext } });
-    return null;
+    return true;
   },
 });
+
+/**
+ * Staged episodes whose show has no queue row: before this fix, claimMatches
+ * deleted a show's row before matching it, so a run that died there left them
+ * behind. Their shows go back in the queue, to be fetched and matched like the
+ * rest. True if any did.
+ */
+async function requeueOrphans(ctx: MutationCtx, batchId: Id<"importBatches">) {
+  let requeued = false;
+  let after: Id<"podcasts"> | undefined;
+  for (;;) {
+    const item = await ctx.db
+      .query("importItems")
+      .withIndex("by_batch_podcast", (q) => (after ? q.eq("batchId", batchId).gt("podcastId", after) : q.eq("batchId", batchId)))
+      .first();
+    if (!item) return requeued;
+    console.warn(`Import ${batchId}: show ${item.podcastId} had staged episodes but no queue row; queueing it again`);
+    await ctx.db.insert("importQueue", { batchId, podcastId: item.podcastId, phase: "fetch" });
+    requeued = true;
+    after = item.podcastId;
+  }
+}
 
 /**
  * Overcast's main-playlist order: hand-placed episodes first (manual playlists'

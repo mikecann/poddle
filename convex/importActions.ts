@@ -112,15 +112,16 @@ export const processBatch = internalAction({
           })),
         ),
       );
-      for (const [i, { rowId }] of claim.rows.entries()) {
+      for (const [i, { rowId, claimedAt }] of claim.rows.entries()) {
         const r = results[i]!;
         // Busy: another fetch of this feed is running, so its episodes may be half
         // stored. Matching now would turn his history into ghosts; wait for it.
-        if (r.status === "busy") await ctx.runMutation(internal.overcastImport.feedBusy, { batchId, rowId });
+        if (r.status === "busy") await ctx.runMutation(internal.overcastImport.feedBusy, { batchId, rowId, claimedAt });
         else
           await ctx.runMutation(internal.overcastImport.feedFetched, {
             batchId,
             rowId,
+            claimedAt,
             ok: r.status !== "error",
             status: r.httpStatus,
             error: r.error,
@@ -132,7 +133,8 @@ export const processBatch = internalAction({
     } else {
       const rows = await ctx.runMutation(internal.overcastImport.claimMatches, { batchId, count: FETCH_BATCH });
       if (rows.length === 0) {
-        await ctx.runMutation(internal.overcastImport.finishBatch, { batchId });
+        if (await ctx.runMutation(internal.overcastImport.finishBatch, { batchId })) return null;
+        await next();
         return null;
       }
       for (const row of rows) {

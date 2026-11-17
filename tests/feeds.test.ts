@@ -346,4 +346,26 @@ describe("the fetch lease", () => {
     await t.mutation(internal.feeds.recordFetch, { podcastId, lease: fresh.lease, status: 200, changed: false });
     expect((await t.run(async (ctx) => await ctx.db.query("feedStates").first()))?.fetchingUntil).toBeUndefined();
   });
+
+  // From a cross-lab review: a fetch stalled reading its body past the claim
+  // stored its older episodes and show details over the newer fetch's.
+  test("a fetch that lost its lease stores nothing", async () => {
+    const t = setup();
+    const podcastId = await t.mutation(internal.podcasts.ensurePodcast, { feedUrl: FEED, title: "Odd" });
+    const slow = (await t.mutation(internal.feeds.claimFetch, { podcastId }))!;
+    vi.setSystemTime(NOW + 6 * 60_000);
+    await t.mutation(internal.feeds.claimFetch, { podcastId });
+    await t.mutation(internal.feeds.updatePodcastMeta, { podcastId, lease: slow.lease, title: "Old title" });
+    const result = await t.mutation(internal.feeds.ingestEpisodes, {
+      podcastId,
+      lease: slow.lease,
+      mode: "normal",
+      isFirstChunk: true,
+      episodes: [{ guid: "x", title: "Old episode", enclosureUrl: "https://cdn.example.com/x.mp3", transcripts: [] } as never],
+    });
+    expect(result.created).toBe(0);
+    const podcast = await t.run(async (ctx) => await ctx.db.get(podcastId));
+    expect(podcast?.title).toBe("Odd");
+  });
 });
+

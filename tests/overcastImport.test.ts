@@ -352,5 +352,77 @@ describe("Overcast import, when things go wrong", () => {
     expect(batch.counts.upNextEpisodes).toBe(3);
     expect(await t.query(api.queue.upNext, {})).toHaveLength(3);
   });
-});
 
+  // From a cross-lab review: a run that was only slow reported a failed fetch after
+  // a newer run had claimed the same show again, and its failure stuck.
+  test("a slow run's late fetch report can't overwrite the newer run's", async () => {
+    const t = setup();
+    const batchId = await parsedOnly(t);
+    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    const first = await t.mutation(internal.overcastImport.claimFetches, { batchId, count: 1, worker });
+    vi.setSystemTime(Date.now() + 4 * MIN); // its claim goes stale
+    const second = await t.mutation(internal.overcastImport.claimFetches, { batchId, count: 1, worker });
+    const { rowId } = second.rows[0]!;
+    expect(rowId).toBe(first.rows[0]!.rowId);
+
+    await t.mutation(internal.overcastImport.feedFetched, { batchId, rowId, claimedAt: first.rows[0]!.claimedAt, ok: false, error: "timeout" });
+    expect(await t.run(async (ctx) => (await ctx.db.get(rowId))?.phase)).toBe("fetch");
+    await t.mutation(internal.overcastImport.feedFetched, { batchId, rowId, claimedAt: second.rows[0]!.claimedAt, ok: true });
+    expect(await t.run(async (ctx) => await ctx.db.get(rowId))).toMatchObject({ phase: "match", feedOk: true });
+    expect((await batchOf(t, batchId)).failedFeeds ?? []).toEqual([]);
+  });
+
+  /** A show with `n` played episodes, all gone from its feed (so all ghosts). */
+  function bigExport(n: number) {
+    const eps = Array.from({ length: n }, (_, i) => {
+      const day = new Date(Date.UTC(2024, 0, 1) + i * 86_400_000).toISOString();
+      return `<outline type="podcast-episode" overcastId="${9000 + i}" pubDate="${day}" title="Big ${i}" url="https://big.example.com/${i}" enclosureUrl="https://cdn.example.com/big/${i}.mp3" userUpdatedDate="${day}" played="1" userDeleted="1" />`;
+    }).join("\n");
+    return `<?xml version="1.0"?><opml version="1.0"><body><outline text="feeds">
+      <outline type="rss" overcastId="900" text="Big" title="Big" xmlUrl="https://feeds.example.com/techtalk.xml" subscribed="1">${eps}</outline>
+      </outline></body></opml>`;
+  }
+
+  test("a show interrupted part way through matching is finished once, with no history twice", async () => {
+    const t = setup();
+    const batchId = await t.mutation(api.overcastImport.startOvercastImport, { opml: bigExport(150), assumedSpeed: 1.5 });
+    vi.runOnlyPendingTimers();
+    await t.finishInProgressScheduledFunctions();
+    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    await t.action(internal.importActions.processBatch, { batchId, worker });
+    await killWorker(t, batchId);
+    const [row] = await t.mutation(internal.overcastImport.claimMatches, { batchId, count: 6 });
+    // The first page of 100, then the run dies with 50 to go.
+    expect(await t.mutation(internal.overcastImport.matchPodcast, { batchId, rowId: row!.rowId })).toBe(false);
+    await drain(t);
+
+    await watchdogAfter(t, 6);
+    // And the slow run wakes up and tries the same show once more.
+    expect(await t.mutation(internal.overcastImport.matchPodcast, { batchId, rowId: row!.rowId })).toBe(true);
+    const batch = await batchOf(t, batchId);
+    expect(batch.status).toBe("done");
+    expect(batch.counts).toMatchObject({ podcastsProcessed: 1, episodes: 150, ghostEpisodes: 150, playedEpisodes: 150, sessions: 150 });
+    expect(await t.run(async (ctx) => (await ctx.db.query("listeningSessions").collect()).length)).toBe(150);
+  });
+
+  // An import the old code broke: claimMatches had deleted a show's queue row, and
+  // the run died before matching it. Its staged episodes were left with nothing to
+  // match them, and a restart would have finished without them.
+  test("a show the old code dropped from the queue is queued again and matched", async () => {
+    const t = setup();
+    const batchId = await parsedOnly(t);
+    const worker = (await t.run(async (ctx) => (await ctx.db.get(batchId))!.worker))!;
+    await t.action(internal.importActions.processBatch, { batchId, worker });
+    await killWorker(t, batchId);
+    await t.run(async (ctx) => {
+      for (const row of await ctx.db.query("importQueue").collect()) await ctx.db.delete(row._id);
+    });
+    await drain(t);
+
+    await watchdogAfter(t, 6);
+    const batch = await batchOf(t, batchId);
+    expect(batch.status).toBe("done");
+    expect(batch.counts).toMatchObject({ podcastsProcessed: 3, playedEpisodes: 5, sessions: 6 });
+    expect(await scratchRows(t)).toEqual([]);
+  });
+});

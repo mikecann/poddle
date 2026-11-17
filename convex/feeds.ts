@@ -93,8 +93,8 @@ export const claimFetch = internalMutation({
 export const recordFetch = internalMutation({
   args: {
     podcastId: v.id("podcasts"),
-    /** The claim's lease. Absent only from fetches scheduled before leases were checked. */
-    lease: v.optional(v.number()),
+    /** The claim's lease, from claimFetch. */
+    lease: v.number(),
     status: v.number(),
     error: v.optional(v.string()),
     etag: v.optional(v.string()),
@@ -113,7 +113,7 @@ export const recordFetch = internalMutation({
     // already finished): its answer is older, and releasing the lease would let a
     // third fetch start alongside the one holding it. Its episodes were stored
     // anyway; ingesting is idempotent.
-    if (a.lease !== undefined && state.fetchingUntil !== a.lease) {
+    if (state.fetchingUntil !== a.lease) {
       console.warn(`A fetch of ${podcast._id} reported after its lease was taken over; ignoring its bookkeeping`);
       return null;
     }
@@ -139,9 +139,20 @@ export const recordFetch = internalMutation({
   },
 });
 
+/**
+ * Whether the fetch with this lease still holds the feed. A fetch that lost it
+ * stores nothing more: the one that took over has a newer answer. Callers without
+ * a lease (tests) always do.
+ */
+async function holdsLease(ctx: QueryCtx, podcastId: Id<"podcasts">, lease: number | undefined) {
+  if (lease === undefined) return true;
+  return (await feedStateFor(ctx, podcastId))?.fetchingUntil === lease;
+}
+
 export const updatePodcastMeta = internalMutation({
   args: {
     podcastId: v.id("podcasts"),
+    lease: v.optional(v.number()),
     title: v.string(),
     author: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -151,9 +162,9 @@ export const updatePodcastMeta = internalMutation({
     newFeedUrl: v.optional(v.string()),
   },
   returns: v.null(),
-  handler: async (ctx, { podcastId, newFeedUrl, ...meta }) => {
+  handler: async (ctx, { podcastId, lease, newFeedUrl, ...meta }) => {
     const podcast = await ctx.db.get(podcastId);
-    if (!podcast) return null;
+    if (!podcast || !(await holdsLease(ctx, podcastId, lease))) return null;
     const patch: Partial<Doc<"podcasts">> = {};
     for (const [k, val] of Object.entries(meta) as [keyof typeof meta, string | undefined][]) {
       if (val !== undefined && podcast[k] !== val) (patch as Record<string, unknown>)[k] = val;
@@ -177,6 +188,7 @@ const MAX_RULED_PER_CHUNK = 10;
 export const ingestEpisodes = internalMutation({
   args: {
     podcastId: v.id("podcasts"),
+    lease: v.optional(v.number()),
     mode: vIngestMode,
     /** Newest episode in the whole feed; in "initial" mode only it gets the new-episode rule. */
     isFirstChunk: v.boolean(),
@@ -186,7 +198,7 @@ export const ingestEpisodes = internalMutation({
   returns: v.object({ created: v.number(), ruled: v.array(v.id("episodes")) }),
   handler: async (ctx, a) => {
     const podcast = await ctx.db.get(a.podcastId);
-    if (!podcast) return { created: 0, ruled: [] };
+    if (!podcast || !(await holdsLease(ctx, a.podcastId, a.lease))) return { created: 0, ruled: [] };
     const now = Date.now();
     const subscribers = a.mode === "import" ? [] : await subscribersOf(ctx, a.podcastId);
     let created = 0;

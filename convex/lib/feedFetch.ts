@@ -11,6 +11,8 @@ import { truncate } from "./parse";
 
 export const USER_AGENT = "Poddle/1.0 (+https://github.com/mikecann/poddle; podcast player)";
 const TIMEOUT_MS = 20_000;
+/** A whole feed, headers and body: big back catalogues on slow hosts take a while. */
+const BODY_TIMEOUT_MS = 60_000;
 const MAX_NOTES_CHARS = 50_000;
 /** Keep each ingest mutation's args well under Convex's limits. */
 const CHUNK_BYTES = 400_000;
@@ -226,9 +228,13 @@ async function fetchAndIngest(
     return { status: "error", newEpisodes: 0, error, httpStatus: status || undefined };
   };
 
+  // The deadline covers the body too: a host that sends headers and then stalls
+  // used to hold the fetch open past its 5-minute claim, and its older answer
+  // then landed on top of the fetch that took over.
   let res: Response;
+  let body: string;
   try {
-    res = await fetchWithTimeout(req.url, { headers: req.headers });
+    ({ res, body } = await fetchText(req.url, { headers: req.headers }, BODY_TIMEOUT_MS));
   } catch (e) {
     return await fail(0, `Network error: ${(e as Error).message}`);
   }
@@ -238,7 +244,6 @@ async function fetchAndIngest(
   }
   if (!res.ok) return await fail(res.status, `HTTP ${res.status}`);
 
-  const body = await res.text();
   const etag = res.headers.get("etag") ?? undefined;
   const lastModified = res.headers.get("last-modified") ?? undefined;
   const bodyHash = await sha256Hex(body);
@@ -256,6 +261,7 @@ async function fetchAndIngest(
 
   await ctx.runMutation(internal.feeds.updatePodcastMeta, {
     podcastId,
+    lease: info.lease,
     title: feed.title,
     author: feed.author,
     description: feed.description,
@@ -271,6 +277,7 @@ async function fetchAndIngest(
     if (i > 0) await new Promise((r) => setTimeout(r, CHUNK_PAUSE_MS));
     const result = await ctx.runMutation(internal.feeds.ingestEpisodes, {
       podcastId,
+      lease: info.lease,
       mode,
       isFirstChunk: i === 0,
       previousLatestAt: info.latestEpisodeAt,
