@@ -210,8 +210,6 @@ export default defineSchema({
     lastStatus: v.optional(v.number()),
     lastError: v.optional(v.string()),
     consecutiveErrors: v.number(),
-    /** Old lease, replaced by `feedFetches`. Unset everywhere, then removed (narrow step). */
-    fetchingUntil: v.optional(v.number()),
   })
     .index("by_podcast", ["podcastId"])
     .index("by_active_nextCheckAt", ["active", "nextCheckAt"]),
@@ -428,12 +426,6 @@ export default defineSchema({
     /** The importBatch machine's state (lifecycles/importBatch.ts). The API still shows it as `status`. */
     state: vImportBatchState,
     stateTimers: machineTimers,
-    // Before the importBatch machine: no longer written, and unset then removed in the narrow step.
-    status: v.optional(vImportStatus),
-    worker: v.optional(v.number()),
-    restarts: v.optional(v.number()),
-    finishedAt: v.optional(v.number()),
-    error: v.optional(v.string()),
     assumedSpeed: v.number(),
     startedAt: v.number(),
     warning: v.optional(v.string()),
@@ -530,19 +522,9 @@ export default defineSchema({
     podcastId: v.id("podcasts"),
     /** The importShow machine's state (lifecycles/importShow.ts). */
     state: vImportShowState,
-    // Before the importShow machine: no longer written, and unset then removed in the narrow step.
-    phase: v.optional(v.union(v.literal("fetch"), v.literal("match"))),
     /** Newest pubDate among the show's exported episodes, and Overcast's added date. */
     newestExportedAt: v.optional(v.number()),
     addedAt: v.optional(v.number()),
-    // Before the importShow machine, now in its states: unset then removed in the narrow step.
-    feedOk: v.optional(v.boolean()),
-    oldestFeedPubDate: v.optional(v.number()),
-    medianDuration: v.optional(v.number()),
-    durations: v.optional(v.array(v.number())),
-    claimedAt: v.optional(v.number()),
-    notBefore: v.optional(v.number()),
-    busyCount: v.optional(v.number()),
   }).index("by_batch_state", ["batchId", "state.kind"]),
 
   /** Episodes to put in Up Next when an import finishes. */

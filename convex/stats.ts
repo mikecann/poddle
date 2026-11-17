@@ -1,4 +1,5 @@
 import { v } from "convex/values";
+import { importBatchView } from "./lib/validators";
 import type { Doc, Id } from "./_generated/dataModel";
 import { userQuery, type UserQueryCtx as QueryCtx } from "./lib/auth";
 import { showCache } from "./lib/library";
@@ -452,7 +453,7 @@ export const yearInReview = userQuery({
       heatmap: s.heatmap,
       months: s.months,
       includesEstimated: s.includesEstimated,
-      estimatedBefore: s.includesEstimated ? (lastImport?.finishedAt ?? lastImport?.startedAt ?? null) : null,
+      estimatedBefore: s.includesEstimated ? (lastImport ? (importBatchView(lastImport).finishedAt ?? lastImport.startedAt) : null) : null,
       listenerName: user?.name ?? null,
     };
   },

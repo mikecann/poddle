@@ -374,16 +374,4 @@ describe("the fetch lease", () => {
     expect(podcast?.title).toBe("Odd");
   });
 
-  // From a Codex review: a fetch claimed on feedStates just before the deploy that
-  // moved claims to feedFetches was overtaken by the next fetch at once.
-  test("a claim from before claims moved still holds the feed until it runs out", async () => {
-    const t = setup();
-    const podcastId = await t.mutation(internal.podcasts.ensurePodcast, { feedUrl: FEED, title: "Odd" });
-    await t.run(async (ctx) => {
-      await ctx.db.insert("feedStates", { podcastId, active: false, nextCheckAt: NOW, consecutiveErrors: 0, fetchingUntil: NOW + 60_000 });
-    });
-    expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).toBeNull();
-    vi.setSystemTime(NOW + 61_000);
-    expect(await t.mutation(internal.feeds.claimFetch, { podcastId })).not.toBeNull();
-  });
 });

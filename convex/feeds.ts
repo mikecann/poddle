@@ -91,8 +91,6 @@ export const claimFetch = machines.internalMutation({
     const now = Date.now();
     const lease = now + FETCH_LEASE_MS;
     const claim = await feedFetchFor(ctx, podcastId);
-    // A fetch claimed on feedStates before claims moved to feedFetches still holds the feed until its lease runs out.
-    if (!claim && ((await feedStateFor(ctx, podcastId))?.fetchingUntil ?? 0) > now) return null;
     const claimed = claim
       ? await feedFetch.send(machineCtx, claim._id, { type: "CLAIM", lease })
       : await feedFetch.create(machineCtx, { podcastId }, { type: "CLAIM", lease });
@@ -147,7 +145,6 @@ export const recordFetch = machines.internalMutation({
     const ok = !a.error;
     const consecutiveErrors = ok ? 0 : state.consecutiveErrors + 1;
     await ctx.db.patch(stateId, {
-      fetchingUntil: undefined,
       lastCheckedAt: now,
       lastStatus: a.status,
       lastError: a.error,
@@ -172,9 +169,7 @@ export const recordFetch = machines.internalMutation({
  */
 async function holdsLease(ctx: QueryCtx, podcastId: Id<"podcasts">, lease: number) {
   const claim = await feedFetchFor(ctx, podcastId);
-  // No claim row: a fetch claimed on feedStates before claims moved to feedFetches.
-  if (!claim) return (await feedStateFor(ctx, podcastId))?.fetchingUntil === lease;
-  return claim.state.kind === "fetching" && claim.state.until === lease;
+  return claim?.state.kind === "fetching" && claim.state.until === lease;
 }
 
 export const updatePodcastMeta = internalMutation({

@@ -165,6 +165,11 @@ describe("Overcast import", () => {
     const y = await t.query(api.stats.summary, { period: "year", anchorDay: "2025-06-01" });
     expect(y.completion.completed).toBe(3); // TTW 1, TTW 3, DF 1
     expect(y.includesEstimated).toBe(true);
+    // Year in Review says the estimates run up to when the import finished. It read the
+    // stored batch's finishedAt, which went when the importBatch machine took it over.
+    const review = await t.query(api.stats.yearInReview, { year: 2025 });
+    expect(review.estimatedBefore).toBe(batch.finishedAt);
+    expect(batch.finishedAt).toBeGreaterThan(batch.startedAt);
   });
 
   test("re-running is idempotent and keeps newer Poddle changes", async () => {

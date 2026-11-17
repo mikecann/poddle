@@ -23,8 +23,7 @@ export const vLibraryEventDoc = doc(schema, "libraryEvents");
 export const vDeviceDoc = doc(schema, "devices");
 /** An import batch as stored, for internal code. */
 export const vImportBatchRow = doc(schema, "importBatches");
-const { state: _state, stateTimers: _timers, status: _status, worker: _worker, restarts: _restarts, finishedAt: _finished, error: _error, ...batchFields } =
-  schema.tables.importBatches.validator.fields;
+const { state: _state, stateTimers: _timers, ...batchFields } = schema.tables.importBatches.validator.fields;
 /**
  * An import batch as the app and website see it (docs/api.md): the importBatch
  * machine's state shown as the `status`, `finishedAt` and `error` they've always
@@ -41,7 +40,7 @@ export const vImportBatchDoc = v.object({
 export type ImportBatchView = Infer<typeof vImportBatchDoc>;
 
 export function importBatchView(row: Doc<"importBatches">): ImportBatchView {
-  const { state, stateTimers: _t, status: _s, worker: _w, restarts: _r, finishedAt: _f, error: _e, ...rest } = row;
+  const { state, stateTimers: _t, ...rest } = row;
   return {
     ...rest,
     status: state.kind,
