@@ -527,7 +527,8 @@ export const feedBusy = internalMutation({
  * its answer mustn't overwrite the newer run's.
  */
 function holdsClaim(row: Doc<"importQueue">, claimedAt: number | undefined) {
-  return row.phase === "fetch" && (claimedAt === undefined || row.claimedAt === claimedAt);
+  // A run from before claims had an identity brings none: it's only trusted on a row no run has claimed since.
+  return row.phase === "fetch" && row.claimedAt === claimedAt;
 }
 
 async function markFetched(
@@ -892,7 +893,24 @@ async function requeueOrphans(ctx: MutationCtx, batchId: Id<"importBatches">) {
       .first();
     if (!item) return requeued;
     console.warn(`Import ${batchId}: show ${item.podcastId} had staged episodes but no queue row; queueing it again`);
-    await ctx.db.insert("importQueue", { batchId, podcastId: item.podcastId, phase: "fetch" });
+    // The row's dates (for episodes published since, which go to Up Next) as near
+    // as they can be rebuilt: the newest staged episode left, and when the
+    // subscription began (stageFeeds set that from Overcast's added date).
+    const podcastId = item.podcastId;
+    const staged = await ctx.db
+      .query("importItems")
+      .withIndex("by_batch_podcast", (q) => q.eq("batchId", batchId).eq("podcastId", podcastId))
+      .collect();
+    const dates = staged.map((i) => i.pubDate).filter((d): d is number => d !== undefined);
+    const batch = (await ctx.db.get(batchId))!;
+    const sub = await subscriptionFor(asUser(ctx, batch.userId!), podcastId);
+    await ctx.db.insert("importQueue", {
+      batchId,
+      podcastId,
+      phase: "fetch",
+      newestExportedAt: dates.length ? Math.max(...dates) : undefined,
+      addedAt: sub?.subscribedAt,
+    });
     requeued = true;
     after = item.podcastId;
   }

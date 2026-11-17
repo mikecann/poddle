@@ -424,5 +424,11 @@ describe("Overcast import, when things go wrong", () => {
     expect(batch.status).toBe("done");
     expect(batch.counts).toMatchObject({ podcastsProcessed: 3, playedEpisodes: 5, sessions: 6 });
     expect(await scratchRows(t)).toEqual([]);
+    // Including the episode published since his export, which only the show's dates find.
+    expect((await t.query(api.queue.upNext, {})).map((q) => q.row.episode.title)).toEqual([
+      "TTW 2: Halfway",
+      "TTW 5: Barely started",
+      "TTW 6: Brand new",
+    ]);
   });
 });

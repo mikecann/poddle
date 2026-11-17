@@ -19,8 +19,10 @@ async function queuedShow(t: T, n: number, title = "Show") {
 
 /** The feed poller finding a new episode, published a day after the show's newest. */
 async function publish(t: T, podcastId: Id<"podcasts">, n: number, title = "Show") {
+  const claim = (await t.raw.mutation(internal.feeds.claimFetch, { podcastId }))!;
   await t.raw.mutation(internal.feeds.ingestEpisodes, {
     podcastId,
+    lease: claim.lease,
     mode: "normal",
     isFirstChunk: true,
     previousLatestAt: BASE + (n - 1) * DAY,
@@ -34,6 +36,7 @@ async function publish(t: T, podcastId: Id<"podcasts">, n: number, title = "Show
       },
     ],
   });
+  await t.raw.mutation(internal.feeds.recordFetch, { podcastId, lease: claim.lease, status: 200, changed: true });
 }
 
 async function upNext(t: T) {

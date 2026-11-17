@@ -102,11 +102,12 @@ export const recordFetch = internalMutation({
     bodyHash: v.optional(v.string()),
     changed: v.boolean(),
   },
-  returns: v.null(),
+  /** False: the fetch had lost its lease, and nothing was recorded. */
+  returns: v.boolean(),
   handler: async (ctx, a) => {
     const now = Date.now();
     const podcast = await ctx.db.get(a.podcastId);
-    if (!podcast) return null;
+    if (!podcast) return false;
     const stateId = await ensureFeedState(ctx, a.podcastId, await hasSubscribers(ctx, a.podcastId), false);
     const state = (await ctx.db.get(stateId))!;
     // A fetch that ran past its lease, after another claimed the feed (or that one
@@ -115,7 +116,7 @@ export const recordFetch = internalMutation({
     // anyway; ingesting is idempotent.
     if (state.fetchingUntil !== a.lease) {
       console.warn(`A fetch of ${podcast._id} reported after its lease was taken over; ignoring its bookkeeping`);
-      return null;
+      return false;
     }
     const ok = !a.error;
     const consecutiveErrors = ok ? 0 : state.consecutiveErrors + 1;
@@ -135,24 +136,23 @@ export const recordFetch = internalMutation({
     if (ok && podcast.lastFetchedAt === undefined) {
       await ctx.db.patch(a.podcastId, { lastFetchedAt: now, updatedAt: now });
     }
-    return null;
+    return true;
   },
 });
 
 /**
  * Whether the fetch with this lease still holds the feed. A fetch that lost it
- * stores nothing more: the one that took over has a newer answer. Callers without
- * a lease (tests) always do.
+ * stores nothing more: the one that took over has a newer answer.
  */
-async function holdsLease(ctx: QueryCtx, podcastId: Id<"podcasts">, lease: number | undefined) {
-  if (lease === undefined) return true;
+async function holdsLease(ctx: QueryCtx, podcastId: Id<"podcasts">, lease: number) {
   return (await feedStateFor(ctx, podcastId))?.fetchingUntil === lease;
 }
 
 export const updatePodcastMeta = internalMutation({
   args: {
     podcastId: v.id("podcasts"),
-    lease: v.optional(v.number()),
+    /** The fetch's lease, from claimFetch: a fetch that lost it writes nothing. */
+    lease: v.number(),
     title: v.string(),
     author: v.optional(v.string()),
     description: v.optional(v.string()),
@@ -188,17 +188,19 @@ const MAX_RULED_PER_CHUNK = 10;
 export const ingestEpisodes = internalMutation({
   args: {
     podcastId: v.id("podcasts"),
-    lease: v.optional(v.number()),
+    /** The fetch's lease, from claimFetch: a fetch that lost it stores nothing, and is told so. */
+    lease: v.number(),
     mode: vIngestMode,
     /** Newest episode in the whole feed; in "initial" mode only it gets the new-episode rule. */
     isFirstChunk: v.boolean(),
     previousLatestAt: v.optional(v.number()),
     episodes: v.array(vIncomingEpisode),
   },
-  returns: v.object({ created: v.number(), ruled: v.array(v.id("episodes")) }),
+  returns: v.object({ created: v.number(), ruled: v.array(v.id("episodes")), lostLease: v.optional(v.boolean()) }),
   handler: async (ctx, a) => {
     const podcast = await ctx.db.get(a.podcastId);
-    if (!podcast || !(await holdsLease(ctx, a.podcastId, a.lease))) return { created: 0, ruled: [] };
+    if (!podcast) return { created: 0, ruled: [] };
+    if (!(await holdsLease(ctx, a.podcastId, a.lease))) return { created: 0, ruled: [], lostLease: true };
     const now = Date.now();
     const subscribers = a.mode === "import" ? [] : await subscribersOf(ctx, a.podcastId);
     let created = 0;

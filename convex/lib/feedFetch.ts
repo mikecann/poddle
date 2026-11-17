@@ -184,7 +184,11 @@ export async function fetchFeedDocument(feedUrl: string): Promise<{ feed: Parsed
 }
 
 export type RefreshResult = {
-  /** "busy": another fetch of this feed is already running. */
+  /**
+   * "busy": another fetch of this feed is running: it was already when this one
+   * tried, or it took over after this one ran past its 5-minute lease (and then
+   * this one stored nothing more). Either way its answer is the one to wait for.
+   */
   status: "updated" | "notModified" | "unchanged" | "busy" | "error";
   newEpisodes: number;
   error?: string;
@@ -204,12 +208,15 @@ export async function refreshPodcast(
   } catch (e) {
     // Always release the lease and record the failure (and its backoff).
     const error = `Failed: ${(e as Error).message}`;
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: 0, error, changed: false });
-    return { status: "error", newEpisodes: 0, error };
+    const recorded = await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: 0, error, changed: false });
+    return recorded ? { status: "error", newEpisodes: 0, error } : LOST;
   }
 }
 
 type FetchInfo = NonNullable<FunctionReturnType<typeof internal.feeds.claimFetch>>;
+
+/** This fetch ran past its lease and another took the feed over: nothing more of it was stored. */
+const LOST: RefreshResult = { status: "busy", newEpisodes: 0 };
 
 async function fetchAndIngest(
   ctx: ActionCtx,
@@ -224,7 +231,7 @@ async function fetchAndIngest(
   if (conditional && info.lastModified) req.headers["If-Modified-Since"] = info.lastModified;
 
   const fail = async (status: number, error: string): Promise<RefreshResult> => {
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status, error, changed: false });
+    if (!(await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status, error, changed: false }))) return LOST;
     return { status: "error", newEpisodes: 0, error, httpStatus: status || undefined };
   };
 
@@ -239,7 +246,7 @@ async function fetchAndIngest(
     return await fail(0, `Network error: ${(e as Error).message}`);
   }
   if (res.status === 304) {
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: 304, changed: false });
+    if (!(await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: 304, changed: false }))) return LOST;
     return { status: "notModified", newEpisodes: 0 };
   }
   if (!res.ok) return await fail(res.status, `HTTP ${res.status}`);
@@ -248,7 +255,8 @@ async function fetchAndIngest(
   const lastModified = res.headers.get("last-modified") ?? undefined;
   const bodyHash = await sha256Hex(body);
   if (conditional && bodyHash === info.bodyHash) {
-    await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: res.status, etag, lastModified, changed: false });
+    const recorded = await ctx.runMutation(internal.feeds.recordFetch, { podcastId, lease: info.lease, status: res.status, etag, lastModified, changed: false });
+    if (!recorded) return LOST;
     return { status: "unchanged", newEpisodes: 0 };
   }
 
@@ -283,9 +291,11 @@ async function fetchAndIngest(
       previousLatestAt: info.latestEpisodeAt,
       episodes: chunk,
     });
+    // Lost the lease part way: the rest belongs to the fetch that took over.
+    if (result.lostLease) return LOST;
     newEpisodes += result.created;
   }
-  await ctx.runMutation(internal.feeds.recordFetch, {
+  const recorded = await ctx.runMutation(internal.feeds.recordFetch, {
     podcastId,
     lease: info.lease,
     status: res.status,
@@ -294,6 +304,7 @@ async function fetchAndIngest(
     bodyHash,
     changed: newEpisodes > 0,
   });
+  if (!recorded) return LOST;
   return { status: "updated", newEpisodes };
 }
 

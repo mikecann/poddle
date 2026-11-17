@@ -363,7 +363,7 @@ describe("the fetch lease", () => {
       isFirstChunk: true,
       episodes: [{ guid: "x", title: "Old episode", enclosureUrl: "https://cdn.example.com/x.mp3", transcripts: [] } as never],
     });
-    expect(result.created).toBe(0);
+    expect(result).toMatchObject({ created: 0, lostLease: true });
     const podcast = await t.run(async (ctx) => await ctx.db.get(podcastId));
     expect(podcast?.title).toBe("Odd");
   });
