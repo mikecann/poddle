@@ -1,0 +1,252 @@
+{
+  "convex/accountDeletion.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 10
+    },
+    "machines/no-direct-state-writes": {
+      "count": 3
+    }
+  },
+  "convex/adminStats.ts": {
+    "@convex-dev/no-collect-in-query": {
+      "count": 6
+    }
+  },
+  "convex/apns.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 1
+    },
+    "mikecann-lint/prefer-kind-discriminant": {
+      "count": 2
+    }
+  },
+  "convex/crons.ts": {
+    "@convex-dev/no-top-of-hour-crons": {
+      "count": 2
+    }
+  },
+  "convex/devices.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 8
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 6
+    }
+  },
+  "convex/directoryCache.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 1
+    }
+  },
+  "convex/episodes.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 4
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/feeds.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 12
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/http.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 1
+    }
+  },
+  "convex/lib/allowlist.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 3
+    }
+  },
+  "convex/lib/auth.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 1
+    }
+  },
+  "convex/lib/e2e.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 5
+    }
+  },
+  "convex/lib/identity.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 2
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/lib/ingest.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 3
+    }
+  },
+  "convex/lib/keepLatest.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 1
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 2
+    }
+  },
+  "convex/lib/library.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 2
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/lib/queue.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 4
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/lib/rollups.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 7
+    }
+  },
+  "convex/lib/sharePages.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 3
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/lib/state.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 10
+    }
+  },
+  "convex/lib/testSignIn.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 1
+    }
+  },
+  "convex/maintenance.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 3
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    }
+  },
+  "convex/migrations.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 8
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 6
+    }
+  },
+  "convex/overcastImport.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 34
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 7
+    }
+  },
+  "convex/podcasts.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 10
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 3
+    }
+  },
+  "convex/queue.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 1
+    }
+  },
+  "convex/schema.ts": {
+    "@convex-dev/no-duplicate-indexes": {
+      "count": 1
+    },
+    "machines/no-optional-on-machine-tables": {
+      "count": 16
+    }
+  },
+  "convex/sessions.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 3
+    }
+  },
+  "convex/settings.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 2
+    }
+  },
+  "convex/stats.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 3
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 6
+    }
+  },
+  "convex/suggestions.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 11
+    }
+  },
+  "convex/suggestionsActions.ts": {
+    "@convex-dev/no-process-env": {
+      "count": 1
+    }
+  },
+  "convex/sync.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 1
+    }
+  },
+  "convex/testing.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 1
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 1
+    },
+    "machines/no-direct-state-writes": {
+      "count": 1
+    }
+  },
+  "convex/users.ts": {
+    "@convex-dev/explicit-table-ids": {
+      "count": 11
+    },
+    "@convex-dev/no-collect-in-query": {
+      "count": 2
+    },
+    "@convex-dev/no-process-env": {
+      "count": 1
+    }
+  },
+  "web/src/components/SignIn.tsx": {
+    "mikecann-lint/click-shows-progress": {
+      "count": 2
+    }
+  },
+  "web/src/pages/MePage.tsx": {
+    "mikecann-lint/click-shows-progress": {
+      "count": 1
+    }
+  },
+  "web/src/pages/ShowPage.tsx": {
+    "mikecann-lint/click-shows-progress": {
+      "count": 1
+    }
+  }
+}
