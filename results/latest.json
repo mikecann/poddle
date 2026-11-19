@@ -1,14 +1,14 @@
 {
-  "sha": "921e4639ed40bfe2224c5fde1d8f42e83ad2f4cd",
-  "status": "passed",
+  "sha": "1df87f3c4279380f9b583a170ac6e5a34a961605",
+  "status": "failed",
   "suite": "both",
-  "startedAt": "2026-11-17T19:00:08.430Z",
-  "finishedAt": "2026-11-17T19:22:14.336Z",
+  "startedAt": "2026-11-19T00:53:17.105Z",
+  "finishedAt": "2026-11-19T01:19:31.541Z",
   "scenarios": [
     {
       "suite": "web",
       "name": "A visitor finds the App Store badge and their way to sign in",
-      "status": "passed"
+      "status": "failed"
     },
     {
       "suite": "web",
@@ -59,235 +59,235 @@
       "suite": "ios",
       "name": "discover: find an episode by name and download just that one",
       "status": "passed",
-      "seconds": 29.598
+      "seconds": 31.799
     },
     {
       "suite": "ios",
       "name": "discover: look at a show s episodes before following it",
       "status": "passed",
-      "seconds": 19.874
+      "seconds": 20.684
     },
     {
       "suite": "ios",
       "name": "discover: get episodes picked for you with your own exa key",
       "status": "passed",
-      "seconds": 36.143
+      "seconds": 38.328
     },
     {
       "suite": "ios",
       "name": "downloads: download an episode",
       "status": "passed",
-      "seconds": 18.692
+      "seconds": 21.031
     },
     {
       "suite": "ios",
       "name": "downloads: delete a download then undo keeps it",
       "status": "passed",
-      "seconds": 28.477
+      "seconds": 33.49
     },
     {
       "suite": "ios",
       "name": "downloads: once the undo toast has gone the download is gone",
       "status": "passed",
-      "seconds": 37.477
+      "seconds": 83.916
     },
     {
       "suite": "ios",
       "name": "import: importing an overcast export brings in the library history and up next",
       "status": "passed",
-      "seconds": 27.056
+      "seconds": 35.801
     },
     {
       "suite": "ios",
       "name": "new episodes: a new episode from a normal show goes to the bottom of up next",
       "status": "passed",
-      "seconds": 10.995
+      "seconds": 15.324
     },
     {
       "suite": "ios",
       "name": "new episodes: a show set to up next top puts it at the top",
       "status": "passed",
-      "seconds": 38.026
+      "seconds": 47.562
     },
     {
       "suite": "ios",
       "name": "new episodes: a show set to don t add leaves up next alone",
       "status": "passed",
-      "seconds": 50.91
+      "seconds": 52.389
     },
     {
       "suite": "ios",
       "name": "new episodes: a show set to keep the latest 1 takes its older episode out of up next",
       "status": "passed",
-      "seconds": 11.343
+      "seconds": 10.893
     },
     {
       "suite": "ios",
       "name": "new episodes: setting a show to keep the latest 1 trims up next straight away",
       "status": "passed",
-      "seconds": 39.991
+      "seconds": 39.871
     },
     {
       "suite": "ios",
       "name": "now playing: swipe right for the show notes where a timestamp seeks",
       "status": "passed",
-      "seconds": 25.773
+      "seconds": 24.915
     },
     {
       "suite": "ios",
       "name": "now playing: swipe left for the playback settings",
       "status": "passed",
-      "seconds": 17.422
+      "seconds": 17.038
     },
     {
       "suite": "ios",
       "name": "now playing: dragging the artwork never archives or skips",
       "status": "passed",
-      "seconds": 36.455
+      "seconds": 36.498
     },
     {
       "suite": "ios",
       "name": "playback: play from up next pause resume and skip",
       "status": "passed",
-      "seconds": 46.075
+      "seconds": 46.008
     },
     {
       "suite": "ios",
       "name": "playback: when an episode ends it s marked played and the next one starts",
       "status": "passed",
-      "seconds": 18.554
+      "seconds": 18.852
     },
     {
       "suite": "ios",
       "name": "share links: a link with a start time offers to play from there",
       "status": "passed",
-      "seconds": 23.36
+      "seconds": 24.338
     },
     {
       "suite": "ios",
       "name": "share links: a dead link says it couldn t be opened",
       "status": "passed",
-      "seconds": 35.983
+      "seconds": 36.188
     },
     {
       "suite": "ios",
       "name": "sign in: test sign in lands on up next",
       "status": "passed",
-      "seconds": 14.836
+      "seconds": 14.561
     },
     {
       "suite": "ios",
       "name": "sign in: sign in with apple uses the iphone s own apple sheet",
       "status": "passed",
-      "seconds": 11.874
+      "seconds": 11.772
     },
     {
       "suite": "ios",
       "name": "sign in: someone who isn t invited sees the invite only message",
       "status": "passed",
-      "seconds": 7.822
+      "seconds": 7.844
     },
     {
       "suite": "ios",
       "name": "sign in: signing out returns to sign in and hides the library",
       "status": "passed",
-      "seconds": 15.819
+      "seconds": 15.673
     },
     {
       "suite": "ios",
       "name": "sign in: deleting the account signs out and removes it",
       "status": "passed",
-      "seconds": 31.547
+      "seconds": 31.288
     },
     {
       "suite": "ios",
       "name": "speed settings: with customize off changing the speed changes the default for every show",
       "status": "passed",
-      "seconds": 32.571
+      "seconds": 32.819
     },
     {
       "suite": "ios",
       "name": "speed settings: turning customize on gives the show its own speed and off returns it to the default",
       "status": "passed",
-      "seconds": 57.3
+      "seconds": 58.143
     },
     {
       "suite": "ios",
       "name": "stats: listening shows up in stats",
       "status": "passed",
-      "seconds": 25.545
+      "seconds": 25.85
     },
     {
       "suite": "ios",
       "name": "subscribe: search discover and follow a show",
       "status": "passed",
-      "seconds": 40.39
+      "seconds": 40.115
     },
     {
       "suite": "ios",
       "name": "subscribe: add a show by pasting its feed url",
       "status": "passed",
-      "seconds": 23.118
+      "seconds": 24.177
     },
     {
       "suite": "ios",
       "name": "subscribe: a link that can t be reached says why",
       "status": "passed",
-      "seconds": 19.099
+      "seconds": 19.513
     },
     {
       "suite": "ios",
       "name": "subscribe: unsubscribe then undo",
       "status": "passed",
-      "seconds": 31.544
+      "seconds": 31.934
     },
     {
       "suite": "ios",
       "name": "subscribe: back from a show s page returns to the library",
       "status": "passed",
-      "seconds": 26.943
+      "seconds": 28.139
     },
     {
       "suite": "ios",
       "name": "subscribe: the end of a long library scrolls clear of the mini player layout grid",
       "status": "passed",
-      "seconds": 36.401
+      "seconds": 38.932
     },
     {
       "suite": "ios",
       "name": "subscribe: the end of a long library scrolls clear of the mini player layout list",
       "status": "passed",
-      "seconds": 63.874
+      "seconds": 69.213
     },
     {
       "suite": "ios",
       "name": "up next: reorder by dragging",
       "status": "passed",
-      "seconds": 36.451
+      "seconds": 38.005
     },
     {
       "suite": "ios",
       "name": "up next: archive then undo puts it back in the same place",
       "status": "passed",
-      "seconds": 24.715
+      "seconds": 25.436
     },
     {
       "suite": "ios",
       "name": "up next: remove with a swipe then undo",
       "status": "passed",
-      "seconds": 23.51
+      "seconds": 23.838
     },
     {
       "suite": "ios",
       "name": "up next: mark played with a long swipe then undo",
       "status": "passed",
-      "seconds": 23.995
+      "seconds": 24.243
     },
     {
       "suite": "ios",
       "name": "up next: the end of a long up next scrolls clear of the mini player",
       "status": "passed",
-      "seconds": 25.893
+      "seconds": 26.022
     }
   ],
   "screenshots": [],
