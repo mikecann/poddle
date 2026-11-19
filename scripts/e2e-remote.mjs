@@ -27,7 +27,7 @@ const results = path.join(root, "e2e/.remote-results", sha);
 const source = process.env.E2E_SOURCE_PACKAGES ?? path.join(os.homedir(), "Library/Caches/poddle-e2e/SourcePackages");
 console.log(`[e2e remote] ${sha}, ${suite}, on ${host}`);
 console.log(`  Fetch origin, verify commit is pushed, create an isolated worktree, npm ci${suite === "web" ? "" : ", verify and sync pinned Swift packages"}.`);
-console.log(`  Take ~/.blender-queue.lock (shared with render-box); run npm run test:e2e${suite === "both" ? "" : `:${suite}`} ${args.map(quote).join(" ")}`);
+console.log(`  Take ~/.blender-queue.lock (shared with render-box), wait for a turn in tinker-desk's heavy queue; run npm run test:e2e${suite === "both" ? "" : `:${suite}`} ${args.map(quote).join(" ")}`);
 console.log(`  Xcode ${process.env.E2E_DEVELOPER_DIR ?? "~/Applications/Xcode-27.1.app"}, iOS runtime ${process.env.E2E_SIM_RUNTIME ?? "27.0"}, device ${process.env.E2E_SIM_DEVICE_TYPE ?? "com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro"}.`);
 console.log(`  Download scenario results, failure screenshots, accessibility dumps and reports to ${results}`);
 if (dryRun) process.exit(0);
@@ -61,7 +61,12 @@ const rsync = (from, to) => command("taskpolicy", ["-b", "rsync", "-a", "-e", "s
 for (const file of ["e2e-remote-worker.mjs", "e2e-remote-lib.mjs"]) rsync(path.join(root, "scripts", file), `${upload}/${file}`);
 if (config.source) rsync(`${source}/`, `${config.source}/`);
 const encoded = Buffer.from(JSON.stringify(config)).toString("base64");
-const invocation = `PATH=${quote(`${path.dirname(node)}:/usr/bin:/bin:/usr/sbin:/sbin`)} /usr/bin/lockf -t 0 -k ${quote(`${home}/.blender-queue.lock`)} /usr/bin/caffeinate -i ${quote(node)} ${quote(`${upload}/e2e-remote-worker.mjs`)} ${quote(encoded)}`;
+// Builds and tests on tinker-desk take turns through its `heavy` queue (bruce-ops), two at a time:
+// every thread sending work there at once took it to a load of 166 on 19 Nov 2026. Holding the
+// render lock, the run waits for a turn and says what it's waiting behind. A host without it runs
+// straight away.
+const heavy = ssh(`test -x ${quote(`${home}/.local/bin/heavy`)} && printf yes || true`) === "yes" ? `${quote(`${home}/.local/bin/heavy`)} ` : "";
+const invocation = `PATH=${quote(`${path.dirname(node)}:/usr/bin:/bin:/usr/sbin:/sbin`)} /usr/bin/lockf -t 0 -k ${quote(`${home}/.blender-queue.lock`)} ${heavy}/usr/bin/caffeinate -i ${quote(node)} ${quote(`${upload}/e2e-remote-worker.mjs`)} ${quote(encoded)}`;
 // Clear the previous report for this SHA so a failed setup cannot display an old pass.
 rmSync(results, { recursive: true, force: true });
 const run = spawnSync("ssh", [...sshOptions, host, invocation], { stdio: "inherit" });

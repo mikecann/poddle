@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Run on tinker-desk with Node from nvm. No sudo, tokens or changes to the main checkout.
-import { mkdirSync, copyFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, copyFileSync, rmSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -30,7 +30,9 @@ writeFileSync(config, JSON.stringify({
 const label = "com.mikecann.poddle-e2e-nightly";
 const tag = "# poddle-e2e-nightly";
 const quote = (s) => `'${String(s).replaceAll("'", "'\\''")}'`;
-const argv = ["/usr/bin/lockf", "-t", "0", "-k", path.join(home, ".blender-queue.lock"), "/usr/bin/caffeinate", "-i", process.execPath, path.join(tools, "e2e-remote-worker.mjs"), "--nightly", config];
+// Takes a turn in tinker-desk's heavy queue (bruce-ops) inside the render lock, as e2e-remote.mjs does.
+const heavy = path.join(home, ".local/bin/heavy");
+const argv = ["/usr/bin/lockf", "-t", "0", "-k", path.join(home, ".blender-queue.lock"), ...(existsSync(heavy) ? [heavy] : []), "/usr/bin/caffeinate", "-i", process.execPath, path.join(tools, "e2e-remote-worker.mjs"), "--nightly", config];
 const line = `0 3 * * * PATH=${quote(`${path.dirname(process.execPath)}:/usr/bin:/bin:/usr/sbin:/sbin`)} ${argv.map(quote).join(" ")} >> ${quote(path.join(logs, "nightly.log"))} 2>> ${quote(path.join(logs, "nightly.error.log"))} ${tag}`;
 // cron, not launchd: tinker-desk has no GUI login, and launchd never fires calendar
 // jobs in the Background user domain without one (runs = 0 after 03:00, 23 Oct).
