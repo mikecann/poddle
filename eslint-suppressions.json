@@ -235,8 +235,16 @@
     }
   },
   "web/src/components/SignIn.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 3
+    },
     "mikecann-lint/click-shows-progress": {
       "count": 2
+    }
+  },
+  "web/src/pages/EpisodePage.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
     }
   },
   "web/src/pages/MePage.tsx": {
@@ -245,6 +253,9 @@
     }
   },
   "web/src/pages/ShowPage.tsx": {
+    "@typescript-eslint/no-misused-promises": {
+      "count": 1
+    },
     "mikecann-lint/click-shows-progress": {
       "count": 1
     }
