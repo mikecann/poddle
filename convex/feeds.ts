@@ -1,7 +1,7 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Doc, Id } from "./_generated/dataModel";
-import { internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
+import { env, internalMutation, internalQuery, type MutationCtx, type QueryCtx } from "./_generated/server";
 import { scheduleSyncWake } from "./devices";
 import { asUser, type UserMutationCtx } from "./lib/auth";
 import { upsertEpisode, vIncomingEpisode, vIngestMode } from "./lib/ingest";
@@ -45,7 +45,7 @@ export async function ensureFeedState(ctx: MutationCtx, podcastId: Id<"podcasts"
   const now = Date.now();
   const existing = await feedStateFor(ctx, podcastId);
   if (existing) {
-    await ctx.db.patch(existing._id, { active, ...(checkNow ? { nextCheckAt: now } : {}) });
+    await ctx.db.patch("feedStates", existing._id, { active, ...(checkNow ? { nextCheckAt: now } : {}) });
     return existing._id;
   }
   return await ctx.db.insert("feedStates", { podcastId, active, nextCheckAt: now, consecutiveErrors: 0 });
@@ -78,6 +78,7 @@ export const claimFetch = machines.internalMutation({
       etag: v.optional(v.string()),
       lastModified: v.optional(v.string()),
       bodyHash: v.optional(v.string()),
+      parsedHash: v.optional(v.string()),
       isFirstFetch: v.boolean(),
       latestEpisodeAt: v.optional(v.number()),
       /** This claim's lease (its expiry). recordFetch takes it back, so only the claim's own fetch can release it. */
@@ -86,7 +87,7 @@ export const claimFetch = machines.internalMutation({
   ),
   handler: async (machineCtx, { podcastId }) => {
     const ctx = asMutationCtx(machineCtx);
-    const podcast = await ctx.db.get(podcastId);
+    const podcast = await ctx.db.get("podcasts", podcastId);
     if (!podcast) return null;
     const now = Date.now();
     const lease = now + FETCH_LEASE_MS;
@@ -96,13 +97,14 @@ export const claimFetch = machines.internalMutation({
       : await feedFetch.create(machineCtx, { podcastId }, { type: "CLAIM", lease });
     if (claimed.status !== "done") return null;
     const stateId = await ensureFeedState(ctx, podcastId, await hasSubscribers(ctx, podcastId), false);
-    const state = (await ctx.db.get(stateId))!;
+    const state = (await ctx.db.get("feedStates", stateId))!;
     return {
       lease,
       feedUrl: podcast.feedUrl,
       etag: state.etag,
       lastModified: state.lastModified,
       bodyHash: state.bodyHash,
+      parsedHash: state.parsedHash,
       isFirstFetch: !state.lastSuccessAt,
       latestEpisodeAt: podcast.latestEpisodeAt,
     };
@@ -120,6 +122,7 @@ export const recordFetch = machines.internalMutation({
     etag: v.optional(v.string()),
     lastModified: v.optional(v.string()),
     bodyHash: v.optional(v.string()),
+    parsedHash: v.optional(v.string()),
     changed: v.boolean(),
   },
   /** False: the fetch had lost its claim, and nothing was recorded. */
@@ -127,7 +130,7 @@ export const recordFetch = machines.internalMutation({
   handler: async (machineCtx, a) => {
     const ctx = asMutationCtx(machineCtx);
     const now = Date.now();
-    const podcast = await ctx.db.get(a.podcastId);
+    const podcast = await ctx.db.get("podcasts", a.podcastId);
     if (!podcast) return false;
     // A fetch that ran past its claim, after another took the feed over (or that
     // one already finished), is refused: its answer is older, and letting the feed
@@ -141,10 +144,10 @@ export const recordFetch = machines.internalMutation({
     const claim = await feedFetchFor(ctx, a.podcastId);
     if (claim && (await feedFetch.send(machineCtx, claim._id, { type: "FINISHED", lease: a.lease })).status !== "done") return false;
     const stateId = await ensureFeedState(ctx, a.podcastId, await hasSubscribers(ctx, a.podcastId), false);
-    const state = (await ctx.db.get(stateId))!;
+    const state = (await ctx.db.get("feedStates", stateId))!;
     const ok = !a.error;
     const consecutiveErrors = ok ? 0 : state.consecutiveErrors + 1;
-    await ctx.db.patch(stateId, {
+    await ctx.db.patch("feedStates", stateId, {
       lastCheckedAt: now,
       lastStatus: a.status,
       lastError: a.error,
@@ -155,9 +158,10 @@ export const recordFetch = machines.internalMutation({
       ...(a.etag !== undefined ? { etag: a.etag } : {}),
       ...(a.lastModified !== undefined ? { lastModified: a.lastModified } : {}),
       ...(a.bodyHash !== undefined ? { bodyHash: a.bodyHash } : {}),
+      ...(a.parsedHash !== undefined ? { parsedHash: a.parsedHash } : {}),
     });
     if (ok && podcast.lastFetchedAt === undefined) {
-      await ctx.db.patch(a.podcastId, { lastFetchedAt: now, updatedAt: now });
+      await ctx.db.patch("podcasts", a.podcastId, { lastFetchedAt: now, updatedAt: now });
     }
     return true;
   },
@@ -187,7 +191,7 @@ export const updatePodcastMeta = internalMutation({
   },
   returns: v.null(),
   handler: async (ctx, { podcastId, lease, newFeedUrl, ...meta }) => {
-    const podcast = await ctx.db.get(podcastId);
+    const podcast = await ctx.db.get("podcasts", podcastId);
     if (!podcast || !(await holdsLease(ctx, podcastId, lease))) return null;
     const patch: Partial<Doc<"podcasts">> = {};
     for (const [k, val] of Object.entries(meta) as [keyof typeof meta, string | undefined][]) {
@@ -200,7 +204,7 @@ export const updatePodcastMeta = internalMutation({
         .first();
       if (!clash) patch.feedUrl = newFeedUrl;
     }
-    if (Object.keys(patch).length) await ctx.db.patch(podcastId, { ...patch, updatedAt: Date.now() });
+    if (Object.keys(patch).length) await ctx.db.patch("podcasts", podcastId, { ...patch, updatedAt: Date.now() });
     return null;
   },
 });
@@ -222,7 +226,7 @@ export const ingestEpisodes = internalMutation({
   },
   returns: v.object({ created: v.number(), ruled: v.array(v.id("episodes")), lostLease: v.optional(v.boolean()) }),
   handler: async (ctx, a) => {
-    const podcast = await ctx.db.get(a.podcastId);
+    const podcast = await ctx.db.get("podcasts", a.podcastId);
     if (!podcast) return { created: 0, ruled: [] };
     if (!(await holdsLease(ctx, a.podcastId, a.lease))) return { created: 0, ruled: [], lostLease: true };
     const now = Date.now();
@@ -269,7 +273,7 @@ export const ingestEpisodes = internalMutation({
     }
 
     if (created || latest !== podcast.latestEpisodeAt) {
-      await ctx.db.patch(a.podcastId, {
+      await ctx.db.patch("podcasts", a.podcastId, {
         episodeCount: podcast.episodeCount + created,
         latestEpisodeAt: latest,
         updatedAt: now,
@@ -311,6 +315,8 @@ export const pollDueFeeds = internalMutation({
   args: {},
   returns: v.number(),
   handler: async (ctx) => {
+    // Dev deployments seeded from prod shouldn't burn DB I/O polling feeds around the clock.
+    if (env.PODDLE_DISABLE_FEED_POLLING === "1") return 0;
     const now = Date.now();
     const due = await ctx.db
       .query("feedStates")
@@ -318,7 +324,7 @@ export const pollDueFeeds = internalMutation({
       .take(POLL_BATCH);
     for (const [i, state] of due.entries()) {
       // Lease it so an overlapping run doesn't fetch twice; recordFetch sets the real time.
-      await ctx.db.patch(state._id, { nextCheckAt: now + 10 * MINUTE });
+      await ctx.db.patch("feedStates", state._id, { nextCheckAt: now + 10 * MINUTE });
       await ctx.scheduler.runAfter(i * 1500, internal.feedActions.fetchFeed, { podcastId: state.podcastId });
     }
     if (due.length === POLL_BATCH) {

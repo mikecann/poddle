@@ -45,6 +45,9 @@ export const PERSONAL_INDEX = {
   statsShowDays: "by_user_day_podcast",
   statsShowMonths: "by_user_month_podcast",
   episodeTotals: "by_user_episode",
+  statsEpisodeYears: "by_user_year_episode",
+  statsShowTotals: "by_user_podcast",
+  statsAllTime: "by_user",
   importBatches: "by_user_startedAt",
   exaKeys: "by_user",
   suggestions: "by_user",
@@ -81,11 +84,11 @@ const SWEEPS: Record<PersonalTable | "chefRequests", Sweep> = {
       .withIndex("by_user_podcast", (q) => q.eq("userId", userId))
       .take(budget);
     for (const row of rows) {
-      await ctx.db.delete(row._id);
+      await ctx.db.delete("subscriptions", row._id);
       // Nobody else subscribes: stop polling the feed.
       if (row.subscribed && !(await hasSubscribers(ctx, row.podcastId))) {
         const state = await feedStateFor(ctx, row.podcastId);
-        if (state?.active) await ctx.db.patch(state._id, { active: false });
+        if (state?.active) await ctx.db.patch("feedStates", state._id, { active: false });
       }
     }
     return rows.length;
@@ -104,6 +107,9 @@ const SWEEPS: Record<PersonalTable | "chefRequests", Sweep> = {
   statsShowDays: plain("statsShowDays"),
   statsShowMonths: plain("statsShowMonths"),
   episodeTotals: plain("episodeTotals"),
+  statsEpisodeYears: plain("statsEpisodeYears"),
+  statsShowTotals: plain("statsShowTotals"),
+  statsAllTime: plain("statsAllTime"),
   exaKeys: plain("exaKeys"),
   suggestions: plain("suggestions"),
   // Each import batch's scratch rows (keyed by batch, not person) go before it.
@@ -134,7 +140,7 @@ const SWEEPS: Record<PersonalTable | "chefRequests", Sweep> = {
       deleted += scratch.length;
       if (deleted >= budget) break;
       // An import step that finds its batch gone stops (overcastImport.ts).
-      await ctx.db.delete(batch._id);
+      await ctx.db.delete("importBatches", batch._id);
       deleted++;
     }
     return deleted;
@@ -201,7 +207,7 @@ export const step = internalMutation({
   args: { deletionId: v.id("accountDeletions") },
   returns: v.null(),
   handler: async (ctx, { deletionId }) => {
-    const deletion = await ctx.db.get(deletionId);
+    const deletion = await ctx.db.get("accountDeletions", deletionId);
     if (!deletion || deletion.finishedAt !== undefined) return null;
     const { userId } = deletion;
     let stageIndex = Math.max(0, STAGES.indexOf(deletion.stage as (typeof STAGES)[number]));
@@ -217,18 +223,18 @@ export const step = internalMutation({
     const now = Date.now();
     const progress = { deletedRows: deletion.deletedRows + deleted, lastStepAt: now };
     if (stageIndex < STAGES.length) {
-      await ctx.db.patch(deletionId, { ...progress, stage: STAGES[stageIndex]! });
+      await ctx.db.patch("accountDeletions", deletionId, { ...progress, stage: STAGES[stageIndex]! });
       await ctx.scheduler.runAfter(0, internal.accountDeletion.step, { deletionId });
       return null;
     }
     // Every stage came up empty. Something written behind the sweep (a feed
     // fan-out that was already running) gets another pass.
     if (deletion.passes + 1 < MAX_PASSES && (await anythingLeft(ctx, userId))) {
-      await ctx.db.patch(deletionId, { ...progress, stage: STAGES[0]!, passes: deletion.passes + 1 });
+      await ctx.db.patch("accountDeletions", deletionId, { ...progress, stage: STAGES[0]!, passes: deletion.passes + 1 });
       await ctx.scheduler.runAfter(0, internal.accountDeletion.step, { deletionId });
       return null;
     }
-    await ctx.db.patch(deletionId, { ...progress, stage: "done", passes: deletion.passes + 1, finishedAt: now });
+    await ctx.db.patch("accountDeletions", deletionId, { ...progress, stage: "done", passes: deletion.passes + 1, finishedAt: now });
     console.log(`Account deletion ${deletionId} finished: ${progress.deletedRows} rows`);
     return null;
   },
@@ -244,7 +250,7 @@ export const resumeStalled = internalMutation({
       .withIndex("by_finishedAt_lastStepAt", (q) => q.eq("finishedAt", undefined).lt("lastStepAt", Date.now() - STALL_MS))
       .take(50);
     for (const d of stalled) {
-      await ctx.db.patch(d._id, { lastStepAt: Date.now() });
+      await ctx.db.patch("accountDeletions", d._id, { lastStepAt: Date.now() });
       await ctx.scheduler.runAfter(0, internal.accountDeletion.step, { deletionId: d._id });
     }
     return stalled.length;

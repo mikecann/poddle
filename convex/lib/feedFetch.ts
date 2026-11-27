@@ -85,6 +85,22 @@ export async function sha256Hex(text: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
+/** Hash of everything a fetch would write to Convex, ignoring volatile XML wrapper fields like `<lastBuildDate>`. */
+export async function parsedFeedHash(feed: ParsedFeed, incoming: IncomingEpisode[]): Promise<string> {
+  return await sha256Hex(
+    JSON.stringify([
+      feed.title,
+      feed.author ?? null,
+      feed.description ?? null,
+      feed.artworkUrl ?? null,
+      feed.link ?? null,
+      feed.language ?? null,
+      feed.newFeedUrl ?? null,
+      incoming,
+    ]),
+  );
+}
+
 /**
  * Why a fetch got no response at all. Node's fetch throws a bare `TypeError: fetch failed`
  * and keeps the reason in `cause`: ENOTFOUND, ECONNREFUSED, UND_ERR_CONNECT_TIMEOUT, a
@@ -267,6 +283,23 @@ async function fetchAndIngest(
     return await fail(res.status, `Parse error: ${(e as Error).message}`);
   }
 
+  const incoming = feed.episodes.map(toIncoming);
+  const parsedHash = await parsedFeedHash(feed, incoming);
+  if (conditional && info.parsedHash && parsedHash === info.parsedHash) {
+    const recorded = await ctx.runMutation(internal.feeds.recordFetch, {
+      podcastId,
+      lease: info.lease,
+      status: res.status,
+      etag,
+      lastModified,
+      bodyHash,
+      parsedHash,
+      changed: false,
+    });
+    if (!recorded) return LOST;
+    return { status: "unchanged", newEpisodes: 0 };
+  }
+
   await ctx.runMutation(internal.feeds.updatePodcastMeta, {
     podcastId,
     lease: info.lease,
@@ -281,7 +314,7 @@ async function fetchAndIngest(
 
   const mode: IngestMode = opts.mode ?? (info.isFirstFetch ? "initial" : "normal");
   let newEpisodes = 0;
-  for (const [i, chunk] of chunkEpisodes(feed.episodes.map(toIncoming)).entries()) {
+  for (const [i, chunk] of chunkEpisodes(incoming).entries()) {
     if (i > 0) await new Promise((r) => setTimeout(r, CHUNK_PAUSE_MS));
     const result = await ctx.runMutation(internal.feeds.ingestEpisodes, {
       podcastId,
@@ -302,6 +335,7 @@ async function fetchAndIngest(
     etag,
     lastModified,
     bodyHash,
+    parsedHash,
     changed: newEpisodes > 0,
   });
   if (!recorded) return LOST;

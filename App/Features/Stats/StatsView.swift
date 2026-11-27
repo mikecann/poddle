@@ -5,8 +5,15 @@ import PoddleKit
 struct StatsView: View {
     @Environment(PoddleStore.self) private var store
     @Environment(AppModel.self) private var app
+    @Environment(\.scenePhase) private var scenePhase
     @State private var year = Calendar.current.component(.year, from: .now)
     @State private var showAllShows = false
+
+    /// PhoneRoot keeps every tab mounted in a ZStack; only hold live stats subscriptions while
+    /// Stats is actually visible in the foreground, otherwise 30s playback saves re-run them.
+    private var shouldWatchStats: Bool {
+        app.tab == .stats && !app.showNowPlaying && !app.showYearInReview && scenePhase == .active
+    }
 
     var body: some View {
         ScrollView {
@@ -42,7 +49,10 @@ struct StatsView: View {
             .padding(.bottom, 24)
         }
         // Again for whoever signs in next: signing in clears the store's stats.
-        .task(id: "\(year)-\(store.accountGeneration)") { await store.loadStats(year: year) }
+        .task(id: "\(shouldWatchStats)-\(year)-\(store.accountGeneration)") {
+            guard shouldWatchStats else { return }
+            await store.loadStats(year: year)
+        }
         .sheet(isPresented: $showAllShows) {
             if let stats = store.stats { AllShowsSheet(stats: stats) }
         }

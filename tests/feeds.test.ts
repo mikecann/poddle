@@ -374,4 +374,77 @@ describe("the fetch lease", () => {
     expect(podcast?.title).toBe("Odd");
   });
 
+  test("volatile XML changes outside parsed fields skip ingestion via parsedHash", async () => {
+    const t = setup();
+    const original = fixture("odd-feed.xml");
+    mockFetch({ [FEED]: original });
+    const podcastId = await subscribeTo(t);
+
+    const beforeUpdated = await t.run(async (ctx) => {
+      const eps = await ctx.db.query("episodes").collect();
+      return eps.map((e) => e.updatedAt);
+    });
+
+    vi.setSystemTime(NOW + 60_000);
+    // Change XML wrapper (<lastBuildDate> / comment) without changing any parsed show or episode field.
+    const bumpedXml = original.replace("<channel>", "<channel>\n    <!-- regenerated -->\n    <lastBuildDate>Thu, 16 Oct 2025 00:00:00 GMT</lastBuildDate>");
+    mockFetch({ [FEED]: bumpedXml });
+    const r = await t.action(api.feedActions.refreshNow, { podcastId });
+    expect(r.result).toEqual({ status: "unchanged", newEpisodes: 0 });
+
+    const afterUpdated = await t.run(async (ctx) => {
+      const eps = await ctx.db.query("episodes").collect();
+      return eps.map((e) => e.updatedAt);
+    });
+    expect(afterUpdated).toEqual(beforeUpdated);
+  });
+
+  test("notesHash skips unchanged show notes and still updates edited ones", async () => {
+    const t = setup();
+    mockFetch({ [FEED]: fixture("odd-feed.xml") });
+    const podcastId = await subscribeTo(t);
+
+    const ep4Before = await t.run(async (ctx) => {
+      const ep = (await ctx.db.query("episodes").collect()).find((e) => e.title.startsWith("Episode 4"))!;
+      const note = await ctx.db.query("episodeNotes").withIndex("by_episode", (q) => q.eq("episodeId", ep._id)).unique();
+      return { ep, note };
+    });
+    expect(ep4Before.ep.notesHash).toBeTruthy();
+
+    // Add a new episode without touching episode 4's show notes: episode 4 stays untouched.
+    vi.setSystemTime(NOW + 120_000);
+    mockFetch({ [FEED]: withNewItems(newItem(5, "Wed, 15 Oct 2025 00:00:00 GMT")) });
+    await t.action(api.feedActions.refreshNow, { podcastId });
+    const ep4AfterNew = await t.run(async (ctx) => await ctx.db.get(ep4Before.ep._id));
+    expect(ep4AfterNew?.updatedAt).toBe(ep4Before.ep.updatedAt);
+
+    // Now edit episode 4's show notes: notesHash changes and episodeNotes updates.
+    vi.setSystemTime(NOW + 240_000);
+    const edited = withNewItems(newItem(5, "Wed, 15 Oct 2025 00:00:00 GMT")).replace(
+      "for episode 4.",
+      "Updated show notes body.",
+    );
+    mockFetch({ [FEED]: edited });
+    await t.action(api.feedActions.refreshNow, { podcastId });
+    const ep4AfterEdit = await t.run(async (ctx) => {
+      const ep = await ctx.db.get(ep4Before.ep._id);
+      const note = await ctx.db.query("episodeNotes").withIndex("by_episode", (q) => q.eq("episodeId", ep4Before.ep._id)).unique();
+      return { ep, note };
+    });
+    expect(ep4AfterEdit.note?.html).toContain("Updated show notes body.");
+    expect(ep4AfterEdit.ep?.notesHash).not.toBe(ep4Before.ep.notesHash);
+  });
+
+  test("PODDLE_DISABLE_FEED_POLLING=1 pauses pollDueFeeds", async () => {
+    const t = setup();
+    mockFetch({ [FEED]: fixture("odd-feed.xml") });
+    await subscribeTo(t);
+    vi.setSystemTime(NOW + 24 * 3600_000);
+    vi.stubEnv("PODDLE_DISABLE_FEED_POLLING", "1");
+    try {
+      expect(await t.mutation(internal.feeds.pollDueFeeds, {})).toBe(0);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
 });

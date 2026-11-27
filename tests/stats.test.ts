@@ -1,5 +1,5 @@
-import { describe, expect, test } from "vitest";
-import { api } from "../convex/_generated/api";
+import { describe, expect, test, vi } from "vitest";
+import { api, internal } from "../convex/_generated/api";
 import type { Id } from "../convex/_generated/dataModel";
 import {
   currentStreak,
@@ -404,7 +404,14 @@ function readTracker<C extends { db: object }>(ctx: C) {
   const tables: string[] = [];
   const ids = new Set<string>();
   const note = (out: unknown) => {
-    for (const d of Array.isArray(out) ? out : [out]) if (d) ids.add((d as { _id: string })._id);
+    if (out && typeof out === "object" && "done" in out && "value" in out) {
+      const val = (out as { done?: boolean; value?: { _id?: string } }).value;
+      if (val?._id) ids.add(val._id);
+      return out;
+    }
+    for (const d of Array.isArray(out) ? out : [out]) {
+      if (d && (d as { _id?: string })._id) ids.add((d as { _id: string })._id);
+    }
     return out;
   };
   // Builder calls (withIndex, order) return more builders; the terminal ones
@@ -611,5 +618,178 @@ describe("stats totals (the website's stat cards)", () => {
       });
       expect(new Set(tables), period).toEqual(new Set(["globalSettings", period === "week" || period === "month" ? "statsDays" : "statsMonths"]));
     }
+  });
+});
+
+describe("extended stats rollups and backfill", () => {
+  test("year and all summaries stay on rollups without scanning raw sessions or all-time show-months", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(syd(2025, 10, 15, 20));
+    try {
+      const t = setup();
+      const userId = await t.userId();
+      const a = await seedShow(t, 3, { title: "alpha" });
+      await record(t, { id: "s1", ep: a.episodeIds[0]!, start: syd(2025, 10, 13, 8), mins: 20, rate: 1 });
+      await record(t, { id: "s2", ep: a.episodeIds[1]!, start: syd(2025, 10, 14, 8), mins: 25, rate: 1 });
+      await record(t, { id: "s3", ep: a.episodeIds[0]!, start: syd(2025, 10, 15, 8), mins: 15, rate: 1 });
+      await record(t, { id: "old", ep: a.episodeIds[2]!, start: syd(2024, 5, 1, 9), mins: 40, rate: 1 });
+
+      const yearTables = new Set(
+        await t.run(async (ctx) => {
+          const r = readTracker(ctx);
+          await computeSummary(asUser(r.ctx, userId), "year", "2025-10-15");
+          return r.tables;
+        }),
+      );
+      expect(yearTables.has("listeningSessions")).toBe(false);
+      expect(yearTables.has("statsEpisodeYears")).toBe(true);
+
+      const allTables = new Set(
+        await t.run(async (ctx) => {
+          const r = readTracker(ctx);
+          await computeSummary(asUser(r.ctx, userId), "all", "2025-10-15");
+          return r.tables;
+        }),
+      );
+      expect(allTables.has("listeningSessions")).toBe(false);
+      expect(allTables.has("statsShowMonths")).toBe(false);
+      expect(allTables.has("statsShowTotals")).toBe(true);
+      expect(allTables.has("statsAllTime")).toBe(true);
+
+      const allSummary = await t.query(api.stats.summary, { period: "all", anchorDay: "2025-10-15" });
+      expect(allSummary.longestStreak).toEqual({ length: 3, startDay: "2025-10-13", endDay: "2025-10-15" });
+      expect(allSummary.currentStreak).toEqual({ length: 3, startDay: "2025-10-13", endDay: "2025-10-15" });
+      expect(allSummary.busiestDay).toEqual({ day: "2024-05-01", wall: 40 * 60 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  test("extending an active session keeps longestStreak accurate without breaking on transient updates", async () => {
+    const t = setup();
+    const a = await seedShow(t, 1, { title: "alpha" });
+    const start = syd(2025, 10, 14, 8);
+    await record(t, { id: "live", ep: a.episodeIds[0]!, start, mins: 12, rate: 1 });
+    await record(t, { id: "live", ep: a.episodeIds[0]!, start, mins: 13, rate: 1 });
+    await record(t, { id: "day2", ep: a.episodeIds[0]!, start: syd(2025, 10, 15, 8), mins: 15, rate: 1 });
+
+    const all = await t.query(api.stats.summary, { period: "all", anchorDay: "2025-10-15" });
+    expect(all.longestStreak).toEqual({ length: 2, startDay: "2025-10-14", endDay: "2025-10-15" });
+    const year = await t.query(api.stats.summary, { period: "year", anchorDay: "2025-10-15" });
+    expect(year.topEpisodes[0]?.wall).toBeCloseTo(28 * 60, 6);
+  });
+
+  test("backfillStatsRollups produces identical year and all-time summaries as the fallback path", async () => {
+    const t = setup();
+    const userId = await t.userId();
+    const a = await seedShow(t, 3, { title: "alpha" });
+    const b = await seedShow(t, 2, { title: "bravo" });
+    await record(t, { id: "s1", ep: a.episodeIds[0]!, start: syd(2024, 6, 10, 9), mins: 20, rate: 1 });
+    await record(t, { id: "s2", ep: a.episodeIds[0]!, start: syd(2024, 6, 11, 9), mins: 15, rate: 1 });
+    await record(t, { id: "s3", ep: b.episodeIds[0]!, start: syd(2025, 10, 14, 9), mins: 30, rate: 1 });
+    await record(t, { id: "s4", ep: a.episodeIds[1]!, start: syd(2025, 10, 15, 9), mins: 45, rate: 1 });
+
+    // Simulate a pre-rollups user: wipe extended tables so summary runs on the fallback path.
+    await t.mutation(internal.migrations.clearStatsRollupsBatch, { userId });
+    const before2025 = await t.query(api.stats.summary, { period: "year", anchorDay: "2025-10-15" });
+    const before2024 = await t.query(api.stats.summary, { period: "year", anchorDay: "2024-06-15" });
+    const beforeAll = await t.query(api.stats.summary, { period: "all", anchorDay: "2025-10-15" });
+
+    // Backfill and verify exact parity (and that running it twice is idempotent).
+    const first = await t.raw.action(internal.migrations.backfillStatsRollups, {});
+    expect(first.users).toBe(1);
+    const second = await t.raw.action(internal.migrations.backfillStatsRollups, {});
+    expect(second).toEqual(first);
+
+    expect(await t.query(api.stats.summary, { period: "year", anchorDay: "2025-10-15" })).toEqual(before2025);
+    expect(await t.query(api.stats.summary, { period: "year", anchorDay: "2024-06-15" })).toEqual(before2024);
+    expect(await t.query(api.stats.summary, { period: "all", anchorDay: "2025-10-15" })).toEqual(beforeAll);
+  });
+
+  test("regression: setPlayed before first session still enables fast paths for fresh accounts", async () => {
+    const t = setup();
+    const userId = await t.userId();
+    const a = await seedShow(t, 1, { title: "alpha" });
+    await t.mutation(api.episodes.setPlayedState, { episodeId: a.episodeIds[0]!, played: true, at: syd(2025, 10, 14, 9) });
+    await record(t, { id: "s1", ep: a.episodeIds[0]!, start: syd(2025, 10, 14, 9), mins: 20, rate: 1 });
+    const marker = await t.run(async (ctx) =>
+      await ctx.db.query("statsAllTime").withIndex("by_user", (q) => q.eq("userId", userId)).unique(),
+    );
+    expect(marker?.rollupsReady).toBe(true);
+  });
+
+  test("regression: yearly topEpisodes finds a starred winner past 20 tied unstarred episodes", async () => {
+    const t = setup();
+    const a = await seedShow(t, 22, { title: "alpha" });
+    for (let i = 0; i < 20; i++) {
+      await record(t, { id: `u${i}`, ep: a.episodeIds[i]!, start: syd(2025, 6, 1, 8) + i * 3600_000, mins: 21, rate: 1 });
+    }
+    const starredEp = a.episodeIds[20]!;
+    await t.mutation(api.episodes.setStarredState, { episodeId: starredEp, starred: true, at: syd(2025, 6, 2, 8) });
+    await record(t, { id: "starred", ep: starredEp, start: syd(2025, 6, 2, 8), mins: 20.5, rate: 1 });
+    const year = await t.query(api.stats.summary, { period: "year", anchorDay: "2025-06-15" });
+    expect(year.topEpisodes[0]?.episodeId).toBe(starredEp);
+  });
+
+  test("regression: all-time busiestDay tie-breaks to the earliest day and backfill handles mid-run sessions and deleted users", async () => {
+    const t = setup();
+    const userId = await t.userId();
+    const a = await seedShow(t, 2, { title: "alpha" });
+    await record(t, { id: "d1", ep: a.episodeIds[0]!, start: syd(2025, 10, 14, 8), mins: 20, rate: 1 });
+    await record(t, { id: "d2", ep: a.episodeIds[0]!, start: syd(2025, 10, 15, 8), mins: 20, rate: 1 });
+    const all = await t.query(api.stats.summary, { period: "all", anchorDay: "2025-10-15" });
+    expect(all.busiestDay).toEqual({ day: "2025-10-14", wall: 20 * 60 });
+
+    // Mid-backfill session move across years: clear puts rollupsReady=false, then a session moves from
+    // 2024 to 2025 after 2024 was already backfilled; finalize must flag both years dirty and converge.
+    await record(t, { id: "moveMe", ep: a.episodeIds[1]!, start: syd(2024, 3, 5, 9), mins: 30, rate: 1 });
+    const cleared = await t.mutation(internal.migrations.clearStatsRollupsBatch, { userId });
+    expect(cleared.isDone).toBe(true);
+    await t.mutation(internal.migrations.backfillEpisodeYearPage, { userId, year: "2024", cursor: null });
+    await t.mutation(internal.migrations.backfillEpisodeYearPage, { userId, year: "2025", cursor: null });
+    // Move `moveMe` from 2024 into 2025 while rollupsReady is still false.
+    await record(t, { id: "moveMe", ep: a.episodeIds[1]!, start: syd(2025, 10, 16, 9), mins: 35, rate: 1 });
+    const firstTry = await t.mutation(internal.migrations.finalizeUserStatsRollups, {
+      userId,
+      snapshotMaxUpdatedAt: cleared.snapshotMaxUpdatedAt,
+    });
+    expect(firstTry.committed).toBe(false);
+    expect(firstTry.dirtyYears).toEqual(["2024", "2025"]);
+    for (const year of firstTry.dirtyYears) {
+      await t.mutation(internal.migrations.clearEpisodeYearBatch, { userId, year });
+      await t.mutation(internal.migrations.backfillEpisodeYearPage, { userId, year, cursor: null });
+    }
+    await t.mutation(internal.migrations.clearShowTotalsBatch, { userId });
+    await t.mutation(internal.migrations.backfillShowTotalsPage, { userId, cursor: null });
+    const secondTry = await t.mutation(internal.migrations.finalizeUserStatsRollups, {
+      userId,
+      snapshotMaxUpdatedAt: firstTry.nextSnapshotMaxUpdatedAt,
+    });
+    expect(secondTry.committed).toBe(true);
+    const allTimeRows = await t.run(async (ctx) =>
+      await ctx.db.query("statsAllTime").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
+    );
+    expect(allTimeRows).toHaveLength(1);
+    expect(allTimeRows[0]?.rollupsReady).toBe(true);
+    expect((await t.query(api.stats.summary, { period: "year", anchorDay: "2024-06-01" })).topEpisodes).toEqual([]);
+    expect(
+      (await t.query(api.stats.summary, { period: "year", anchorDay: "2025-10-15" })).topEpisodes.map((e) => e.episodeId),
+    ).toEqual([a.episodeIds[0], a.episodeIds[1]]);
+
+    // Deleted user: backfill mutations must not recreate statsAllTime on a tombstone.
+    await t.run(async (ctx) => {
+      await ctx.db.patch("users", userId, { deletedAt: Date.now() });
+      for (const row of await ctx.db.query("statsAllTime").withIndex("by_user", (q) => q.eq("userId", userId)).collect()) {
+        await ctx.db.delete("statsAllTime", row._id);
+      }
+    });
+    await t.mutation(internal.migrations.finalizeUserStatsRollups, {
+      userId,
+      snapshotMaxUpdatedAt: 0,
+    });
+    const afterTombstone = await t.run(async (ctx) =>
+      await ctx.db.query("statsAllTime").withIndex("by_user", (q) => q.eq("userId", userId)).collect(),
+    );
+    expect(afterTombstone).toHaveLength(0);
   });
 });

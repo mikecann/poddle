@@ -140,6 +140,11 @@ function changedFields(existing: Doc<"episodes">, incoming: IncomingEpisode): Pa
   return patch as Partial<Doc<"episodes">>;
 }
 
+async function hashNotes(html: string): Promise<string> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(html));
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 export async function upsertEpisode(
   ctx: MutationCtx,
   podcastId: Id<"podcasts">,
@@ -148,25 +153,37 @@ export async function upsertEpisode(
 ): Promise<{ episode: Doc<"episodes">; created: boolean }> {
   const existing = await findExistingEpisode(ctx, podcastId, incoming);
   const { showNotesHtml, ...fields } = incoming;
-  let episodeId: Id<"episodes">;
-  let created = false;
+  const notesHash = showNotesHtml !== undefined ? await hashNotes(showNotesHtml) : undefined;
   if (existing) {
-    episodeId = existing._id;
     const patch = changedFields(existing, incoming);
-    if (Object.keys(patch).length) await ctx.db.patch(episodeId, { ...patch, updatedAt: now });
-  } else {
-    episodeId = await ctx.db.insert("episodes", {
-      ...fields,
-      podcastId,
-      enclosureKey: enclosureKey(incoming.enclosureUrl),
-      isGhost: false,
-      firstSeenAt: now,
-      updatedAt: now,
-    });
-    created = true;
+    const hasFieldChanges = Object.keys(patch).length > 0;
+    const notesChanged = notesHash !== undefined && existing.notesHash !== notesHash;
+    if (notesChanged) {
+      await upsertNotes(ctx, existing._id, showNotesHtml!, now);
+    }
+    if (hasFieldChanges) {
+      const fullPatch = notesChanged ? { ...patch, notesHash, updatedAt: now } : { ...patch, updatedAt: now };
+      await ctx.db.patch("episodes", existing._id, fullPatch);
+      return { episode: (await ctx.db.get("episodes", existing._id))!, created: false };
+    }
+    if (notesChanged) {
+      // Stamp notesHash without bumping updatedAt so existing episodes don't churn sync:changes.
+      await ctx.db.patch("episodes", existing._id, { notesHash });
+      return { episode: { ...existing, notesHash }, created: false };
+    }
+    return { episode: existing, created: false };
   }
+  const episodeId = await ctx.db.insert("episodes", {
+    ...fields,
+    podcastId,
+    enclosureKey: enclosureKey(incoming.enclosureUrl),
+    isGhost: false,
+    ...(notesHash !== undefined ? { notesHash } : {}),
+    firstSeenAt: now,
+    updatedAt: now,
+  });
   if (showNotesHtml !== undefined) await upsertNotes(ctx, episodeId, showNotesHtml, now);
-  return { episode: (await ctx.db.get(episodeId))!, created };
+  return { episode: (await ctx.db.get("episodes", episodeId))!, created: true };
 }
 
 async function upsertNotes(ctx: MutationCtx, episodeId: Id<"episodes">, html: string, now: number) {
@@ -175,5 +192,5 @@ async function upsertNotes(ctx: MutationCtx, episodeId: Id<"episodes">, html: st
     .withIndex("by_episode", (q) => q.eq("episodeId", episodeId))
     .unique();
   if (!existing) await ctx.db.insert("episodeNotes", { episodeId, html, updatedAt: now });
-  else if (existing.html !== html) await ctx.db.patch(existing._id, { html, updatedAt: now });
+  else if (existing.html !== html) await ctx.db.patch("episodeNotes", existing._id, { html, updatedAt: now });
 }

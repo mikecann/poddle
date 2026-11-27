@@ -47,6 +47,7 @@ type Env = {
   readonly PODDLE_API_TOKEN: string | undefined;
   readonly PODDLE_APPLE_URL: string | undefined;
   readonly PODDLE_DIRECTORY_URL: string | undefined;
+  readonly PODDLE_DISABLE_FEED_POLLING: string | undefined;
   readonly PODDLE_E2E: string | undefined;
   readonly PODDLE_OPEN_SIGNUP: string | undefined;
   readonly PODDLE_SITE_URL: string | undefined;

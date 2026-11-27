@@ -7,6 +7,8 @@ import { podcastSummary } from "./lib/rows";
 import { resolveGlobalSettings } from "./lib/settings";
 import { globalSettingsDoc } from "./lib/settingsDb";
 import {
+  STREAK_MIN_SECONDS,
+  type Streak,
   addDays,
   currentStreak,
   dayToUtcMs,
@@ -128,7 +130,22 @@ async function todayFor(ctx: QueryCtx): Promise<string> {
  * The `limit` shows with the most wall time, plus `listened`: how many shows had
  * any (over half a second) in the period, for year in review's "+ N other shows".
  */
-async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay: string, limit: number) {
+async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay: string, limit: number, rollupsReady: boolean) {
+  const show = showCache(ctx);
+  if (period === "all" && rollupsReady) {
+    const totals = await ctx.db
+      .query("statsShowTotals")
+      .withIndex("by_user_wall", (q) => q.eq("userId", ctx.userId))
+      .order("desc")
+      .take(limit * 2 + 10);
+    const out = [];
+    for (const r of totals) {
+      if (r.wall <= 0.5 || out.length >= limit) break;
+      const podcast = await show(r.podcastId);
+      if (podcast) out.push({ podcast: podcastSummary(podcast), wall: r.wall, content: r.content, sessions: r.sessions });
+    }
+    return { top: out, listened: out.length };
+  }
   const byShow = new Map<Id<"podcasts">, { wall: number; content: number; sessions: number }>();
   const rows =
     period === "week"
@@ -151,7 +168,6 @@ async function topShows(ctx: QueryCtx, period: Period, startDay: string, endDay:
   }
   const ranked = [...byShow.entries()].filter(([, a]) => a.wall > 0.5).sort((a, b) => b[1].wall - a[1].wall);
   const out = [];
-  const show = showCache(ctx);
   for (const [podcastId, acc] of ranked) {
     if (out.length >= limit) break;
     const podcast = await show(podcastId);
@@ -176,25 +192,7 @@ async function sessionsInRange(ctx: QueryCtx, startDay: string, endDay: string) 
   });
 }
 
-async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endDay: string, limit: number) {
-  let ranked: { episodeId: Id<"episodes">; wall: number; sessions: number }[];
-  if (period === "all") {
-    const totals = await ctx.db
-      .query("episodeTotals")
-      .withIndex("by_user_wall", (q) => q.eq("userId", ctx.userId))
-      .order("desc")
-      .take(limit * 2);
-    ranked = totals.map((t) => ({ episodeId: t.episodeId, wall: t.wall, sessions: t.sessions }));
-  } else {
-    const byEpisode = new Map<Id<"episodes">, { wall: number; sessions: number }>();
-    for (const s of await sessionsInRange(ctx, startDay, endDay)) {
-      const acc = byEpisode.get(s.episodeId) ?? { wall: 0, sessions: 0 };
-      acc.wall += sessionMetrics(s).wall;
-      acc.sessions += 1;
-      byEpisode.set(s.episodeId, acc);
-    }
-    ranked = [...byEpisode.entries()].map(([episodeId, a]) => ({ episodeId, ...a }));
-  }
+async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endDay: string, limit: number, rollupsReady: boolean) {
   // Rank first, then look things up only for episodes that can still make the
   // list. A year can have thousands of episodes, and reading each one's state
   // put the playing episode's row (patched every few seconds) in every Stats
@@ -206,21 +204,33 @@ async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endD
   // that point only starred episodes get looked up, and the walk stops at the
   // first one 60 s or more under W. The sort is stable, so equal walls keep
   // the order they had before, and the final sort sees the same ties.
-  ranked.sort((a, b) => b.wall - a.wall);
-  const rows = [];
+  const rows: {
+    episodeId: Id<"episodes">;
+    title: string;
+    artworkUrl: string | undefined;
+    podcast: ReturnType<typeof podcastSummary>;
+    wall: number;
+    sessions: number;
+    starred: boolean;
+  }[] = [];
   const show = showCache(ctx);
-  for (const r of ranked) {
-    if (r.wall <= 0.5) break;
+  // Cap how many near-tied candidates past `limit` we inspect for the star tie-break so huge
+  // equal-duration tie groups (e.g. estimated Overcast imports) stay well inside Convex's read budget.
+  const MAX_TIE_CANDIDATES = 200;
+  let inspectedPastCutoff = 0;
+  const consider = async (r: { episodeId: Id<"episodes">; wall: number; sessions: number }) => {
+    if (r.wall <= 0.5) return false;
     const cutoff = rows[limit - 1];
-    if (cutoff && cutoff.wall - r.wall >= 60) break;
+    if (cutoff && cutoff.wall - r.wall >= 60) return false;
+    if (cutoff && ++inspectedPastCutoff > MAX_TIE_CANDIDATES) return false;
     const state = await ctx.db
       .query("episodeStates")
       .withIndex("by_user_episode", (q) => q.eq("userId", ctx.userId).eq("episodeId", r.episodeId))
       .unique();
-    if (cutoff && !state?.starred) continue;
-    const episode = await ctx.db.get(r.episodeId);
+    if (cutoff && !state?.starred) return true;
+    const episode = await ctx.db.get("episodes", r.episodeId);
     const podcast = episode && (await show(episode.podcastId));
-    if (!episode || !podcast) continue;
+    if (!episode || !podcast) return true;
     rows.push({
       episodeId: episode._id,
       title: episode.title,
@@ -230,26 +240,86 @@ async function topEpisodes(ctx: QueryCtx, period: Period, startDay: string, endD
       sessions: r.sessions,
       starred: state?.starred ?? false,
     });
+    return true;
+  };
+
+  if (period === "all") {
+    for await (const t of ctx.db
+      .query("episodeTotals")
+      .withIndex("by_user_wall", (q) => q.eq("userId", ctx.userId))
+      .order("desc")) {
+      if (!(await consider(t))) break;
+    }
+  } else if (period === "year" && rollupsReady) {
+    const year = startDay.slice(0, 4);
+    for await (const t of ctx.db
+      .query("statsEpisodeYears")
+      .withIndex("by_user_year_wall", (q) => q.eq("userId", ctx.userId).eq("year", year))
+      .order("desc")) {
+      if (!(await consider(t))) break;
+    }
+  } else {
+    const byEpisode = new Map<Id<"episodes">, { wall: number; sessions: number }>();
+    for (const s of await sessionsInRange(ctx, startDay, endDay)) {
+      const acc = byEpisode.get(s.episodeId) ?? { wall: 0, sessions: 0 };
+      acc.wall += sessionMetrics(s).wall;
+      acc.sessions += 1;
+      byEpisode.set(s.episodeId, acc);
+    }
+    const ranked = [...byEpisode.entries()]
+      .map(([episodeId, a]) => ({ episodeId, ...a }))
+      .sort((a, b) => b.wall - a.wall);
+    for (const r of ranked) {
+      if (!(await consider(r))) break;
+    }
   }
   // Wall time first; stars break near-ties (within a minute).
   rows.sort((a, b) => (Math.abs(b.wall - a.wall) < 60 ? Number(b.starred) - Number(a.starred) : 0) || b.wall - a.wall);
   return rows.slice(0, limit);
 }
 
+/** Walks backwards from `today`, stopping as soon as the streak breaks instead of reading 400 days. */
 async function currentStreakFrom(ctx: QueryCtx, today: string) {
-  const recent = await ctx.db
+  const yesterday = addDays(today, -1);
+  const recent: { day: string; wall: number }[] = [];
+  let needDay: string | null = null;
+  for await (const d of ctx.db
     .query("statsDays")
     .withIndex("by_user_day", (q) => q.eq("userId", ctx.userId).lte("day", today))
-    .order("desc")
-    .take(400);
+    .order("desc")) {
+    if (d.day === today) {
+      if (d.wall >= STREAK_MIN_SECONDS) {
+        recent.push(d);
+        needDay = yesterday;
+      }
+      continue;
+    }
+    if (needDay === null) {
+      if (d.day !== yesterday || d.wall < STREAK_MIN_SECONDS) break;
+      recent.push(d);
+      needDay = addDays(yesterday, -1);
+      continue;
+    }
+    if (d.day !== needDay || d.wall < STREAK_MIN_SECONDS) break;
+    recent.push(d);
+    needDay = addDays(needDay, -1);
+    if (recent.length >= 400) break;
+  }
   return currentStreak(recent, today);
 }
 
 export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: string | undefined, limit = 10) {
   const today = await todayFor(ctx);
   const { startDay, endDay } = periodRange(period, anchorDay ?? today);
-  const days = await daysIn(ctx, startDay, endDay);
-  const months = await monthsIn(ctx, startDay, endDay);
+  const allTime = await ctx.db
+    .query("statsAllTime")
+    .withIndex("by_user", (q) => q.eq("userId", ctx.userId))
+    .unique();
+  const rollupsReady = allTime?.rollupsReady === true;
+
+  const useAllTimeFastPath = period === "all" && rollupsReady;
+  const days = useAllTimeFastPath ? [] : await daysIn(ctx, startDay, endDay);
+  const months = totalsFromDays(period) ? [] : await monthsIn(ctx, startDay, endDay);
   const { totals, completion } = totalsOf(totalsFromDays(period) ? days : months);
 
   let heatmap = new Array<number>(7 * 24).fill(0);
@@ -262,11 +332,36 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
     for (const m of months) heatmap = heatmap.map((x, i) => x + (m.heatmap[i] ?? 0));
   }
 
-  const shows = await topShows(ctx, period, startDay, endDay, limit);
-  const busiestDay = days.reduce<{ day: string; wall: number } | null>(
-    (best, d) => (d.wall > (best?.wall ?? 0) ? { day: d.day, wall: d.wall } : best),
-    null,
-  );
+  const shows = await topShows(ctx, period, startDay, endDay, limit, rollupsReady);
+  let busiestDay: { day: string; wall: number } | null;
+  let longest: Streak;
+  if (useAllTimeFastPath) {
+    busiestDay = null;
+    for await (const d of ctx.db
+      .query("statsDays")
+      .withIndex("by_user_wall", (q) => q.eq("userId", ctx.userId))
+      .order("desc")) {
+      if (d.wall <= 0) break;
+      if (!busiestDay) busiestDay = { day: d.day, wall: d.wall };
+      else if (d.wall === busiestDay.wall) {
+        if (d.day < busiestDay.day) busiestDay = { day: d.day, wall: d.wall };
+      } else break;
+    }
+    longest =
+      allTime.longestStreakLength > 0
+        ? {
+            length: allTime.longestStreakLength,
+            startDay: allTime.longestStreakStartDay,
+            endDay: allTime.longestStreakEndDay,
+          }
+        : { length: 0 };
+  } else {
+    busiestDay = days.reduce<{ day: string; wall: number } | null>(
+      (best, d) => (d.wall > (best?.wall ?? 0) ? { day: d.day, wall: d.wall } : best),
+      null,
+    );
+    longest = longestStreak(days);
+  }
   const busiestMonth =
     period === "year" || period === "all"
       ? months.reduce<{ month: string; wall: number } | null>(
@@ -274,6 +369,15 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
           null,
         )
       : null;
+
+  let current: Streak;
+  if (!useAllTimeFastPath && startDay <= today && endDay >= today) {
+    const inRange = currentStreak(days, today);
+    const touchesStart = inRange.startDay === startDay || (inRange.length === 0 && startDay === today);
+    current = touchesStart ? await currentStreakFrom(ctx, today) : inRange;
+  } else {
+    current = await currentStreakFrom(ctx, today);
+  }
 
   return {
     period,
@@ -284,9 +388,9 @@ export async function computeSummary(ctx: QueryCtx, period: Period, anchorDay: s
     topShows: shows.top,
     /** Not in `vSummary`: only year in review uses it, and `summary` drops it. */
     showsListened: shows.listened,
-    topEpisodes: await topEpisodes(ctx, period, startDay, endDay, limit),
-    longestStreak: longestStreak(days),
-    currentStreak: await currentStreakFrom(ctx, today),
+    topEpisodes: await topEpisodes(ctx, period, startDay, endDay, limit, rollupsReady),
+    longestStreak: longest,
+    currentStreak: current,
     heatmap,
     busiestDay,
     busiestMonth,
@@ -402,7 +506,7 @@ export const yearInReview = userQuery({
     const show = showCache(ctx);
     const ref = async (sess: Doc<"listeningSessions"> | undefined) => {
       if (!sess) return null;
-      const episode = await ctx.db.get(sess.episodeId);
+      const episode = await ctx.db.get("episodes", sess.episodeId);
       const podcast = episode && (await show(episode.podcastId));
       if (!episode || !podcast) return null;
       return { episodeId: episode._id, title: episode.title, podcast: podcastSummary(podcast), at: sess.startedAt };
@@ -433,7 +537,7 @@ export const yearInReview = userQuery({
       .first();
 
     const top = s.topShows.filter((t) => keep(t.podcast)).slice(0, 5);
-    const user = await ctx.db.get(ctx.userId);
+    const user = await ctx.db.get("users", ctx.userId);
 
     return {
       year,

@@ -1,7 +1,7 @@
 {
   "convex/accountDeletion.ts": {
     "@convex-dev/explicit-table-ids": {
-      "count": 10
+      "count": 2
     },
     "machines/no-direct-state-writes": {
       "count": 3
@@ -47,9 +47,6 @@
     }
   },
   "convex/feeds.ts": {
-    "@convex-dev/explicit-table-ids": {
-      "count": 12
-    },
     "@convex-dev/no-collect-in-query": {
       "count": 1
     }
@@ -82,11 +79,6 @@
       "count": 1
     }
   },
-  "convex/lib/ingest.ts": {
-    "@convex-dev/explicit-table-ids": {
-      "count": 3
-    }
-  },
   "convex/lib/keepLatest.ts": {
     "@convex-dev/explicit-table-ids": {
       "count": 1
@@ -109,11 +101,6 @@
     },
     "@convex-dev/no-collect-in-query": {
       "count": 1
-    }
-  },
-  "convex/lib/rollups.ts": {
-    "@convex-dev/explicit-table-ids": {
-      "count": 7
     }
   },
   "convex/lib/sharePages.ts": {
@@ -144,7 +131,7 @@
   },
   "convex/migrations.ts": {
     "@convex-dev/explicit-table-ids": {
-      "count": 8
+      "count": 1
     },
     "@convex-dev/no-collect-in-query": {
       "count": 6
@@ -152,7 +139,7 @@
   },
   "convex/overcastImport.ts": {
     "@convex-dev/explicit-table-ids": {
-      "count": 34
+      "count": 1
     },
     "@convex-dev/no-collect-in-query": {
       "count": 7
@@ -179,20 +166,12 @@
       "count": 16
     }
   },
-  "convex/sessions.ts": {
-    "@convex-dev/explicit-table-ids": {
-      "count": 3
-    }
-  },
   "convex/settings.ts": {
     "@convex-dev/explicit-table-ids": {
       "count": 2
     }
   },
   "convex/stats.ts": {
-    "@convex-dev/explicit-table-ids": {
-      "count": 3
-    },
     "@convex-dev/no-collect-in-query": {
       "count": 6
     }

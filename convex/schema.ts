@@ -204,6 +204,8 @@ export default defineSchema({
     etag: v.optional(v.string()),
     lastModified: v.optional(v.string()),
     bodyHash: v.optional(v.string()),
+    /** SHA-256 of the normalised parsed feed, so feeds whose XML wrapper changes every poll skip ingestion. */
+    parsedHash: v.optional(v.string()),
     lastCheckedAt: v.optional(v.number()),
     lastSuccessAt: v.optional(v.number()),
     lastChangedAt: v.optional(v.number()),
@@ -250,6 +252,8 @@ export default defineSchema({
     explicit: v.optional(v.boolean()),
     /** Known only from an import, no longer in the feed. */
     isGhost: v.boolean(),
+    /** SHA-256 of `episodeNotes.html`, so unchanged re-ingests skip reading the HTML row. */
+    notesHash: v.optional(v.string()),
     firstSeenAt: v.number(),
     updatedAt: v.number(),
   })
@@ -554,7 +558,9 @@ export default defineSchema({
     episodesStarted: v.number(),
     episodesCompleted: v.number(),
     liveHours: v.array(v.number()), // 24 buckets of live wall seconds
-  }).index("by_user_day", ["userId", "day"]),
+  })
+    .index("by_user_day", ["userId", "day"])
+    .index("by_user_wall", ["userId", "wall"]),
 
   statsMonths: defineTable({
     userId: vOwner,
@@ -605,6 +611,44 @@ export default defineSchema({
   })
     .index("by_user_episode", ["userId", "episodeId"])
     .index("by_user_wall", ["userId", "wall"]),
+
+  /** Per-year episode listening totals so `stats:summary("year")` avoids scanning raw sessions. */
+  statsEpisodeYears: defineTable({
+    userId: v.id("users"),
+    year: v.string(), // local YYYY
+    episodeId: v.id("episodes"),
+    podcastId: v.id("podcasts"),
+    wall: v.number(),
+    content: v.number(),
+    sessions: v.number(),
+  })
+    .index("by_user_year_episode", ["userId", "year", "episodeId"])
+    .index("by_user_year_wall", ["userId", "year", "wall"]),
+
+  /** All-time per-show totals so `stats:summary("all")` avoids scanning every month × show row. */
+  statsShowTotals: defineTable({
+    userId: v.id("users"),
+    podcastId: v.id("podcasts"),
+    wall: v.number(),
+    content: v.number(),
+    speedSaved: v.number(),
+    smartSaved: v.number(),
+    sessions: v.number(),
+  })
+    .index("by_user_podcast", ["userId", "podcastId"])
+    .index("by_user_wall", ["userId", "wall"]),
+
+  /** All-time streak summary + readiness marker so `stats:summary("all")` avoids scanning every day row. */
+  statsAllTime: defineTable({
+    userId: v.id("users"),
+    longestStreakLength: v.number(),
+    longestStreakStartDay: v.optional(v.string()),
+    longestStreakEndDay: v.optional(v.string()),
+    /** True once `statsEpisodeYears` and `statsShowTotals` reflect all pre-existing history. */
+    rollupsReady: v.boolean(),
+    /** Years touched by session writes while a backfill is in progress (`rollupsReady === false`). */
+    backfillDirtyYears: v.optional(v.array(v.string())),
+  }).index("by_user", ["userId"]),
 
   /** Someone's own Exa key for "For you", encrypted (suggestionsActions.ts). Never sent back or synced. */
   exaKeys: defineTable({

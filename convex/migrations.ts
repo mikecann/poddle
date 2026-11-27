@@ -1,13 +1,14 @@
 import { v } from "convex/values";
 import { internal } from "./_generated/api";
 import type { Id, TableNames } from "./_generated/dataModel";
-import { internalAction, internalMutation, internalQuery } from "./_generated/server";
+import { internalAction, internalMutation, internalQuery, type MutationCtx } from "./_generated/server";
 import { asUser, type UserMutationCtx, type UserQueryCtx } from "./lib/auth";
 import { userByEmail } from "./lib/identity";
 import { addToQueue, orderedQueue, queueItemFor } from "./lib/queue";
 import { resolveGlobalSettings } from "./lib/settings";
 import { globalSettingsDoc } from "./lib/settingsDb";
 import { systemAt } from "./lib/state";
+import { dayToUtcMs, localDay, longestStreak, sessionMetrics } from "./lib/statsMath";
 import { asMutationCtx, importBatch, machines } from "./machines";
 
 // The accounts migration (docs/runbooks/accounts-prod.md). Everything that
@@ -52,7 +53,7 @@ export const ensureOwner = internalMutation({
   handler: async (ctx, { email = OWNER_EMAIL }) => {
     const existing = await userByEmail(ctx, email);
     if (existing) {
-      if (!existing.emailVerified) await ctx.db.patch(existing._id, { emailVerified: true });
+      if (!existing.emailVerified) await ctx.db.patch("users", existing._id, { emailVerified: true });
       return existing._id;
     }
     return await ctx.db.insert("users", { email: email.trim().toLowerCase(), emailVerified: true, name: "Mike Cann" });
@@ -126,7 +127,7 @@ export const moveSubscriptions = internalMutation({
         created++;
       }
       if (p.subscribed !== undefined || p.subscribedAt !== undefined || p.unsubscribedAt !== undefined || p.subscriptionUpdatedAt !== undefined) {
-        await ctx.db.patch(p._id, { subscribed: undefined, subscribedAt: undefined, unsubscribedAt: undefined, subscriptionUpdatedAt: undefined });
+        await ctx.db.patch("podcasts", p._id, { subscribed: undefined, subscribedAt: undefined, unsubscribedAt: undefined, subscriptionUpdatedAt: undefined });
         cleared++;
       }
     }
@@ -237,7 +238,7 @@ export const retireInboxFor = internalMutation({
 
     const states = await inboxStates(ctx);
     const entries = [];
-    for (const state of states) entries.push({ state, episode: await ctx.db.get(state.episodeId) });
+    for (const state of states) entries.push({ state, episode: await ctx.db.get("episodes", state.episodeId) });
     // Oldest first, so the oldest ends up highest in Up Next. Each batch goes
     // after the last, and the next batch is the oldest of what's left.
     entries.sort(
@@ -253,7 +254,7 @@ export const retireInboxFor = internalMutation({
       if (episode && !state.archived && !state.played && !(await queueItemFor(ctx, episode._id))) {
         if (await addToQueue(ctx, episode, "bottom", at, "auto")) moved++;
       }
-      await ctx.db.patch(state._id, {
+      await ctx.db.patch("episodeStates", state._id, {
         inInbox: false,
         inboxAt: undefined,
         inboxUpdatedAt: Math.max(state.inboxUpdatedAt, at),
@@ -280,7 +281,7 @@ async function retireInboxRules(ctx: UserMutationCtx, now: number) {
   let overridesCleared = 0;
   const global = await globalSettingsDoc(ctx);
   if (global?.newEpisodes === "inbox") {
-    await ctx.db.patch(global._id, { newEpisodes: "upNextBottom", updatedAt: now });
+    await ctx.db.patch("globalSettings", global._id, { newEpisodes: "upNextBottom", updatedAt: now });
     globalRewritten = true;
   }
   const globalRule = resolveGlobalSettings(global).newEpisodes;
@@ -291,10 +292,10 @@ async function retireInboxRules(ctx: UserMutationCtx, now: number) {
   for (const show of shows) {
     if (show.newEpisodes !== "inbox") continue;
     if (globalRule === "upNextBottom") {
-      await ctx.db.patch(show._id, { newEpisodes: undefined, updatedAt: now });
+      await ctx.db.patch("podcastSettings", show._id, { newEpisodes: undefined, updatedAt: now });
       overridesCleared++;
     } else {
-      await ctx.db.patch(show._id, { newEpisodes: "upNextBottom", updatedAt: now });
+      await ctx.db.patch("podcastSettings", show._id, { newEpisodes: "upNextBottom", updatedAt: now });
       overridesRewritten++;
     }
   }
@@ -368,5 +369,392 @@ export const armImportTimers = machines.internalMutation({
       }
     }
     return armed;
+  },
+});
+
+// ---- Extended stats rollups backfill (statsEpisodeYears, statsShowTotals, statsAllTime) ----
+//
+// Populates per-year episode totals, all-time show totals and longest-streak summary so
+// `stats:summary` stops scanning raw listeningSessions / statsShowMonths / statsDays.
+// Safe to run again: clears and rebuilds each user's extended rollups, with the latest year,
+// show totals and `rollupsReady: true` committed atomically in the final mutation.
+//
+//   npx convex run migrations:backfillStatsRollups
+
+const ROLLUP_PAD_MS = 14 * 3600_000;
+const ROLLUP_CLEAR_BATCH = 500;
+const ROLLUP_SESSION_PAGE = 2000;
+const MAX_BACKFILL_ROUNDS = 5;
+const clean = (x: number) => (Math.abs(x) < 1e-6 ? 0 : x);
+
+export const statsBackfillTargets = internalQuery({
+  args: {},
+  returns: v.array(v.id("users")),
+  handler: async (ctx) => {
+    const out: Id<"users">[] = [];
+    for await (const user of ctx.db.query("users")) {
+      if (user.mergedInto || user.deletedAt !== undefined) continue;
+      out.push(user._id);
+    }
+    return out;
+  },
+});
+
+async function isActiveUser(ctx: MutationCtx, userId: Id<"users">): Promise<boolean> {
+  const user = await ctx.db.get("users", userId);
+  return Boolean(user && !user.mergedInto && user.deletedAt === undefined);
+}
+
+export const clearStatsRollupsBatch = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.object({
+    deleted: v.number(),
+    isDone: v.boolean(),
+    snapshotMaxUpdatedAt: v.number(),
+    years: v.array(v.string()),
+  }),
+  handler: async (ctx, { userId }) => {
+    if (!(await isActiveUser(ctx, userId))) return { deleted: 0, isDone: true, snapshotMaxUpdatedAt: 0, years: [] };
+    let deleted = 0;
+    // Keep one `rollupsReady: false` marker in place while clearing so concurrent sessions on
+    // empty accounts cannot race to insert a second `statsAllTime` row before finalization,
+    // and any session written mid-backfill records its touched years in `backfillDirtyYears`.
+    const existingAllTime = await ctx.db
+      .query("statsAllTime")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .take(10);
+    if (existingAllTime.length === 0) {
+      await ctx.db.insert("statsAllTime", {
+        userId,
+        longestStreakLength: 0,
+        rollupsReady: false,
+      });
+    } else {
+      const [keep, ...extras] = existingAllTime;
+      await ctx.db.patch("statsAllTime", keep!._id, {
+        longestStreakLength: 0,
+        longestStreakStartDay: undefined,
+        longestStreakEndDay: undefined,
+        rollupsReady: false,
+        backfillDirtyYears: undefined,
+      });
+      for (const extra of extras) {
+        await ctx.db.delete("statsAllTime", extra._id);
+        deleted++;
+      }
+    }
+    for (const row of await ctx.db
+      .query("statsEpisodeYears")
+      .withIndex("by_user_year_episode", (q) => q.eq("userId", userId))
+      .take(ROLLUP_CLEAR_BATCH - deleted)) {
+      await ctx.db.delete("statsEpisodeYears", row._id);
+      deleted++;
+    }
+    if (deleted < ROLLUP_CLEAR_BATCH) {
+      for (const row of await ctx.db
+        .query("statsShowTotals")
+        .withIndex("by_user_podcast", (q) => q.eq("userId", userId))
+        .take(ROLLUP_CLEAR_BATCH - deleted)) {
+        await ctx.db.delete("statsShowTotals", row._id);
+        deleted++;
+      }
+    }
+    const isDone = deleted < ROLLUP_CLEAR_BATCH;
+    if (!isDone) return { deleted, isDone: false, snapshotMaxUpdatedAt: 0, years: [] };
+
+    // Capture the year range and change watermark in the same atomic transaction after clearing.
+    const [latest, first, last] = await Promise.all([
+      ctx.db
+        .query("listeningSessions")
+        .withIndex("by_user_updatedAt", (q) => q.eq("userId", userId))
+        .order("desc")
+        .first(),
+      ctx.db
+        .query("listeningSessions")
+        .withIndex("by_user_startedAt", (q) => q.eq("userId", userId))
+        .order("asc")
+        .first(),
+      ctx.db
+        .query("listeningSessions")
+        .withIndex("by_user_startedAt", (q) => q.eq("userId", userId))
+        .order("desc")
+        .first(),
+    ]);
+    const years: string[] = [];
+    if (first && last) {
+      // Pad UTC timestamps by ±14 h so timezone shifts around New Year never invert or omit a local year.
+      const minY = new Date(first.startedAt - ROLLUP_PAD_MS).getUTCFullYear();
+      const maxY = new Date(last.startedAt + ROLLUP_PAD_MS).getUTCFullYear();
+      for (let y = minY; y <= maxY; y++) years.push(String(y));
+    }
+    return { deleted, isDone: true, snapshotMaxUpdatedAt: latest?.updatedAt ?? 0, years };
+  },
+});
+
+export const clearShowTotalsBatch = internalMutation({
+  args: { userId: v.id("users") },
+  returns: v.object({ deleted: v.number(), isDone: v.boolean() }),
+  handler: async (ctx, { userId }) => {
+    if (!(await isActiveUser(ctx, userId))) return { deleted: 0, isDone: true };
+    const rows = await ctx.db
+      .query("statsShowTotals")
+      .withIndex("by_user_podcast", (q) => q.eq("userId", userId))
+      .take(ROLLUP_CLEAR_BATCH);
+    for (const row of rows) await ctx.db.delete("statsShowTotals", row._id);
+    return { deleted: rows.length, isDone: rows.length < ROLLUP_CLEAR_BATCH };
+  },
+});
+
+export const backfillShowTotalsPage = internalMutation({
+  args: { userId: v.id("users"), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ upserted: v.number(), isDone: v.boolean(), continueCursor: v.string() }),
+  handler: async (ctx, { userId, cursor }) => {
+    if (!(await isActiveUser(ctx, userId))) return { upserted: 0, isDone: true, continueCursor: "" };
+    const page = await ctx.db
+      .query("statsShowMonths")
+      .withIndex("by_user_month_podcast", (q) => q.eq("userId", userId))
+      .paginate({ cursor, numItems: ROLLUP_SESSION_PAGE });
+    const byShow = new Map<
+      Id<"podcasts">,
+      { wall: number; content: number; speedSaved: number; smartSaved: number; sessions: number }
+    >();
+    for (const r of page.page) {
+      const acc = byShow.get(r.podcastId) ?? { wall: 0, content: 0, speedSaved: 0, smartSaved: 0, sessions: 0 };
+      acc.wall = clean(acc.wall + r.wall);
+      acc.content = clean(acc.content + r.content);
+      acc.speedSaved = clean(acc.speedSaved + r.speedSaved);
+      acc.smartSaved = clean(acc.smartSaved + r.smartSaved);
+      acc.sessions += r.sessions;
+      byShow.set(r.podcastId, acc);
+    }
+    for (const [podcastId, acc] of byShow) {
+      const existing = await ctx.db
+        .query("statsShowTotals")
+        .withIndex("by_user_podcast", (q) => q.eq("userId", userId).eq("podcastId", podcastId))
+        .unique();
+      if (existing) {
+        await ctx.db.patch("statsShowTotals", existing._id, {
+          wall: clean(existing.wall + acc.wall),
+          content: clean(existing.content + acc.content),
+          speedSaved: clean(existing.speedSaved + acc.speedSaved),
+          smartSaved: clean(existing.smartSaved + acc.smartSaved),
+          sessions: existing.sessions + acc.sessions,
+        });
+      } else {
+        await ctx.db.insert("statsShowTotals", { userId, podcastId, ...acc });
+      }
+    }
+    return { upserted: byShow.size, isDone: page.isDone, continueCursor: page.continueCursor };
+  },
+});
+
+export const clearEpisodeYearBatch = internalMutation({
+  args: { userId: v.id("users"), year: v.string() },
+  returns: v.object({ deleted: v.number(), isDone: v.boolean() }),
+  handler: async (ctx, { userId, year }) => {
+    if (!(await isActiveUser(ctx, userId))) return { deleted: 0, isDone: true };
+    const rows = await ctx.db
+      .query("statsEpisodeYears")
+      .withIndex("by_user_year_episode", (q) => q.eq("userId", userId).eq("year", year))
+      .take(ROLLUP_CLEAR_BATCH);
+    for (const row of rows) await ctx.db.delete("statsEpisodeYears", row._id);
+    return { deleted: rows.length, isDone: rows.length < ROLLUP_CLEAR_BATCH };
+  },
+});
+
+export const backfillEpisodeYearPage = internalMutation({
+  args: { userId: v.id("users"), year: v.string(), cursor: v.union(v.string(), v.null()) },
+  returns: v.object({ upserted: v.number(), isDone: v.boolean(), continueCursor: v.string() }),
+  handler: async (ctx, { userId, year, cursor }) => {
+    if (!(await isActiveUser(ctx, userId))) return { upserted: 0, isDone: true, continueCursor: "" };
+    const from = dayToUtcMs(`${year}-01-01`) - ROLLUP_PAD_MS;
+    const to = dayToUtcMs(`${Number(year) + 1}-01-01`) + ROLLUP_PAD_MS;
+    const page = await ctx.db
+      .query("listeningSessions")
+      .withIndex("by_user_startedAt", (q) => q.eq("userId", userId).gte("startedAt", from).lt("startedAt", to))
+      .paginate({ cursor, numItems: ROLLUP_SESSION_PAGE });
+    const byEpisode = new Map<Id<"episodes">, { podcastId: Id<"podcasts">; wall: number; content: number; sessions: number }>();
+    for (const s of page.page) {
+      if (localDay(s.startedAt, s.utcOffsetMinutes).slice(0, 4) !== year) continue;
+      const m = sessionMetrics(s);
+      const acc = byEpisode.get(s.episodeId) ?? { podcastId: s.podcastId, wall: 0, content: 0, sessions: 0 };
+      acc.wall = clean(acc.wall + m.wall);
+      acc.content = clean(acc.content + m.content);
+      acc.sessions += 1;
+      byEpisode.set(s.episodeId, acc);
+    }
+    for (const [episodeId, acc] of byEpisode) {
+      const existing = await ctx.db
+        .query("statsEpisodeYears")
+        .withIndex("by_user_year_episode", (q) => q.eq("userId", userId).eq("year", year).eq("episodeId", episodeId))
+        .unique();
+      if (existing) {
+        await ctx.db.patch("statsEpisodeYears", existing._id, {
+          wall: clean(existing.wall + acc.wall),
+          content: clean(existing.content + acc.content),
+          sessions: existing.sessions + acc.sessions,
+        });
+      } else {
+        await ctx.db.insert("statsEpisodeYears", { userId, year, episodeId, ...acc });
+      }
+    }
+    return { upserted: byEpisode.size, isDone: page.isDone, continueCursor: page.continueCursor };
+  },
+});
+
+export const finalizeUserStatsRollups = internalMutation({
+  args: { userId: v.id("users"), snapshotMaxUpdatedAt: v.number() },
+  returns: v.object({
+    committed: v.boolean(),
+    dirtyYears: v.array(v.string()),
+    nextSnapshotMaxUpdatedAt: v.number(),
+    showTotals: v.number(),
+    longestStreak: v.number(),
+  }),
+  handler: async (ctx, { userId, snapshotMaxUpdatedAt }) => {
+    if (!(await isActiveUser(ctx, userId))) {
+      return { committed: true, dirtyYears: [], nextSnapshotMaxUpdatedAt: snapshotMaxUpdatedAt, showTotals: 0, longestStreak: 0 };
+    }
+    const existingAllTime = await ctx.db
+      .query("statsAllTime")
+      .withIndex("by_user", (q) => q.eq("userId", userId))
+      .unique();
+    const dirty = new Set<string>(existingAllTime?.backfillDirtyYears ?? []);
+    let nextWatermark = snapshotMaxUpdatedAt;
+    for await (const s of ctx.db
+      .query("listeningSessions")
+      .withIndex("by_user_updatedAt", (q) => q.eq("userId", userId).gt("updatedAt", snapshotMaxUpdatedAt))) {
+      dirty.add(localDay(s.startedAt, s.utcOffsetMinutes).slice(0, 4));
+      if (s.updatedAt > nextWatermark) nextWatermark = s.updatedAt;
+    }
+    if (dirty.size > 0) {
+      if (existingAllTime?.backfillDirtyYears?.length) {
+        await ctx.db.patch("statsAllTime", existingAllTime._id, { backfillDirtyYears: undefined });
+      }
+      return {
+        committed: false,
+        dirtyYears: [...dirty].sort(),
+        nextSnapshotMaxUpdatedAt: nextWatermark,
+        showTotals: 0,
+        longestStreak: 0,
+      };
+    }
+
+    const days: { day: string; wall: number }[] = [];
+    for await (const d of ctx.db.query("statsDays").withIndex("by_user_day", (q) => q.eq("userId", userId))) {
+      days.push({ day: d.day, wall: d.wall });
+    }
+    const best = longestStreak(days);
+    const marker = {
+      longestStreakLength: best.length,
+      longestStreakStartDay: best.startDay,
+      longestStreakEndDay: best.endDay,
+      rollupsReady: true,
+      backfillDirtyYears: undefined,
+    };
+    if (existingAllTime) await ctx.db.patch("statsAllTime", existingAllTime._id, marker);
+    else await ctx.db.insert("statsAllTime", { userId, ...marker });
+    return {
+      committed: true,
+      dirtyYears: [],
+      nextSnapshotMaxUpdatedAt: nextWatermark,
+      showTotals: 0,
+      longestStreak: best.length,
+    };
+  },
+});
+
+/** Backfills `statsEpisodeYears`, `statsShowTotals` and `statsAllTime` for every active user. */
+export const backfillStatsRollups = internalAction({
+  args: {},
+  returns: v.object({ users: v.number(), episodeYears: v.number(), showTotals: v.number() }),
+  handler: async (ctx) => {
+    const userIds: Id<"users">[] = await ctx.runQuery(internal.migrations.statsBackfillTargets, {});
+    let episodeYears = 0;
+    let showTotals = 0;
+
+    const rebuildYear = async (userId: Id<"users">, year: string) => {
+      for (;;) {
+        const cleared: { deleted: number; isDone: boolean } = await ctx.runMutation(
+          internal.migrations.clearEpisodeYearBatch,
+          { userId, year },
+        );
+        if (cleared.isDone) break;
+      }
+      let cursor: string | null = null;
+      for (;;) {
+        const page: { upserted: number; isDone: boolean; continueCursor: string } = await ctx.runMutation(
+          internal.migrations.backfillEpisodeYearPage,
+          { userId, year, cursor },
+        );
+        episodeYears += page.upserted;
+        if (page.isDone) break;
+        cursor = page.continueCursor;
+      }
+    };
+
+    const rebuildShowTotals = async (userId: Id<"users">) => {
+      for (;;) {
+        const cleared: { deleted: number; isDone: boolean } = await ctx.runMutation(
+          internal.migrations.clearShowTotalsBatch,
+          { userId },
+        );
+        if (cleared.isDone) break;
+      }
+      let count = 0;
+      let cursor: string | null = null;
+      for (;;) {
+        const page: { upserted: number; isDone: boolean; continueCursor: string } = await ctx.runMutation(
+          internal.migrations.backfillShowTotalsPage,
+          { userId, cursor },
+        );
+        count += page.upserted;
+        if (page.isDone) break;
+        cursor = page.continueCursor;
+      }
+      return count;
+    };
+
+    for (const userId of userIds) {
+      let snapshotMaxUpdatedAt = 0;
+      let years: string[] = [];
+      for (;;) {
+        const cleared: { deleted: number; isDone: boolean; snapshotMaxUpdatedAt: number; years: string[] } =
+          await ctx.runMutation(internal.migrations.clearStatsRollupsBatch, { userId });
+        if (cleared.isDone) {
+          snapshotMaxUpdatedAt = cleared.snapshotMaxUpdatedAt;
+          years = cleared.years;
+          break;
+        }
+      }
+      for (const year of years) await rebuildYear(userId, year);
+      let userShowTotals = await rebuildShowTotals(userId);
+
+      let committed = false;
+      for (let round = 0; round < MAX_BACKFILL_ROUNDS; round++) {
+        const fin: {
+          committed: boolean;
+          dirtyYears: string[];
+          nextSnapshotMaxUpdatedAt: number;
+          showTotals: number;
+          longestStreak: number;
+        } = await ctx.runMutation(internal.migrations.finalizeUserStatsRollups, {
+          userId,
+          snapshotMaxUpdatedAt,
+        });
+        if (fin.committed) {
+          showTotals += userShowTotals;
+          committed = true;
+          break;
+        }
+        snapshotMaxUpdatedAt = fin.nextSnapshotMaxUpdatedAt;
+        for (const year of fin.dirtyYears) await rebuildYear(userId, year);
+        userShowTotals = await rebuildShowTotals(userId);
+      }
+      if (!committed) {
+        throw new Error(`backfillStatsRollups did not converge for user ${userId} after ${MAX_BACKFILL_ROUNDS} rounds`);
+      }
+    }
+    return { users: userIds.length, episodeYears, showTotals };
   },
 });

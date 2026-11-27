@@ -2,7 +2,7 @@ import { v, type Infer } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { userMutation, userQuery, type UserMutationCtx as MutationCtx } from "./lib/auth";
 import { ensureLibraryRow } from "./lib/library";
-import { applySessionToRollups } from "./lib/rollups";
+import { applySessionToRollups, replaceSessionInRollups } from "./lib/rollups";
 import { episodeRows } from "./lib/rows";
 import { userUtcOffset } from "./lib/state";
 import { vEpisodeRow } from "./lib/validators";
@@ -33,7 +33,11 @@ export type SessionInput = Infer<typeof vSessionInput>;
 type Stored = Omit<Doc<"listeningSessions">, "_id" | "_creationTime" | "userId">;
 
 /** Insert or replace a session by id, keeping the stats rollups in step. */
-export async function upsertSession(ctx: MutationCtx, s: Stored): Promise<"inserted" | "updated" | "unchanged"> {
+export async function upsertSession(
+  ctx: MutationCtx,
+  s: Stored,
+  opts: { deferStreakInto?: Map<string, boolean> } = {},
+): Promise<"inserted" | "updated" | "unchanged"> {
   const existing = await ctx.db
     .query("listeningSessions")
     .withIndex("by_user_sessionId", (q) => q.eq("userId", ctx.userId).eq("sessionId", s.sessionId))
@@ -49,14 +53,13 @@ export async function upsertSession(ctx: MutationCtx, s: Stored): Promise<"inser
       existing.rate === s.rate;
     // An older snapshot of a session we already have (out-of-order replay).
     if (same || s.endedAt < existing.endedAt) return "unchanged";
-    await applySessionToRollups(ctx, existing, -1);
-    await ctx.db.replace(existing._id, stored);
-    await applySessionToRollups(ctx, s, 1);
+    await ctx.db.replace("listeningSessions", existing._id, stored);
+    await replaceSessionInRollups(ctx, existing, s, opts);
     return "updated";
   }
   await ensureLibraryRow(ctx, s.podcastId);
   await ctx.db.insert("listeningSessions", stored);
-  await applySessionToRollups(ctx, s, 1);
+  await applySessionToRollups(ctx, s, 1, opts);
   return "inserted";
 }
 
@@ -70,7 +73,7 @@ export const record = userMutation({
     for (const input of sessions) {
       let podcastId = shows.get(input.episodeId);
       if (!podcastId) {
-        const episode = await ctx.db.get(input.episodeId);
+        const episode = await ctx.db.get("episodes", input.episodeId);
         if (!episode) throw new Error(`Episode ${input.episodeId} not found`);
         podcastId = episode.podcastId;
         shows.set(input.episodeId, podcastId);
@@ -111,7 +114,7 @@ export const recent = userQuery({
     }
     const out = [];
     for (const [episodeId, lastListenedAt] of latest) {
-      const episode = await ctx.db.get(episodeId);
+      const episode = await ctx.db.get("episodes", episodeId);
       if (!episode) continue;
       const [row] = await episodeRows(ctx, [episode]);
       if (row) out.push({ row, lastListenedAt });

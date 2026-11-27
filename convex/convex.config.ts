@@ -33,6 +33,8 @@ const app = defineApp({
     PODDLE_OPEN_SIGNUP: v.optional(v.string()),
     // Unset on production. Only an explicit "1" enables test sign-in (auth.ts).
     PODDLE_TEST_SIGNIN: v.optional(v.string()),
+    // Unset on production. "1" pauses the 15-minute feed polling cron on dev deployments.
+    PODDLE_DISABLE_FEED_POLLING: v.optional(v.string()),
     // Admin path for scripts (lib/auth.ts) and APNs, read with process.env.
     PODDLE_API_TOKEN: v.optional(v.string()),
     APNS_KEY_P8: v.optional(v.string()),

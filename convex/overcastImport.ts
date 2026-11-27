@@ -10,6 +10,7 @@ import { countsAsListened } from "./lib/opml";
 import { enclosureKey } from "./lib/parse";
 import { addToQueue, queueItemFor, type AddedBy } from "./lib/queue";
 import { getOrCreatePodcast, setSubscribed } from "./podcasts";
+import { syncStreakAfterChanges } from "./lib/rollups";
 import { upsertSession } from "./sessions";
 import { setArchived, setPlayed, setPosition, setStarred, stateFor, userUtcOffset } from "./lib/state";
 import { importBatchView, vImportBatchDoc, vImportBatchRow } from "./lib/validators";
@@ -112,7 +113,7 @@ export const getImport = userQuery({
   args: { batchId: v.id("importBatches") },
   returns: v.union(vImportBatchDoc, v.null()),
   handler: async (ctx, { batchId }) => {
-    const batch = await ctx.db.get(batchId);
+    const batch = await ctx.db.get("importBatches", batchId);
     return batch?.userId === ctx.userId ? importBatchView(batch) : null;
   },
 });
@@ -132,7 +133,7 @@ export const latestImport = userQuery({
 
 /** The batch and a ctx acting as its owner. */
 async function batchCtx(ctx: MutationCtx, batchId: Id<"importBatches">) {
-  const batch = await ctx.db.get(batchId);
+  const batch = await ctx.db.get("importBatches", batchId);
   if (!batch?.userId) return null;
   return { batch, ctx: asUser(ctx, batch.userId) };
 }
@@ -142,14 +143,14 @@ async function batchCtx(ctx: MutationCtx, batchId: Id<"importBatches">) {
 export const getBatch = internalQuery({
   args: { batchId: v.id("importBatches") },
   returns: v.union(vImportBatchRow, v.null()),
-  handler: async (ctx, { batchId }) => await ctx.db.get(batchId),
+  handler: async (ctx, { batchId }) => await ctx.db.get("importBatches", batchId),
 });
 
 type Counts = Doc<"importBatches">["counts"];
 
 /** Adds to the batch's counts. Every call is progress, which the batch's CHECK timer looks for in `updatedAt`. */
 async function bumpCounts(ctx: MutationCtx, batchId: Id<"importBatches">, delta: Partial<Counts>) {
-  const batch = await ctx.db.get(batchId);
+  const batch = await ctx.db.get("importBatches", batchId);
   if (!batch) return;
   const counts = { ...batch.counts };
   for (const [k, val] of Object.entries(delta) as [keyof Counts, number | undefined][]) {
@@ -157,7 +158,7 @@ async function bumpCounts(ctx: MutationCtx, batchId: Id<"importBatches">, delta:
     if (k === "earliestListenAt") counts.earliestListenAt = Math.min(counts.earliestListenAt ?? Infinity, val);
     else counts[k] = (counts[k] ?? 0) + val;
   }
-  await ctx.db.patch(batchId, { counts, ...progressed() });
+  await ctx.db.patch("importBatches", batchId, { counts, ...progressed() });
 }
 
 /** What a step that got somewhere writes: the time importBatch's CHECK looks at. */
@@ -212,7 +213,7 @@ export const stageFeeds = machines.internalMutation({
           : null;
       const podcast = byOvercast ?? (await getOrCreatePodcast(ctx, { feedUrl: feed.feedUrl, title: feed.title, overcastId: feed.overcastId }));
       if (feed.overcastId !== undefined && podcast.overcastId === undefined) {
-        await ctx.db.patch(podcast._id, { overcastId: feed.overcastId });
+        await ctx.db.patch("podcasts", podcast._id, { overcastId: feed.overcastId });
       }
       // LWW on Overcast's added date, so anything changed in Poddle since wins.
       const at = feed.addedAt ?? 1;
@@ -225,7 +226,7 @@ export const stageFeeds = machines.internalMutation({
       if (feed.notifications) await setShowOverride(ctx, podcast._id, { notifications: true }, at);
       // The import fetches the feed itself; keep the poller off it until then.
       const stateId = await ensureFeedState(ctx, podcast._id, await hasSubscribers(ctx, podcast._id), false);
-      await ctx.db.patch(stateId, { nextCheckAt: Date.now() + 6 * 3600_000 });
+      await ctx.db.patch("feedStates", stateId, { nextCheckAt: Date.now() + 6 * 3600_000 });
 
       let newestExportedAt: number | undefined;
       for (const e of feed.episodes) {
@@ -259,18 +260,18 @@ async function importUnsubscribed(ctx: UserMutationCtx, podcast: Doc<"podcasts">
   const sub = await ensureLibraryRow(ctx, podcast._id);
   const now = Date.now();
   if (sub.subscriptionUpdatedAt === 0) {
-    await ctx.db.patch(sub._id, { subscriptionUpdatedAt: at, subscribedAt: sub.subscribedAt ?? addedAt, updatedAt: now });
+    await ctx.db.patch("subscriptions", sub._id, { subscriptionUpdatedAt: at, subscribedAt: sub.subscribedAt ?? addedAt, updatedAt: now });
     return;
   }
   if (!sub.subscribed || sub.subscriptionUpdatedAt > at) return;
-  await ctx.db.patch(sub._id, { subscribed: false, subscriptionUpdatedAt: at, unsubscribedAt: undefined, updatedAt: now });
+  await ctx.db.patch("subscriptions", sub._id, { subscribed: false, subscriptionUpdatedAt: at, unsubscribedAt: undefined, updatedAt: now });
   await ensureFeedState(ctx, podcast._id, await hasSubscribers(ctx, podcast._id), false);
   const event = await ctx.db
     .query("libraryEvents")
     .withIndex("by_user_eventId", (q) => q.eq("userId", ctx.userId).eq("eventId", `subscribed:${podcast._id}:${at}`))
     .unique();
   if (event) {
-    await ctx.db.delete(event._id);
+    await ctx.db.delete("libraryEvents", event._id);
     await ctx.db.insert("deletions", { userId: ctx.userId, table: "libraryEvents", docId: event._id, deletedAt: now, updatedAt: now });
   }
 }
@@ -294,7 +295,7 @@ async function setShowOverride(
     fieldTimes[k] = at;
   }
   if (!Object.keys(patch).length) return;
-  if (existing) await ctx.db.patch(existing._id, { ...patch, fieldTimes, updatedAt: Date.now() });
+  if (existing) await ctx.db.patch("podcastSettings", existing._id, { ...patch, fieldTimes, updatedAt: Date.now() });
   else await ctx.db.insert("podcastSettings", { userId: ctx.userId, podcastId, ...patch, fieldTimes, updatedAt: Date.now() });
 }
 
@@ -353,7 +354,7 @@ export const beginFetching = machines.internalMutation({
       const sub = await subscriptionFor(ctx, podcast._id);
       await setShowOverride(ctx, podcast._id, { newEpisodes: "upNextTop" }, sub?.subscribedAt ?? 1);
     }
-    await ctx.db.patch(batchId, {
+    await ctx.db.patch("importBatches", batchId, {
       warning,
       playlists: resolved,
       upNextPlan: { ...upNextPlan, priorityPodcastIds: priority.map((p) => p._id) },
@@ -382,7 +383,7 @@ export const discardScratch = machines.internalMutation({
   returns: v.null(),
   handler: async (machineCtx, { batchId }) => {
     const ctx = asMutationCtx(machineCtx);
-    const batch = await ctx.db.get(batchId);
+    const batch = await ctx.db.get("importBatches", batchId);
     if (batch && batch.state.kind !== "failed") return null;
     const shows = await ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batchId)).take(SCRATCH_PAGE);
     for (const row of shows) await importShow.purge(machineCtx, row._id, { force: true });
@@ -416,7 +417,7 @@ export const claimFetches = machines.internalMutation({
   }),
   handler: async (machineCtx, { batchId, count, worker }) => {
     const ctx = asMutationCtx(machineCtx);
-    if (!isCurrent(await ctx.db.get(batchId), worker)) return { stale: true, rows: [] };
+    if (!isCurrent(await ctx.db.get("importBatches", batchId), worker)) return { stale: true, rows: [] };
     const now = Date.now();
     const inState = (kind: "waiting" | "fetching") =>
       ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batchId).eq("state.kind", kind)).collect();
@@ -454,8 +455,8 @@ export const feedFetched = machines.internalMutation({
   returns: v.null(),
   handler: async (machineCtx, { batchId, rowId, claimedAt, ok, status, error }) => {
     const ctx = asMutationCtx(machineCtx);
-    const row = await ctx.db.get(rowId);
-    const batch = await ctx.db.get(batchId);
+    const row = await ctx.db.get("importQueue", rowId);
+    const batch = await ctx.db.get("importBatches", batchId);
     if (!row || batch?.state.kind !== "fetching") return null;
     const episodes = await ctx.db
       .query("episodes")
@@ -476,7 +477,7 @@ export const feedFetched = machines.internalMutation({
     });
     // Refused: a run that was only slow, reporting after a newer run claimed the show again or fetched it.
     if (fetched.status !== "done") return null;
-    await ctx.db.patch(batchId, { ...(ok ? {} : { failedFeeds: withFailedFeed(await ctx.db.get(row.podcastId), batch, status, error) }), ...progressed() });
+    await ctx.db.patch("importBatches", batchId, { ...(ok ? {} : { failedFeeds: withFailedFeed(await ctx.db.get("podcasts", row.podcastId), batch, status, error) }), ...progressed() });
     return null;
   },
 });
@@ -498,14 +499,14 @@ export const feedBusy = machines.internalMutation({
   returns: v.null(),
   handler: async (machineCtx, { batchId, rowId, claimedAt }) => {
     const ctx = asMutationCtx(machineCtx);
-    const row = await ctx.db.get(rowId);
-    const batch = await ctx.db.get(batchId);
+    const row = await ctx.db.get("importQueue", rowId);
+    const batch = await ctx.db.get("importBatches", batchId);
     if (!row || batch?.state.kind !== "fetching") return null;
     const busy = await importShow.send(machineCtx, rowId, { type: "BUSY", claimedAt, retryAt: Date.now() + BUSY_RETRY_MS });
     if (busy.status !== "done") return null;
     const gaveUp = busy.to === "fetched";
-    const failedFeeds = gaveUp ? withFailedFeed(await ctx.db.get(row.podcastId), batch, undefined, "Another fetch of this feed never finished") : undefined;
-    await ctx.db.patch(batchId, { ...(failedFeeds ? { failedFeeds } : {}), ...progressed() });
+    const failedFeeds = gaveUp ? withFailedFeed(await ctx.db.get("podcasts", row.podcastId), batch, undefined, "Another fetch of this feed never finished") : undefined;
+    await ctx.db.patch("importBatches", batchId, { ...(failedFeeds ? { failedFeeds } : {}), ...progressed() });
     return null;
   },
 });
@@ -536,13 +537,13 @@ export const claimMatches = machines.internalMutation({
   returns: v.array(vMatchRow),
   handler: async (machineCtx, { batchId, count }) => {
     const ctx = asMutationCtx(machineCtx);
-    const batch = await ctx.db.get(batchId);
+    const batch = await ctx.db.get("importBatches", batchId);
     if (batch?.state.kind !== "fetching") return [];
     const pending = () =>
       ctx.db.query("importQueue").withIndex("by_batch_state", (q) => q.eq("batchId", batchId).eq("state.kind", "fetched"));
     if (batch.medianDuration === undefined) {
       const overall = median((await pending().collect()).flatMap((r) => (r.state.kind === "fetched" ? r.state.durations : [])));
-      if (overall !== undefined) await ctx.db.patch(batchId, { medianDuration: overall });
+      if (overall !== undefined) await ctx.db.patch("importBatches", batchId, { medianDuration: overall });
     }
     // The rows stay until their show is matched (matchPodcast deletes each), so a
     // run that dies part way loses nothing: the next one takes them again.
@@ -574,7 +575,7 @@ export const matchPodcast = machines.internalMutation({
   handler: async (machineCtx, { batchId, rowId }) => {
     const rawCtx = asMutationCtx(machineCtx);
     const owned = await batchCtx(rawCtx, batchId);
-    const queued = await rawCtx.db.get(rowId);
+    const queued = await rawCtx.db.get("importQueue", rowId);
     // Gone: another run finished this show. Not fetching: the batch is over.
     if (!owned || owned.batch.state.kind !== "fetching" || !queued || queued.state.kind !== "fetched") return true;
     const row = { ...queued, ...queued.state };
@@ -583,7 +584,7 @@ export const matchPodcast = machines.internalMutation({
       await importShow.send(machineCtx, rowId, { type: "MATCHED" });
       await importShow.purge(machineCtx, rowId);
     };
-    const podcast = await rawCtx.db.get(row.podcastId);
+    const podcast = await rawCtx.db.get("podcasts", row.podcastId);
     if (!podcast) {
       await matched();
       return true;
@@ -596,6 +597,7 @@ export const matchPodcast = machines.internalMutation({
       .take(MATCH_PAGE);
     const delta = { ...(emptyCounts() as Required<Counts>), earliestListenAt: undefined as number | undefined };
     const estimatedDuration = row.medianDuration ?? batch.medianDuration;
+    const deferredStreakDays = new Map<string, boolean>();
     for (const item of items) {
       const { episode, matched } = await matchOrGhost(ctx, row.podcastId, item);
       if (matched) delta.episodesMatched++;
@@ -606,7 +608,7 @@ export const matchPodcast = machines.internalMutation({
           delta.ghostsOlderThanFeed++;
         else delta.ghostsMissingFromFeed++;
       }
-      const r = await applyImportedState(ctx, batch, subscribed, episode, item, estimatedDuration);
+      const r = await applyImportedState(ctx, batch, subscribed, episode, item, estimatedDuration, deferredStreakDays);
       if (item.played) delta.playedEpisodes++;
       else if ((item.progress ?? 0) > 0) delta.inProgressEpisodes++;
       if (item.userRecommendedAt) delta.starredEpisodes++;
@@ -616,8 +618,9 @@ export const matchPodcast = machines.internalMutation({
         delta.estimatedListenSeconds += r.sessionWall;
         delta.earliestListenAt = Math.min(delta.earliestListenAt ?? Infinity, r.sessionStart!);
       }
-      await ctx.db.delete(item._id);
+      await ctx.db.delete("importItems", item._id);
     }
+    if (deferredStreakDays.size > 0) await syncStreakAfterChanges(ctx, deferredStreakDays);
     const done = items.length < MATCH_PAGE;
     if (done) {
       await matched();
@@ -625,7 +628,7 @@ export const matchPodcast = machines.internalMutation({
       if (!row.feedOk) delta.feedsFailed = 1;
       if (subscribed && row.feedOk) await stageUntouchedEpisodes(ctx, batchId, podcast._id, row);
       const episodeCount = await countEpisodes(ctx, row.podcastId);
-      await ctx.db.patch(row.podcastId, { episodeCount, updatedAt: Date.now() });
+      await ctx.db.patch("podcasts", row.podcastId, { episodeCount, updatedAt: Date.now() });
     }
     await bumpCounts(ctx, batchId, delta);
     return done;
@@ -715,7 +718,7 @@ async function matchOrGhost(ctx: MutationCtx, podcastId: Id<"podcasts">, item: D
     firstSeenAt: now,
     updatedAt: now,
   });
-  return { episode: (await ctx.db.get(id))!, matched: false };
+  return { episode: (await ctx.db.get("episodes", id))!, matched: false };
 }
 
 /**
@@ -729,6 +732,7 @@ async function applyImportedState(
   episode: Doc<"episodes">,
   item: Doc<"importItems">,
   estimatedDuration: number | undefined,
+  deferredStreakDays: Map<string, boolean>,
 ): Promise<{ sessionWall?: number; sessionStart?: number; durationEstimated?: boolean }> {
   const at = item.userUpdatedAt ?? item.pubDate ?? batch.startedAt;
   if (item.played) await setPlayed(ctx, episode, true, at);
@@ -781,7 +785,7 @@ async function applyImportedState(
     utcOffsetMinutes: await userUtcOffset(ctx, startedAt),
     importBatchId: batch._id,
     updatedAt: Date.now(),
-  });
+  }, { deferStreakInto: deferredStreakDays });
   return { sessionWall: wall, sessionStart: startedAt, durationEstimated };
 }
 
@@ -817,13 +821,13 @@ export const finishBatch = machines.internalMutation({
         upNext++;
         continue;
       }
-      const episode = await ctx.db.get(row.episodeId);
+      const episode = await ctx.db.get("episodes", row.episodeId);
       const state = await stateFor(ctx, row.episodeId);
       if (!episode || (state && (state.played || state.archived))) continue;
       if (await addToQueue(ctx, episode, "bottom", row.at, addedBy)) upNext++;
     }
-    for (const row of rows) await ctx.db.delete(row._id);
-    await ctx.db.patch(batchId, { counts: { ...batch.counts, upNextEpisodes: upNext }, updatedAt: Date.now() });
+    for (const row of rows) await ctx.db.delete("importUpNext", row._id);
+    await ctx.db.patch("importBatches", batchId, { counts: { ...batch.counts, upNextEpisodes: upNext }, updatedAt: Date.now() });
     return true;
   },
 });
@@ -856,7 +860,7 @@ async function requeueOrphans(machineCtx: MachineCtx, ctx: MutationCtx, batchId:
       .withIndex("by_batch_podcast", (q) => q.eq("batchId", batchId).eq("podcastId", podcastId))
       .collect();
     const dates = staged.map((i) => i.pubDate).filter((d): d is number => d !== undefined);
-    const batch = (await ctx.db.get(batchId))!;
+    const batch = (await ctx.db.get("importBatches", batchId))!;
     const sub = await subscriptionFor(asUser(ctx, batch.userId!), podcastId);
     await queueShow(machineCtx, {
       batchId,
